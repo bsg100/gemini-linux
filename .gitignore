@@ -13,6 +13,9 @@ zips/
 kali/
 Gemini_x25_x27_06052019/
 
+#archive files
+archive/
+
 # Flash tool binaries and runtime state
 FlashToolLinux/*.so
 FlashToolLinux/*.so.*

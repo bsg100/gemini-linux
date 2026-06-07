@@ -1,0 +1,235 @@
+diff --git a/drivers/usb/typec/Kconfig b/drivers/usb/typec/Kconfig
+index 2f80c2792..a0cce480e 100644
+--- a/drivers/usb/typec/Kconfig
++++ b/drivers/usb/typec/Kconfig
+@@ -115,3 +115,11 @@ source "drivers/usb/typec/mux/Kconfig"
+ source "drivers/usb/typec/altmodes/Kconfig"
+ 
+ endif # TYPEC
++
++config TYPEC_FUSB301A
++	tristate "ON Semiconductor FUSB301A USB Type-C CC controller"
++	depends on I2C && REGMAP_I2C
++	help
++	  Driver for the ON Semiconductor FUSB301A USB Type-C CC-only
++	  controller. Detects connector orientation and reports attach/detach
++	  to the USB role switch framework. Used on the Gemini PDA.
+diff --git a/drivers/usb/typec/Makefile b/drivers/usb/typec/Makefile
+index 7a368fea6..ff69c47ae 100644
+--- a/drivers/usb/typec/Makefile
++++ b/drivers/usb/typec/Makefile
+@@ -12,3 +12,4 @@ obj-$(CONFIG_TYPEC_STUSB160X) 	+= stusb160x.o
+ obj-$(CONFIG_TYPEC_RT1719)	+= rt1719.o
+ obj-$(CONFIG_TYPEC_WUSB3801)	+= wusb3801.o
+ obj-$(CONFIG_TYPEC)		+= mux/
++obj-$(CONFIG_TYPEC_FUSB301A) += fusb301a.o
+diff --git a/drivers/usb/typec/fusb301a.c b/drivers/usb/typec/fusb301a.c
+new file mode 100644
+index 000000000..93e61f2cd
+--- /dev/null
++++ b/drivers/usb/typec/fusb301a.c
+@@ -0,0 +1,204 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * ON Semiconductor FUSB301A USB Type-C CC controller driver
++ *
++ * The FUSB301A is a CC-only USB Type-C controller: it detects connector
++ * orientation (CC1/CC2) and VBUS presence but does NOT implement Power
++ * Delivery or Alt-mode.  It reports attach/detach and orientation to the
++ * kernel USB role switch framework.
++ *
++ * On the Gemini PDA: i2c address 0x25, interrupt on a GPIO (TBD from DTS).
++ * USB2 host mode works without this driver (fixed polarity).  Enable in
++ * Phase 4+ for proper orientation detection and OTG role switching.
++ *
++ * Reference: ON Semiconductor FUSB301A datasheet;
++ *   vendor driver at drivers/misc/mediatek/fusb301/
++ */
++
++#include <linux/i2c.h>
++#include <linux/interrupt.h>
++#include <linux/module.h>
++#include <linux/pm_wakeirq.h>
++#include <linux/regmap.h>
++#include <linux/usb/role.h>
++
++/* Register map */
++#define FUSB301A_REG_DEVICE_ID	0x01	/* Device ID — read in probe */
++#define FUSB301A_REG_MODES	0x02	/* Mode control: DRP/UFP/DFP */
++#define FUSB301A_REG_INTERRUPT	0x03	/* Interrupt status (read-clears) */
++#define FUSB301A_REG_STATUS	0x04	/* Attach status, VBUS, orientation */
++#define FUSB301A_REG_TYPE	0x05	/* Attached device type */
++#define FUSB301A_REG_INT_MASK	0x08	/* Interrupt mask */
++
++/* STATUS register fields */
++#define FUSB301A_ATTACH		BIT(0)
++#define FUSB301A_VBUS_OK	BIT(4)
++#define FUSB301A_CC_ORIENT	BIT(1)
++
++/* MODES: operate as DFP (host) */
++#define FUSB301A_MODE_DFP	0x04
++
++struct fusb301a {
++	struct regmap *regmap;
++	struct usb_role_switch *role_sw;
++	struct device *dev;
++};
++
++/*
++ * FIXME: role detection is UNVERIFIED and likely wrong.
++ * The FUSB301A reports the attached port type in the TYPE register (0x05);
++ * role should be derived from those fields, not from VBUS_OK.  Deriving
++ * HOST/DEVICE from VBUS is probably INVERTED for a sink (a charging cable
++ * has VBUS but should be DEVICE).  Connector orientation (CC1/CC2) is read
++ * and logged but not yet plumbed to a typec mux.  All STATUS/TYPE bit
++ * positions here are assumed and must be reworked against the FUSB301A
++ * datasheet before this driver is trusted to drive VBUS direction.
++ */
++static void fusb301a_update_role(struct fusb301a *fusb)
++{
++	unsigned int status, type = 0;
++	enum usb_role role;
++	int ret;
++
++	ret = regmap_read(fusb->regmap, FUSB301A_REG_STATUS, &status);
++	if (ret) {
++		dev_err_ratelimited(fusb->dev, "failed to read STATUS: %d\n", ret);
++		return;
++	}
++	regmap_read(fusb->regmap, FUSB301A_REG_TYPE, &type);
++
++	if (status & FUSB301A_ATTACH)
++		role = (status & FUSB301A_VBUS_OK) ? USB_ROLE_HOST : USB_ROLE_DEVICE;
++	else
++		role = USB_ROLE_NONE;
++
++	dev_dbg(fusb->dev, "status=0x%02x type=0x%02x cc=%s role=%d\n",
++		status, type,
++		(status & FUSB301A_CC_ORIENT) ? "CC2" : "CC1", role);
++
++	if (fusb->role_sw)
++		usb_role_switch_set_role(fusb->role_sw, role);
++}
++
++static irqreturn_t fusb301a_irq_handler(int irq, void *dev_id)
++{
++	struct fusb301a *fusb = dev_id;
++	unsigned int interrupt;
++
++	/* Reading INTERRUPT clears it */
++	if (regmap_read(fusb->regmap, FUSB301A_REG_INTERRUPT, &interrupt)) {
++		dev_err_ratelimited(fusb->dev, "failed to read INTERRUPT\n");
++		return IRQ_NONE;
++	}
++
++	dev_dbg_ratelimited(fusb->dev, "IRQ: interrupt=0x%02x\n", interrupt);
++	fusb301a_update_role(fusb);
++
++	return IRQ_HANDLED;
++}
++
++static const struct regmap_config fusb301a_regmap_config = {
++	.reg_bits	= 8,
++	.val_bits	= 8,
++	.max_register	= FUSB301A_REG_INT_MASK,
++};
++
++static int fusb301a_probe(struct i2c_client *client)
++{
++	struct fusb301a *fusb;
++	unsigned int id;
++	int ret;
++
++	fusb = devm_kzalloc(&client->dev, sizeof(*fusb), GFP_KERNEL);
++	if (!fusb)
++		return -ENOMEM;
++
++	fusb->dev = &client->dev;
++
++	fusb->regmap = devm_regmap_init_i2c(client, &fusb301a_regmap_config);
++	if (IS_ERR(fusb->regmap))
++		return dev_err_probe(&client->dev, PTR_ERR(fusb->regmap),
++				     "regmap init failed\n");
++
++	ret = regmap_read(fusb->regmap, FUSB301A_REG_DEVICE_ID, &id);
++	if (ret)
++		return dev_err_probe(&client->dev, ret,
++				     "failed to read device ID\n");
++
++	dev_dbg(&client->dev, "device ID: 0x%02x\n", id);
++
++	/* Set DFP (host) mode (FIXME: MODES encoding unverified, see above) */
++	ret = regmap_write(fusb->regmap, FUSB301A_REG_MODES, FUSB301A_MODE_DFP);
++	if (ret)
++		return dev_err_probe(&client->dev, ret, "failed to set MODES\n");
++
++	fusb->role_sw = devm_usb_role_switch_get(&client->dev);
++	if (IS_ERR(fusb->role_sw)) {
++		if (PTR_ERR(fusb->role_sw) != -ENODEV)
++			return dev_err_probe(&client->dev,
++					     PTR_ERR(fusb->role_sw),
++					     "failed to get role switch\n");
++		fusb->role_sw = NULL;
++	}
++
++	i2c_set_clientdata(client, fusb);
++
++	if (client->irq) {
++		ret = devm_request_threaded_irq(&client->dev, client->irq,
++						NULL, fusb301a_irq_handler,
++						IRQF_ONESHOT,
++						"fusb301a", fusb);
++		if (ret)
++			return dev_err_probe(&client->dev, ret,
++					     "failed to request IRQ\n");
++
++		/* Unmask interrupts now that the handler is live. */
++		ret = regmap_write(fusb->regmap, FUSB301A_REG_INT_MASK, 0x00);
++		if (ret)
++			return dev_err_probe(&client->dev, ret,
++					     "failed to unmask interrupts\n");
++
++		/* A cable/charger plugged while suspended should wake us. */
++		device_init_wakeup(&client->dev, true);
++		dev_pm_set_wake_irq(&client->dev, client->irq);
++	}
++
++	/* Sample initial state so a cable present at probe is handled. */
++	fusb301a_update_role(fusb);
++
++	dev_info(&client->dev, "FUSB301A USB Type-C CC controller ready\n");
++	return 0;
++}
++
++static void fusb301a_remove(struct i2c_client *client)
++{
++	dev_pm_clear_wake_irq(&client->dev);
++	device_init_wakeup(&client->dev, false);
++}
++
++static const struct of_device_id fusb301a_of_match[] = {
++	{ .compatible = "onsemi,fusb301a" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, fusb301a_of_match);
++
++static const struct i2c_device_id fusb301a_id[] = {
++	{ "fusb301a" },
++	{ }
++};
++MODULE_DEVICE_TABLE(i2c, fusb301a_id);
++
++static struct i2c_driver fusb301a_driver = {
++	.driver = {
++		.name		= "fusb301a",
++		.of_match_table	= fusb301a_of_match,
++	},
++	.probe		= fusb301a_probe,
++	.remove		= fusb301a_remove,
++	.id_table	= fusb301a_id,
++};
++module_i2c_driver(fusb301a_driver);
++
++MODULE_AUTHOR("Gemini PDA Linux Project");
++MODULE_DESCRIPTION("ON Semiconductor FUSB301A USB Type-C CC controller");
++MODULE_LICENSE("GPL");

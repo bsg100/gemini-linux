@@ -1,0 +1,25 @@
+diff --git a/drivers/gpu/drm/mediatek/mtk_dsi.c b/drivers/gpu/drm/mediatek/mtk_dsi.c
+index d8bfc2cce..bb91844bd 100644
+--- a/drivers/gpu/drm/mediatek/mtk_dsi.c
++++ b/drivers/gpu/drm/mediatek/mtk_dsi.c
+@@ -1190,6 +1190,11 @@ static const struct mtk_dsi_driver_data mt8173_dsi_driver_data = {
+ 	.reg_cmdq_off = 0x200,
+ };
+ 
++
++static const struct mtk_dsi_driver_data mt6797_dsi_driver_data = {
++	.reg_cmdq_off = 0x200,
++};
++
+ static const struct mtk_dsi_driver_data mt2701_dsi_driver_data = {
+ 	.reg_cmdq_off = 0x180,
+ };
+@@ -1207,6 +1212,8 @@ static const struct mtk_dsi_driver_data mt8186_dsi_driver_data = {
+ };
+ 
+ static const struct of_device_id mtk_dsi_of_match[] = {
++	{ .compatible = "mediatek,mt6797-dsi",
++	  .data = &mt6797_dsi_driver_data },
+ 	{ .compatible = "mediatek,mt2701-dsi",
+ 	  .data = &mt2701_dsi_driver_data },
+ 	{ .compatible = "mediatek,mt8173-dsi",

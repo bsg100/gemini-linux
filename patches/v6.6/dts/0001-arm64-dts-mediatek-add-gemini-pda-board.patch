@@ -1,0 +1,443 @@
+diff --git a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+new file mode 100644
+index 000000000..4b2a1ef89
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+@@ -0,0 +1,437 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Device tree for Planet Computers Gemini PDA
++ * SoC: MediaTek MT6797X (Helio X27)
++ *
++ * Status: Phase 3 bring-up — boot critical peripherals only.
++ *   Display, USB-C CC, Wi-Fi deferred.
++ *   Serial console is the primary debug interface.
++ *
++ * Hardware sources:
++ *   Vendor DTS: gemini-kernel/arch/arm64/boot/dts/aeon6797_6m_n.dts
++ *   Mainline SoC DTS: arch/arm64/boot/dts/mediatek/mt6797.dtsi
++ *
++ * NOT YET in mainline mt6797.dtsi (Phase 4+ work):
++ *   - MSDC0/eMMC node (MT6797 MSDC not yet upstreamed)
++ *   - PMIC/pwrap (mt6351 regulator nodes)
++ *   - Display / DRM
++ */
++
++/dts-v1/;
++#include "mt6797.dtsi"
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/input/input.h>
++
++/ {
++	model = "Planet Computers Gemini PDA";
++	compatible = "planet,gemini-pda", "mediatek,mt6797";
++
++	aliases {
++		serial0 = &uart0;
++	};
++
++	chosen {
++		stdout-path = "serial0:921600n8";
++		/*
++		 * Phase 3 depends on early serial output. Bare "earlycon"
++		 * derives the UART base from the stdout-path node (&uart0 reg),
++		 * so no SoC address is hardcoded here. If LK already passes a
++		 * cmdline with earlycon this is harmless. Confirm the 921600
++		 * baud against the vendor LK console config before flashing.
++		 */
++		bootargs = "earlycon console=ttyS0,921600n8";
++	};
++
++	/*
++	 * TODO (verify in VM): add a reserved-memory node.
++	 *   - Confirm whether mainline mt6797.dtsi already reserves the
++	 *     ATF/TEE/SCP carve-outs at the top of DRAM. If it does not, the
++	 *     flat 4 GB region below lets the kernel stomp firmware memory.
++	 *   - Add a ramoops/pstore region so a panic that kills the UART
++	 *     still leaves a post-mortem (CLAUDE.md Phase 3 goal).
++	 * Addresses must come from the vendor memory map / LK — do not guess.
++	 */
++	memory@40000000 {
++		device_type = "memory";
++		/* 4 GB LPDDR3 (TODO: confirm base/size and DRAM holes) */
++		reg = <0 0x40000000 1 0x00000000>;
++	};
++
++	/* Fixed 1.8V rail for I2C pull-ups and digital logic (Phase 3 stub) */
++	vdd_fixed_1v8: regulator-vdd-1v8 {
++		compatible = "regulator-fixed";
++		regulator-name = "vdd_1v8";
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <1800000>;
++		regulator-always-on;
++		regulator-boot-on;
++	};
++
++	/*
++	 * Fixed-voltage vproc workaround for Phase 3 bring-up.
++	 * Replace with richtek,rt5735 driver once RT5735 patch is tested.
++	 */
++	vproc_fixed: regulator-vproc-fixed {
++		compatible = "regulator-fixed";
++		regulator-name = "vproc";
++		regulator-min-microvolt = <1000000>;
++		regulator-max-microvolt = <1000000>;
++		regulator-always-on;
++		regulator-boot-on;
++	};
++
++	/*
++	 * Gemini PDA physical keyboard matrix.
++	 *
++	 * 8 rows (P0_0..P0_7 of AW9523B) × 7 columns (P1_0..P1_6).
++	 * Keymap derived from vendor: drivers/misc/mediatek/aw9523/aw9523_key.c.
++	 * Disabled by default; enable once AW9523B GPIO driver is validated.
++	 */
++	keyboard {
++		compatible = "gpio-matrix-keypad";
++
++		/* Rows: AW9523B Port 0, GPIO 0..7 */
++		row-gpios = <&aw9523b 0 GPIO_ACTIVE_LOW>,
++			    <&aw9523b 1 GPIO_ACTIVE_LOW>,
++			    <&aw9523b 2 GPIO_ACTIVE_LOW>,
++			    <&aw9523b 3 GPIO_ACTIVE_LOW>,
++			    <&aw9523b 4 GPIO_ACTIVE_LOW>,
++			    <&aw9523b 5 GPIO_ACTIVE_LOW>,
++			    <&aw9523b 6 GPIO_ACTIVE_LOW>,
++			    <&aw9523b 7 GPIO_ACTIVE_LOW>;
++
++		/* Columns: AW9523B Port 1, GPIO 8..14 */
++		col-gpios = <&aw9523b 8  GPIO_ACTIVE_LOW>,
++			    <&aw9523b 9  GPIO_ACTIVE_LOW>,
++			    <&aw9523b 10 GPIO_ACTIVE_LOW>,
++			    <&aw9523b 11 GPIO_ACTIVE_LOW>,
++			    <&aw9523b 12 GPIO_ACTIVE_LOW>,
++			    <&aw9523b 13 GPIO_ACTIVE_LOW>,
++			    <&aw9523b 14 GPIO_ACTIVE_LOW>;
++
++		debounce-delay-ms = <5>;
++		col-scan-delay-us = <2>;
++
++		linux,keymap = <
++			/* col 0 (P1_0) */
++			MATRIX_KEY(0, 0, KEY_1)
++			MATRIX_KEY(1, 0, KEY_U)
++			MATRIX_KEY(2, 0, KEY_S)
++			MATRIX_KEY(3, 0, KEY_Z)
++			MATRIX_KEY(4, 0, KEY_COMMA)
++			MATRIX_KEY(5, 0, KEY_APOSTROPHE)
++			MATRIX_KEY(6, 0, KEY_8)
++			MATRIX_KEY(7, 0, KEY_J)
++			/* col 1 (P1_1) */
++			MATRIX_KEY(0, 1, KEY_2)
++			MATRIX_KEY(1, 1, KEY_W)
++			MATRIX_KEY(2, 1, KEY_D)
++			MATRIX_KEY(3, 1, KEY_C)
++			MATRIX_KEY(4, 1, KEY_LEFTALT)
++			MATRIX_KEY(5, 1, KEY_LEFT)
++			MATRIX_KEY(6, 1, KEY_9)
++			MATRIX_KEY(7, 1, KEY_K)
++			/* col 2 (P1_2) */
++			MATRIX_KEY(0, 2, KEY_3)
++			MATRIX_KEY(1, 2, KEY_Y)
++			MATRIX_KEY(2, 2, KEY_TAB)
++			MATRIX_KEY(3, 2, KEY_N)
++			MATRIX_KEY(4, 2, KEY_M)
++			MATRIX_KEY(5, 2, KEY_DOWN)
++			MATRIX_KEY(6, 2, KEY_BACKSPACE)
++			MATRIX_KEY(7, 2, KEY_I)
++			/* col 3 (P1_3) */
++			MATRIX_KEY(0, 3, KEY_4)
++			MATRIX_KEY(1, 3, KEY_T)
++			MATRIX_KEY(2, 3, KEY_F)
++			MATRIX_KEY(3, 3, KEY_X)
++			MATRIX_KEY(4, 3, KEY_FN)
++			MATRIX_KEY(5, 3, KEY_RIGHTSHIFT)
++			MATRIX_KEY(6, 3, KEY_P)
++			/* col 4 (P1_4) */
++			MATRIX_KEY(0, 4, KEY_5)
++			MATRIX_KEY(1, 4, KEY_E)
++			MATRIX_KEY(2, 4, KEY_G)
++			MATRIX_KEY(3, 4, KEY_V)
++			MATRIX_KEY(4, 4, KEY_SPACE)
++			MATRIX_KEY(5, 4, KEY_UP)
++			MATRIX_KEY(6, 4, KEY_O)
++			/* col 5 (P1_5) */
++			MATRIX_KEY(0, 5, KEY_6)
++			MATRIX_KEY(1, 5, KEY_Q)
++			MATRIX_KEY(2, 5, KEY_A)
++			MATRIX_KEY(3, 5, KEY_B)
++			MATRIX_KEY(4, 5, KEY_DOT)
++			MATRIX_KEY(5, 5, KEY_RIGHT)
++			MATRIX_KEY(6, 5, KEY_ENTER)
++			/* col 6 (P1_6) */
++			MATRIX_KEY(0, 6, KEY_7)
++			MATRIX_KEY(1, 6, KEY_R)
++			MATRIX_KEY(2, 6, KEY_H)
++			MATRIX_KEY(3, 6, KEY_LEFTSHIFT)
++			MATRIX_KEY(4, 6, KEY_LEFTCTRL)
++			MATRIX_KEY(5, 6, KEY_L)
++			MATRIX_KEY(6, 6, KEY_0)
++		>;
++
++		status = "disabled";
++	};
++
++	/*
++	 * GPIO-controlled fixed regulators for TPS65132 LCD bias (±5 V).
++	 * ENP (AVDD +5V): GPIO60, active-high.
++	 * ENN (AVEE -5V): GPIO251, active-high.
++	 * TPS65132 at I2C1 (0x11008000) address 0x3E is configured to +/-5V
++	 * by the panel driver writing 0x0E to registers 0x00 and 0x01.
++	 */
++	lcd_avdd: lcd-avdd-regulator {
++		compatible = "regulator-fixed";
++		regulator-name = "lcd_avdd";
++		regulator-min-microvolt = <5000000>;
++		regulator-max-microvolt = <5000000>;
++		gpio = <&pio 60 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++	};
++
++	lcd_avee: lcd-avee-regulator {
++		compatible = "regulator-fixed";
++		regulator-name = "lcd_avee";
++		regulator-min-microvolt = <5000000>;
++		regulator-max-microvolt = <5000000>;
++		gpio = <&pio 251 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++	};
++};
++
++/*
++ * UART0 serial console.
++ * Vendor DTS: UART0 RX=GPIO97, TX=GPIO98 (confirmed from aw9523/uart DTS).
++ * The mainline uart0_pins_a uses GPIO234/235 (wrong for Gemini).
++ * We define gemini-specific pinctrl below.
++ */
++&uart0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&uart0_gemini_pins>;
++	status = "okay";
++};
++
++/* --- I2C buses --- */
++
++/*
++ * i2c0: charger RT9466 (0x53) and FUSB301A USB-C CC (0x25).
++ * Confirmed: vendor DTS rt9466.dtsi and aeon6797_6m_n.dts &i2c0 block.
++ * i2c0 mainline pin: SCL=GPIO37, SDA=GPIO38 (mt6797.dtsi i2c0_pins_a).
++ * Gemini may use different i2c0 pins; verify on hardware.
++ */
++&i2c0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&i2c0_pins_a>;
++	clock-frequency = <400000>;
++	status = "okay";
++
++	charger: battery-charger@53 {
++		compatible = "richtek,rt9467";
++		reg = <0x53>;
++		/* IRQ: vendor DTS rt,intr_gpio_num = <246> */
++		interrupt-parent = <&pio>;
++		interrupts = <246 IRQ_TYPE_LEVEL_LOW>;
++		interrupt-names = "wdtmri";
++		richtek,ichg-microamp = <2000000>;
++		richtek,aicr-microamp = <500000>;
++		richtek,mivr-microvolt = <4400000>;
++		richtek,cv-microvolt = <4350000>;
++		richtek,ieoc-microamp = <250000>;
++		richtek,safety-timer-hours = <12>;
++		status = "okay";
++	};
++
++	/*
++	 * FUSB301A USB Type-C CC controller at 0x25.
++	 * Deferred: USB2 host mode works without CC detection.
++	 * Enable in Phase 4+ once USB role switch is wired up.
++	 */
++	usb_cc: typec@25 {
++		compatible = "onsemi,fusb301a";
++		reg = <0x25>;
++		status = "disabled";
++	};
++};
++
++/* i2c1: touchscreen (Novatek NT, address TBD via nvtpid) */
++&i2c1 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&i2c1_pins_a>;
++	clock-frequency = <400000>;
++	status = "okay";
++
++	/*
++	 * Touchscreen: Novatek NT controller at 0x5d.
++	 * Chip model determined at runtime via nvtpid register.
++	 * Disabled until chip model confirmed and driver selected.
++	 */
++	touchscreen@5d {
++		compatible = "novatek,nt11205-ts";
++		reg = <0x5d>;
++		status = "disabled";
++	};
++};
++
++/*
++ * i2c5: AW9523B GPIO/keyboard expander (0x5b) and NFC (0x28).
++ * i2c5 base: 0x1101c000.  Address 0x5b = 0x58 base | AD0=1,AD1=1.
++ * Confirmed: vendor DTS aeon6797_6m_n.dts &i2c5 block.
++ * Mainline i2c5_pins_a: SDA=GPIO240, SCL=GPIO241.
++ */
++&i2c5 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&i2c5_pins_a>;
++	clock-frequency = <400000>;
++	status = "okay";
++
++	/*
++	 * AW9523B 16-bit GPIO expander / LED driver.
++	 * Drives the Gemini PDA 8×7 keyboard matrix.
++	 *
++	 * SHDN: GPIO58 — reset, active-low.
++	 * INT:  GPIO87 (EINT10) — interrupt, active-low.
++	 * GPIO 0..7  (Port 0): keyboard row inputs.
++	 * GPIO 8..14 (Port 1): keyboard column outputs.
++	 *
++	 * Disabled: enable once GPIO driver validated on hardware.
++	 */
++	aw9523b: gpio@5b {
++		compatible = "awinic,aw9523b";
++		reg = <0x5b>;
++		reset-gpios = <&pio 58 GPIO_ACTIVE_LOW>;
++		interrupt-parent = <&pio>;
++		interrupts = <87 IRQ_TYPE_LEVEL_LOW>;
++		gpio-controller;
++		#gpio-cells = <2>;
++		interrupt-controller;
++		#interrupt-cells = <2>;
++		status = "disabled";
++	};
++};
++
++/* i2c7: RT5735 VPROC buck regulator */
++&i2c7 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&i2c7_pins_a>;
++	clock-frequency = <400000>;
++	status = "okay";
++
++	/*
++	 * RT5735 VPROC regulator at 0x1c.
++	 * Enabled once fan53555 RT5735 patch is tested on hardware.
++	 * Fixed regulator (vproc_fixed) is the Phase 3 substitute.
++	 */
++	vproc: regulator@1c {
++		compatible = "richtek,rt5735";
++		reg = <0x1c>;
++		regulator-name = "vproc";
++		regulator-min-microvolt = <600000>;
++		regulator-max-microvolt = <1393750>;
++		richtek,dvs-up-microvolt-per-usec = <32000>;
++		richtek,dvs-down-microvolt-per-usec = <4000>;
++		status = "disabled";
++	};
++};
++
++/* --- Pinctrl --- */
++
++
++&pio {
++	/*
++	 * UART0 pins for Gemini PDA.
++	 * Vendor DTS: UART0 RX=GPIO97, TX=GPIO98.
++	 * These differ from the mainline uart0_pins_a (GPIO234/235).
++	 */
++	uart0_gemini_pins: uart0-gemini {
++		pins-rx-tx {
++			pinmux = <MT6797_GPIO98__FUNC_UTXD0>,
++				 <MT6797_GPIO97__FUNC_URXD0>;
++		};
++	};
++
++	/*
++	 * AW9523B SHDN and INT pins.
++	 * SHDN: GPIO58 as plain GPIO output (active-low reset).
++	 * INT:  GPIO87 as EINT10 input.
++	 */
++	aw9523b_pins: aw9523b {
++		pins-shdn {
++			pinmux = <MT6797_GPIO58__FUNC_GPIO58>;
++			output-high;
++		};
++		pins-int {
++			pinmux = <MT6797_GPIO87__FUNC_EINT10>;
++			input-enable;
++			bias-pull-up;
++		};
++	};
++
++	/*
++	 * Display panel pins.
++	 * Reset:   GPIO180 (active-low).
++	 * ENP:     GPIO60  (AVDD enable, active-high).
++	 * ENN:     GPIO251 (AVEE enable, active-high).
++	 */
++	panel_pins: panel {
++		pins-rst {
++			pinmux = <MT6797_GPIO180__FUNC_GPIO180>;
++			output-low;
++		};
++		pins-enp {
++			pinmux = <MT6797_GPIO60__FUNC_GPIO60>;
++			output-low;
++		};
++	};
++};
++
++/*
++ * Display pipeline — Phase 5 bring-up.
++ *
++ * Panel:  Renesas R63419 "Truly Phantom" 1440x2560 WQHD MIPI DSI CMD mode.
++ * Bias:   TPS65132 at I2C1 / addr 0x3E  — ±5 V AVDD/AVEE.
++ * Reset:  GPIO180 active-low.
++ * ENP/ENN bias enable: GPIO60 / GPIO251 via fixed-regulators above.
++ *
++ * NOTE: R63419 requires dual-DSI (port0 + port1). Mainline MT6797 DRM does
++ * not yet support dual-DSI. Single-port is wired here for initial testing.
++ * The panel will be kept disabled until the DRM pipeline is verified working.
++ */
++&dsi0 {
++	status = "disabled";
++	#address-cells = <1>;
++	#size-cells = <0>;
++
++	/*
++	 * R63419 panel connected to DSI0 port.
++	 * Panel node provides DCS init sequence and timing.
++	 */
++	panel@0 {
++		compatible = "renesas,r63419-truly-wqhd";
++		reg = <0>;
++		avdd-supply = <&lcd_avdd>;
++		avee-supply = <&lcd_avee>;
++		reset-gpios = <&pio 180 GPIO_ACTIVE_LOW>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&panel_pins>;
++
++		port {
++			panel_in: endpoint {
++				remote-endpoint = <&dsi0_out>;
++			};
++		};
++	};
++};
++
++/* Wire dsi0_out (defined in dtsi) to panel_in */
++&dsi0_out {
++	remote-endpoint = <&panel_in>;
++};
++
++&mipi_tx0 {
++	status = "disabled";
++};
++

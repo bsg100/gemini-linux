@@ -1,0 +1,33 @@
+diff --git a/drivers/phy/mediatek/Makefile b/drivers/phy/mediatek/Makefile
+index c9a503955..75b2dad3c 100644
+--- a/drivers/phy/mediatek/Makefile
++++ b/drivers/phy/mediatek/Makefile
+@@ -18,4 +18,5 @@ obj-$(CONFIG_PHY_MTK_HDMI)		+= phy-mtk-hdmi-drv.o
+ phy-mtk-mipi-dsi-drv-y			:= phy-mtk-mipi-dsi.o
+ phy-mtk-mipi-dsi-drv-y			+= phy-mtk-mipi-dsi-mt8173.o
+ phy-mtk-mipi-dsi-drv-y			+= phy-mtk-mipi-dsi-mt8183.o
++phy-mtk-mipi-dsi-drv-y			+= phy-mtk-mipi-dsi-mt6797.o
+ obj-$(CONFIG_PHY_MTK_MIPI_DSI)		+= phy-mtk-mipi-dsi-drv.o
+diff --git a/drivers/phy/mediatek/phy-mtk-mipi-dsi.c b/drivers/phy/mediatek/phy-mtk-mipi-dsi.c
+index 065ea6260..e52c4f06e 100644
+--- a/drivers/phy/mediatek/phy-mtk-mipi-dsi.c
++++ b/drivers/phy/mediatek/phy-mtk-mipi-dsi.c
+@@ -181,6 +181,7 @@ static int mtk_mipi_tx_probe(struct platform_device *pdev)
+ 
+ static const struct of_device_id mtk_mipi_tx_match[] = {
+ 	{ .compatible = "mediatek,mt2701-mipi-tx", .data = &mt2701_mipitx_data },
++	{ .compatible = "mediatek,mt6797-mipi-tx", .data = &mt6797_mipitx_data },
+ 	{ .compatible = "mediatek,mt8173-mipi-tx", .data = &mt8173_mipitx_data },
+ 	{ .compatible = "mediatek,mt8183-mipi-tx", .data = &mt8183_mipitx_data },
+ 	{ /* sentinel */ }
+diff --git a/drivers/phy/mediatek/phy-mtk-mipi-dsi.h b/drivers/phy/mediatek/phy-mtk-mipi-dsi.h
+index 5d4876f1d..44a21a93e 100644
+--- a/drivers/phy/mediatek/phy-mtk-mipi-dsi.h
++++ b/drivers/phy/mediatek/phy-mtk-mipi-dsi.h
+@@ -42,5 +42,6 @@ unsigned long mtk_mipi_tx_pll_recalc_rate(struct clk_hw *hw,
+ extern const struct mtk_mipitx_data mt2701_mipitx_data;
+ extern const struct mtk_mipitx_data mt8173_mipitx_data;
+ extern const struct mtk_mipitx_data mt8183_mipitx_data;
++extern const struct mtk_mipitx_data mt6797_mipitx_data;
+ 
+ #endif
