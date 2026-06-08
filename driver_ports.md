@@ -16,6 +16,7 @@ For the status of each subsystem in context see [hardware.md](hardware.md).
 - [FUSB301A USB-C CC Controller](#fusb301a-cc-controller)
 - [MT6351 Fuel Gauge](#mt6351-fuel-gauge)
 - [Novatek Touchscreen](#novatek-touchscreen)
+- [MT6797 CONSYS WiFi/BT](#mt6797-consys-wifibt)
 
 ---
 
@@ -787,3 +788,128 @@ The mainline driver validates chip identity by reading from offset `0x78` (param
 - Extract `nvtpid` value from Gemian or Kali boot logs for the Gemini PDA.
 - Confirm I2C address of the touchscreen controller (not recorded in current DTS analysis).
 - Determine whether the NT model uses the same MIPI I2C protocol variant as NT11205 or a different one.
+
+---
+
+## MT6797 CONSYS WiFi/BT
+
+**Subsystem:** Wi-Fi / Bluetooth / GPS  
+**hardware.md Action:** Port Driver — deferred to Phase 9  
+**Status:** Research complete (2026-06-08) — implementation not started  
+**Priority:** Phase 9 (Optional Hardware); USB-Ethernet (`xhci-mtk` + USB dongle) is the Phase 8 networking solution
+
+### Architecture
+
+The MT6797X CONSYS is a **hard-IP block integrated into the SoC die**. It is not a discrete external chip. It contains a WiFi MAC/baseband, a BGF block (BT + GPS + FM + ANT), and their shared RF front-end.
+
+```
+MT6797X SoC
+│
+├── AP (ARM Cortex-A72/A53)
+│   ├── AHB bus ──────────────────── WiFi MAC/baseband (memory-mapped registers)
+│   ├── BTIF (on-chip UART) ─────── CONSYS control CPU + BT/GPS/FM mux (STP framing)
+│   └── /dev/mtk_stp_wmt (ioctl) ─── wmt_launcher daemon (firmware + coexistence mgmt)
+│
+└── CONSYS block
+    ├── WiFi MAC (AHB-mapped)
+    ├── BT BGF (via BTIF/STP)
+    ├── GPS (via BTIF/STP)
+    ├── FM radio (via BTIF/STP)
+    └── CONSYS control CPU (runs MCU firmware patches)
+```
+
+**Key architectural facts:**
+- WiFi uses **AHB bus** (NOT SDIO). The gen2 driver registers as a `platform_driver` with `"mediatek,wifi"` compatible and uses AHB memory-mapped register access + PDMA DMA engine.
+- BT/GPS/FM are multiplexed over a single BTIF channel using **STP** (Serial Transport Protocol, a proprietary MTK framing layer). STP is a kernel TTY line discipline (`N_MTKSTP`, ID=16).
+- The `wmt_launcher` userspace daemon must run before any RF function is usable. It opens `/dev/mtk_stp_wmt` and loads MCU firmware patches into the CONSYS control CPU.
+
+### Why Mainline Drivers Don't Apply
+
+| Mainline driver | Why it doesn't help |
+|----------------|---------------------|
+| `mt76` | PCIe/USB chips only (MT7603/MT7615/MT7921). No AHB or integrated variants |
+| `btmtksdio` | SDIO BT for MT7663/MT7668/MT7921/MT7902. MT6625 not in device table |
+| `conninfra` | MT7921-era Filogic PCIe architecture. Completely different from WMT/STP stack |
+| `hci_uart` | BTIF is not a standard TTY; STP framing required; WMT must be running first |
+| `btmtkuart` | For external UART chips; does not match CONSYS BTIF architecture |
+
+### Vendor Driver Structure
+
+Source: `github.com/gemian/gemini-linux-kernel-3.18`  
+Path: `drivers/misc/mediatek/connectivity/`
+
+| Directory | Files | Function |
+|-----------|-------|----------|
+| `common/common_main/mt6797/` | `mtk_wcn_consys_hw.c` | CONSYS power-on/off: regulators, clocks (CCF), ioremap, GPIO, EMI reserved memory |
+| `common/common_main/core/` | 15 .c files (~8–10 KLOC) | WMT core: chip ID probe, firmware patch download, coexistence config |
+| `common/common_main/linux/` | 13 .c files (~6–8 KLOC) | Linux glue: chrdevs, STP-BTIF, debug procfs, OS abstraction layer |
+| `common/common_detect/` | ~12 files (~3–4 KLOC) | Platform driver DT probe, external chip detection, GPIO setup |
+| `wlan/gen2/mgmt/` | ~46 .c files (~30–40 KLOC) | Full 802.11 management stack: scan FSM, AIS FSM, auth, assoc, RSN/WPA, roaming, TDLS, P2P, HS2.0 |
+| `wlan/gen2/common/` + `nic/` | ~15 .c files (~8–10 KLOC) | NIC layer, TX/RX, OID, P2P, BOW |
+| `wlan/gen2/os/linux/` | ~14 .c files (~10–15 KLOC) | cfg80211 ops, cfg80211_ops table, vendor commands (Google OUI + QCA OUI) |
+| `wlan/gen2/hif/ahb/mt6797/` | `ahb.c`, `ahb_pdma.c` | MT6797 AHB + PDMA DMA engine |
+| `drv_bt/linux/hci_stp.c` | 1 file | BlueZ path: `hci_alloc_dev` + `hci_register_dev`, routes HCI via STP |
+| `bt/stp_chrdev_bt.c` | 1 file | Bluedroid path: `/dev/stpbt` char device |
+| `gps/` + `fmradio/` | ~15 files | GPS and FM char devices |
+
+**Total size (gen2 path, excluding gen3):** ~136 .c files, ~75–103 KLOC
+
+### Firmware Requirements
+
+Loaded by `wmt_launcher` daemon from `/system/etc/firmware/`:
+- MCU firmware patches: `ROMv3_patch_1_0_hdr.bin`, `ROMv3_patch_1_1_hdr.bin` (MT6797 IC ID 0x0279)
+- WMT configuration: `WMT.cfg` / `WMT_SOC.cfg` (at `/system/vendor/firmware/`)
+- WiFi firmware config: `wifi_fw.cfg` (at `/vendor/firmware/`)
+
+**Full firmware file inventory must be confirmed by mounting `system.img` in the build VM:**
+```bash
+sudo mount -o loop,ro /path/to/planet/system.img /mnt/android
+find /mnt/android/etc/firmware /mnt/android/vendor/firmware -type f | sort
+```
+
+Firmware blobs from the Android system partition must be placed in `/lib/firmware/` of the Linux rootfs for CONSYS to initialise.
+
+### Community Reference
+
+**Best available out-of-tree port:** `github.com/frank-w/BPI-Router-Linux`
+
+The BPI-R2 (Banana Pi R2) uses an external SDIO MT6625 combo chip — the same WiFi/BT core as MT6797 CONSYS, but with an SDIO transport instead of AHB/BTIF. The `wlan_drv_gen2` WiFi driver core is shared; the HIF layer differs.
+
+| Kernel | WiFi | BT | Status |
+|--------|------|----|--------|
+| 3.18 (vendor) | ✓ | ✓ | Vendor |
+| 4.4–5.6 | ✓ | ✓ | frank-w BPI-R2 |
+| 5.7–5.15 | partial | **broken** | BT core changes in 5.7; unfixed |
+| **6.0+** | **broken** | **broken** | Unidentified kernel API changes; no active fix |
+
+### Porting Strategy (Phase 9)
+
+**Do NOT start from 3.18.** The frank-w BPI-Router-Linux tree already bridges 3.18→5.6. Start there.
+
+1. **Identify the 5.7 BT breakage** — compare BT HCI registration path (`hci_stp.c` or `hci_alloc_dev` API) against `net/bluetooth/` changes between kernel 5.6 and 5.7. This is the first blocker.
+
+2. **Identify the 6.0 WiFi breakage** — diff the frank-w 5.15 tree against 6.0 kernel changes in `net/wireless/` and `lib/` that would affect cfg80211 registration, SDIO subsystem, or the AHB DMA API.
+
+3. **Port CONSYS HW init to 6.6 API** — `mtk_wcn_consys_hw.c` uses: `regulator_*`, `clk_*` (CCF), `devm_pinctrl_*`, `ioremap/readl/writel`, `request_irq`, `of_reserved_mem`. All are stable CCF/regulator framework calls; this component is the least changed.
+
+4. **Port `wmt_launcher`** — The userspace daemon must be compiled for arm64 Linux (not Android libc). It uses `/dev/mtk_stp_wmt` ioctls. A musl libc / glibc build should be straightforward; the binary is available in the Android system partition.
+
+5. **AHB HIF vs SDIO HIF** — The frank-w tree uses the SDIO HIF. For MT6797, the AHB HIF (`hif/ahb/mt6797/`) must be used instead. This is already present in the vendor gen2 driver.
+
+6. **BT path** — Use `hci_stp.c` (BlueZ path) once CONSYS firmware is running. This hooks into standard `hci_core` and should be transparent to BlueZ userspace tools.
+
+### Phase 8 Fallback
+
+USB-Ethernet via USB-C port and `xhci-mtk` is the **definitive Phase 8 networking solution**. It requires no driver porting and works as soon as USB is functional. Options:
+- USB Ethernet adapter (CDC-ECM/CDC-NCM class, supported in mainline)
+- USB gadget `g_ether` mode (device acts as Ethernet adapter connected to host PC)
+
+WiFi and Bluetooth porting is deferred until the device boots stably and all core milestones (Phases 3–7) are complete.
+
+### Open Questions
+
+- **Firmware inventory:** Mount `system.img` in VM to confirm exact firmware filenames, sizes, and whether NVRAM calibration data (`*.cfg`) is device-specific.
+- **wmt_launcher binary:** Confirm whether the binary is present in `system.img` and whether it compiles cleanly with standard glibc for arm64 Linux.
+- **6.0 WiFi breakage root cause:** Review Linux 6.0 changelogs for cfg80211, `net/wireless/`, and AHB DMA changes that could affect `wlan_drv_gen2`.
+- **5.7 BT breakage root cause:** Review Linux 5.7 changelog for `net/bluetooth/` HCI registration changes affecting `hci_alloc_dev()` / `hci_register_dev()`.
+- **MT6797 AHB DMA API:** Confirm whether the MT6797 AHB PDMA engine (`ahb_pdma.c`) uses the standard DMA engine API or a vendor-specific DMA API that needs porting.
