@@ -13,6 +13,26 @@ The project should follow a hardware-enablement methodology similar to that used
 # History
 files in archive/ refelct previous attempts.  they could contain details of lessons learnt, but the approach may have changed so use it as a resource, but any assumptions drawn must be tested.
 
+# Current Operating Decisions
+
+**Driver-work freeze (2026-06-10):** no new driver code until the first serial
+output on hardware (Phase 3). Permitted work: documentation, evidence
+extraction (vendor DTB / spec PDF / boot images), Phase-3 build and packaging
+scripts, and fixes to existing patches required for the minimal boot. See
+[blockers.md](blockers.md) for rationale and the full blocker list.
+
+**Console (resolved 2026-06-10):** debug console is UART0 @ 0x11002000
+(vendor `ttyMT0`, mainline `ttyS0`), 921600 baud, RX=GPIO97 / TX=GPIO98.
+Triple-sourced; see [kernel.md](kernel.md). The `ttyMT3` value in the
+known-good kernel's CONFIG_CMDLINE is a never-used fallback — do not use it.
+
+**Vendor DTB evidence:** the decompiled vendor device tree is committed at
+`docs/vendor-dtb/gemini_kali_boot.dts` (extracted from `planet/kali_boot.img`),
+with the known-good kernel config alongside. Do not cite `/tmp` paths in
+project documents.
+
+---
+
 # Core Principles
 
 1. Prefer upstream Linux drivers over vendor-specific drivers.
@@ -295,20 +315,30 @@ Optional hardware should never block progress toward earlier milestones.
 
 # Build Environment
 
-All kernel builds are performed inside the QEMU arm64 VM. Do not attempt to cross-compile on macOS — the kernel host-tool build chain requires Linux.
+All kernel builds are performed inside the QEMU arm64 VM. Do not attempt to cross-compile on macOS — the kernel host-tool build chain requires Linux (confirmed again 2026-06-10: macOS's case-insensitive filesystem produces phantom file collisions in the kernel tree).
+
+> **VM rebuilt 2026-06-10** after the original was deleted in a disk cleanup.
+> Now Debian 13 (was Kali) provisioned headlessly via cloud-init — rebuild any
+> time with `~/gemini-build/vm/seed/` + the base image (see blockers.md B-10
+> history). Patch validation and DTS compilation also work directly on macOS:
+> `git apply --check` against `/Volumes/extdata/github/linux-6.6` and
+> `clang -E -nostdinc -x assembler-with-cpp -undef -D__DTS__ -I include
+> -I arch/arm64/boot/dts <dts>` piped to Homebrew `dtc`.
 
 ## Build VM
 
 | Parameter | Value |
 |-----------|-------|
-| Image | `~/gemini-build/vm/gemini-build.qcow2` |
-| Architecture | arm64 (Kali Linux) |
-| GCC | 15.2.0 (Debian) — confirmed working with Linux 6.6 |
-| Make | 4.4.1 |
-| SSH | `ssh -p 5522 -o StrictHostKeyChecking=no root@localhost` |
+| Image | `~/gemini-build/vm/gemini-build.qcow2` (10 GiB virtual, `discard=unmap`) |
+| Base / rescue image | `~/gemini-build/vm/debian-13-generic-arm64.qcow2` + `seed.iso` (cloud-init: root key+password, build deps) |
+| OS | Debian 13 arm64 (cloud image; was Kali pre-2026-06-10) |
+| GCC | 14.2.0 (Debian 13) — full kernel build confirmed 2026-06-10. (GCC 15.2 note below predates the rebuild; both work for 6.6.) |
+| SSH | `ssh -p 5522 root@localhost` — key auth (`~/.ssh/id_ed25519`) or password |
 | Password | toor |
-| Kernel source (in VM) | `~/linux-6.6/` |
-| Project source (in VM) | `~/gemini_linux/` |
+| Kernel source (in VM) | `~/linux-6.6/` (shallow clone, tag v6.6 — clone in-VM; do **not** rsync the Mac checkout, macOS case-folding corrupts colliding files like `xt_CONNMARK.h`) |
+| Project source (in VM) | `~/gemini_linux/` (rsync, exclude `planet/` + `FlashToolLinux/`) |
+| Host share | `~/gemini-build` ↔ `/mnt/host` (9p, tag `hostshare`); build outputs in `~/gemini-build/OUTPUT/` |
+| Disk hygiene | run `fstrim /` in the VM after large deletions — with `discard=unmap` the host qcow2 shrinks |
 
 **Start the VM (macOS):**
 ```bash

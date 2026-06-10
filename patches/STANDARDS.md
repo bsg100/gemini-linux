@@ -1,7 +1,8 @@
 # Patch Authoring Standard
 
-Every driver patch in this project is reviewed against the rubric in
-[`../code_review/opus_driver_review_prompt.md`](../code_review/opus_driver_review_prompt.md).
+Every driver patch in this project is reviewed against the adversarial-review
+rubric (kept locally in `archive/opus_driver_review_prompt.md`; `archive/` is
+not committed).
 This document distils that rubric into the concrete rules a patch **must**
 satisfy before it is added under `patches/`. It exists so the same defects found
 in the first review round are not reintroduced.

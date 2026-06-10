@@ -81,7 +81,7 @@ If all checks pass → add as new variant. If two or more fail → write standal
 
 **Subsystem:** Regulators (external) — VPROC (CPU voltage) + VGPU  
 **hardware.md Action:** Port Driver  
-**Status:** Code complete — compiles cleanly against Linux 6.6 with GCC 15.2.0; DT binding written; not yet tested on hardware  
+**Status:** Code complete — **compiled built-in in full kernel build 2026-06-10** (`REGULATOR_FAN53555=y`, GCC 14.2, rebuilt VM); DT binding written; not yet tested on hardware; register values remain verification-blocked (findings.md)  
 **Priority:** Boot Critical — blocks DVFS; can defer with fixed-voltage workaround
 
 ### Background
@@ -348,7 +348,7 @@ dmesg | grep rt5735
 
 **Subsystem:** Display Controller (MMSYS / DDP)  
 **hardware.md Action:** Port Driver  
-**Status:** Code complete — all changes compile cleanly against Linux 6.6 with GCC 15.2.0; not yet tested on hardware  
+**Status:** Code complete — **compiled as modules in full kernel build 2026-06-10** (`DRM_MEDIATEK=m` + MT6797 DDP/DSI/MIPITX, GCC 14.2); not yet tested on hardware; MIPITX PLL values remain verification-blocked (findings.md)  
 **Priority:** Usability Critical — Phase 5 (display bring-up)
 
 ### Background
@@ -386,7 +386,7 @@ The MT6797 MIPITX PHY register layout must be extracted from the vendor driver a
 
 ### DTS Additions Required
 
-The Gemini board DTS will need display pipeline nodes matching the upstream bindings. These should follow the pattern in `mt8173-evb.dts` adapted for MT6797 register addresses extracted from the vendor DTS (`/tmp/gemini_kernel.dts`).
+The Gemini board DTS will need display pipeline nodes matching the upstream bindings. These should follow the pattern in `mt8173-evb.dts` adapted for MT6797 register addresses extracted from the vendor DTS ([`docs/vendor-dtb/gemini_kali_boot.dts`](docs/vendor-dtb/gemini_kali_boot.dts)).
 
 ### Reference Implementations
 
@@ -428,14 +428,14 @@ All planned changes are implemented and compile cleanly.
 
 **Subsystem:** Display Panel  
 **hardware.md Action:** Port Driver  
-**Status:** Code complete — driver compiles cleanly against Linux 6.6; not yet tested on hardware  
+**Status:** Code complete — **compiled as module in full kernel build 2026-06-10** (`DRM_PANEL_RENESAS_R63419=m`); not yet tested on hardware  
 **Priority:** Usability Critical — Phase 5 (after display controller)
 
 ### Background
 
 The Gemini PDA display is a 5.99-inch Renesas R63419 WQHD (1440×2560) MIPI DSI CMD-mode panel ("Truly Phantom 2K"). The vendor driver lives in the MTK LCM framework (`drivers/misc/mediatek/lcm/r63419_wqhd_truly_phantom_2k_cmd/`) which is an Android-only abstraction that cannot be ported. A new DRM panel driver must be written.
 
-The full panel initialization sequence is available in the vendor DTS (decompiled at `/tmp/gemini_kernel.dts`) and the LCM source. This is the primary source of truth for the port.
+The full panel initialization sequence is available in the vendor DTS (decompiled at [`docs/vendor-dtb/gemini_kali_boot.dts`](docs/vendor-dtb/gemini_kali_boot.dts)) and the LCM source. This is the primary source of truth for the port.
 
 ### Closest Mainline References
 
@@ -511,7 +511,7 @@ Full DRM panel driver written from scratch. Init sequence (`lcm_initialization_s
 
 **Subsystem:** Keyboard Matrix Controller  
 **hardware.md Action:** Port Driver  
-**Status:** Code complete — GPIO driver (gpio-aw9523b.c) compiles cleanly; DT binding written; keyboard DTS node with full keymap added; not yet tested on hardware  
+**Status:** Code complete — **compiled as module in full kernel build 2026-06-10** (`GPIO_AW9523B=m`; the earlier "compiles" claim predated any real build and hid a fabricated-API bug, since fixed — see findings.md "Full-build validation pass"); DT binding written; keyboard DTS node with full keymap added; not yet tested on hardware. **IRQ blocked by missing EINT support in mainline pinctrl-mt6797 (blockers.md B-11)** — `matrix-keypad` polling is the workaround.  
 **Priority:** Usability Critical — Phase 6
 
 ### Background
@@ -639,7 +639,7 @@ Path A chosen and implemented. The AW9523B GPIO driver (`drivers/gpio/gpio-aw952
 
 **Subsystem:** USB-C CC Controller  
 **hardware.md Action:** Port Driver  
-**Status:** Code complete — driver written (`drivers/usb/typec/fusb301a.c`), compiles cleanly, DTS node added (disabled); not yet tested on hardware  
+**Status:** Code complete — **compiled as module in full kernel build 2026-06-10** (`TYPEC_FUSB301A=m`; the prior review's `devm_usb_role_switch_get` "fix" used a nonexistent API — replaced with `usb_role_switch_get` + devm action, see findings.md); DTS node added (disabled); role-decode FIXME still needs the datasheet; not yet tested on hardware  
 **Priority:** Usability Critical for full Type-C; USB2 host mode works without it
 
 ### Background

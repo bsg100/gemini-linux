@@ -1,9 +1,21 @@
+diff --git a/arch/arm64/boot/dts/mediatek/Makefile b/arch/arm64/boot/dts/mediatek/Makefile
+index c99c3372a..ffe1ab530 100644
+--- a/arch/arm64/boot/dts/mediatek/Makefile
++++ b/arch/arm64/boot/dts/mediatek/Makefile
+@@ -5,6 +5,7 @@ dtb-$(CONFIG_ARCH_MEDIATEK) += mt6779-evb.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt6795-evb.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt6795-sony-xperia-m5.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt6797-evb.dtb
++dtb-$(CONFIG_ARCH_MEDIATEK) += mt6797-gemini-pda.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt6797-x20-dev.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7622-rfb1.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7622-bananapi-bpi-r64.dtb
 diff --git a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
 new file mode 100644
-index 000000000..4b2a1ef89
+index 000000000..3ba6ccc18
 --- /dev/null
 +++ b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
-@@ -0,0 +1,437 @@
+@@ -0,0 +1,524 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Device tree for Planet Computers Gemini PDA
@@ -49,18 +61,99 @@ index 000000000..4b2a1ef89
 +	};
 +
 +	/*
-+	 * TODO (verify in VM): add a reserved-memory node.
-+	 *   - Confirm whether mainline mt6797.dtsi already reserves the
-+	 *     ATF/TEE/SCP carve-outs at the top of DRAM. If it does not, the
-+	 *     flat 4 GB region below lets the kernel stomp firmware memory.
-+	 *   - Add a ramoops/pstore region so a panic that kills the UART
-+	 *     still leaves a post-mortem (CLAUDE.md Phase 3 goal).
-+	 * Addresses must come from the vendor memory map / LK — do not guess.
++	 * Memory: 4 GB LPDDR3. The vendor DTB carries a 1 GB placeholder
++	 * (vendor DTB memory@00000000: reg = <0 0x40000000 0 0x40000000>)
++	 * which the preloader/LK fixes up at boot with the real DRAM size.
++	 * LK should fix up this node the same way; the 4 GB value below is
++	 * the fallback if it does not. TODO: verify LK fixup on hardware.
 +	 */
 +	memory@40000000 {
 +		device_type = "memory";
-+		/* 4 GB LPDDR3 (TODO: confirm base/size and DRAM holes) */
 +		reg = <0 0x40000000 1 0x00000000>;
++	};
++
++	/*
++	 * Firmware carve-outs, from the vendor DTB reserved-memory node
++	 * (docs/vendor-dtb/gemini_kali_boot.dts lines 317-409). Only the
++	 * fixed-address entries are reproduced here; the vendor's dynamic
++	 * size/alignment entries (ccci modem, consys, scp_share, spm) are
++	 * allocation requests serviced by 3.18 vendor drivers this kernel
++	 * does not run, so nothing claims those regions.
++	 *
++	 * Layout context (Android boot header of kali_boot.img): kernel @
++	 * 0x40080000, tags @ 0x44000000, ramdisk @ 0x45000000.
++	 */
++	reserved-memory {
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++
++		/* vendor: mediatek,spm-dummy-1 — first page of DRAM */
++		spm-dummy@40000000 {
++			reg = <0 0x40000000 0 0x1000>;
++			no-map;
++		};
++
++		/* vendor: ram_console-reserve-memory. Matches known-good
++		 * CONFIG_MTK_RAM_CONSOLE_DRAM_ADDR=0x44400000 (see
++		 * docs/vendor-dtb/kali_known_good_kernel.config). */
++		ramconsole@44400000 {
++			reg = <0 0x44400000 0 0x10000>;
++			no-map;
++		};
++
++		/*
++		 * ramoops in the exact region Android/Kali already uses for
++		 * pstore (vendor: mediatek,pstore @ 0x44410000, len 0xe0000),
++		 * so the dual-boot handoff is safe: the other OS expects this
++		 * region to hold console logs too. Gives a post-mortem when a
++		 * panic kills the UART (STANDARDS.md rule 7).
++		 */
++		ramoops@44410000 {
++			compatible = "ramoops";
++			reg = <0 0x44410000 0 0xe0000>;
++			record-size = <0x8000>;
++			console-size = <0x40000>;
++			pmsg-size = <0x8000>;
++			ftrace-size = <0x8000>;
++		};
++
++		/* vendor: minirdump-reserve-memory */
++		minirdump@444f0000 {
++			reg = <0 0x444f0000 0 0x10000>;
++			no-map;
++		};
++
++		/* vendor: mediatek,mt6797-atf-reserved-memory —
++		 * ARM Trusted Firmware; no-map in vendor DTB too */
++		atf@44600000 {
++			reg = <0 0x44600000 0 0x10000>;
++			no-map;
++		};
++
++		/* vendor: mediatek,mt6797-atf-ramdump-memory */
++		atf-ramdump@44610000 {
++			reg = <0 0x44610000 0 0x30000>;
++			no-map;
++		};
++
++		/* vendor: mediatek,cache-dump-memory */
++		cache-dump@44640000 {
++			reg = <0 0x44640000 0 0x30000>;
++			no-map;
++		};
++
++		/* vendor: mediatek,preloader */
++		preloader@44800000 {
++			reg = <0 0x44800000 0 0x100000>;
++			no-map;
++		};
++
++		/* vendor: mediatek,lk */
++		lk@46000000 {
++			reg = <0 0x46000000 0 0x400000>;
++			no-map;
++		};
 +	};
 +
 +	/* Fixed 1.8V rail for I2C pull-ups and digital logic (Phase 3 stub) */
@@ -235,10 +328,17 @@ index 000000000..4b2a1ef89
 +	clock-frequency = <400000>;
 +	status = "okay";
 +
++	/*
++	 * RT9466 charger (Phase 7). IRQ: vendor DTS rt,intr_gpio_num = <246>.
++	 * DISABLED: mainline pinctrl-mt6797.c has no EINT support, so
++	 * interrupt-parent = <&pio> cannot resolve and probe would fail.
++	 * Vendor EINT controller: eintc@1000b000, GIC SPI 170, 192 lines
++	 * (docs/vendor-dtb/gemini_kali_boot.dts line 2835). Enable after
++	 * EINT support is added to pinctrl-mt6797 — see blockers.md B-11.
++	 */
 +	charger: battery-charger@53 {
 +		compatible = "richtek,rt9467";
 +		reg = <0x53>;
-+		/* IRQ: vendor DTS rt,intr_gpio_num = <246> */
 +		interrupt-parent = <&pio>;
 +		interrupts = <246 IRQ_TYPE_LEVEL_LOW>;
 +		interrupt-names = "wdtmri";
@@ -248,7 +348,7 @@ index 000000000..4b2a1ef89
 +		richtek,cv-microvolt = <4350000>;
 +		richtek,ieoc-microamp = <250000>;
 +		richtek,safety-timer-hours = <12>;
-+		status = "okay";
++		status = "disabled";
 +	};
 +
 +	/*
@@ -440,4 +540,3 @@ index 000000000..4b2a1ef89
 +&mipi_tx0 {
 +	status = "disabled";
 +};
-+

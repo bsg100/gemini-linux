@@ -1,3 +1,78 @@
+diff --git a/Documentation/devicetree/bindings/gpio/awinic,aw9523b.yaml b/Documentation/devicetree/bindings/gpio/awinic,aw9523b.yaml
+new file mode 100644
+index 000000000..fe482e1c3
+--- /dev/null
++++ b/Documentation/devicetree/bindings/gpio/awinic,aw9523b.yaml
+@@ -0,0 +1,69 @@
++# SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/gpio/awinic,aw9523b.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: AWINIC AW9523B 16-bit I2C GPIO expander
++
++maintainers:
++  - Gemini PDA Linux Project
++
++description: |
++  The AW9523B provides two 8-bit GPIO ports (P0 = GPIO 0-7, P1 = GPIO 8-15)
++  with per-pin direction control, interrupt generation, and optional LED mode.
++  On the Gemini PDA it is used as a keyboard matrix controller.
++
++properties:
++  compatible:
++    const: awinic,aw9523b
++
++  reg:
++    maxItems: 1
++
++  gpio-controller: true
++
++  '#gpio-cells':
++    const: 2
++
++  interrupt-controller: true
++
++  '#interrupt-cells':
++    const: 2
++
++  interrupts:
++    maxItems: 1
++    description: IRQ from the AW9523B INT pin (active-low, open-drain)
++
++  reset-gpios:
++    maxItems: 1
++    description: GPIO connected to the AW9523B SHDN (active-low reset) pin
++
++required:
++  - compatible
++  - reg
++  - gpio-controller
++  - '#gpio-cells'
++
++additionalProperties: false
++
++examples:
++  - |
++    #include <dt-bindings/gpio/gpio.h>
++    #include <dt-bindings/interrupt-controller/irq.h>
++
++    i2c {
++      #address-cells = <1>;
++      #size-cells = <0>;
++
++      keyboard_gpio: gpio@58 {
++        compatible = "awinic,aw9523b";
++        reg = <0x58>;
++        gpio-controller;
++        #gpio-cells = <2>;
++        interrupt-controller;
++        #interrupt-cells = <2>;
++        interrupts = <87 IRQ_TYPE_LEVEL_LOW>;
++        reset-gpios = <&pio 58 GPIO_ACTIVE_LOW>;
++      };
++    };
 diff --git a/drivers/gpio/Kconfig b/drivers/gpio/Kconfig
 index 673bafb8b..d61fd0652 100644
 --- a/drivers/gpio/Kconfig
@@ -33,10 +108,10 @@ index eb73b5d63..c8d7c4522 100644
  obj-$(CONFIG_GPIO_ASPEED)		+= gpio-aspeed.o
 diff --git a/drivers/gpio/gpio-aw9523b.c b/drivers/gpio/gpio-aw9523b.c
 new file mode 100644
-index 000000000..8e71917b9
+index 000000000..e32e4cf9d
 --- /dev/null
 +++ b/drivers/gpio/gpio-aw9523b.c
-@@ -0,0 +1,413 @@
+@@ -0,0 +1,416 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * AWINIC AW9523B 16-bit I2C GPIO expander driver
@@ -83,7 +158,6 @@ index 000000000..8e71917b9
 +
 +struct aw9523b {
 +	struct gpio_chip gc;
-+	struct irq_chip irqc;
 +	struct regmap *regmap;
 +	struct gpio_desc *reset_gpio;
 +	struct mutex lock;
@@ -201,6 +275,7 @@ index 000000000..8e71917b9
 +	struct aw9523b *aw = gpiochip_get_data(gc);
 +
 +	aw->irq_mask |= BIT(d->hwirq);
++	gpiochip_disable_irq(gc, irqd_to_hwirq(d));
 +}
 +
 +static void aw9523b_irq_unmask(struct irq_data *d)
@@ -208,6 +283,7 @@ index 000000000..8e71917b9
 +	struct gpio_chip *gc = irq_data_get_irq_chip_data(d);
 +	struct aw9523b *aw = gpiochip_get_data(gc);
 +
++	gpiochip_enable_irq(gc, irqd_to_hwirq(d));
 +	aw->irq_mask &= ~BIT(d->hwirq);
 +}
 +
@@ -230,6 +306,16 @@ index 000000000..8e71917b9
 +	regmap_write(aw->regmap, AW9523B_REG_P1_INT, p1_mask);
 +	mutex_unlock(&aw->lock);
 +}
++
++static const struct irq_chip aw9523b_irq_chip = {
++	.name			= "aw9523b",
++	.irq_mask		= aw9523b_irq_mask,
++	.irq_unmask		= aw9523b_irq_unmask,
++	.irq_bus_lock		= aw9523b_irq_bus_lock,
++	.irq_bus_sync_unlock	= aw9523b_irq_bus_sync_unlock,
++	.flags			= IRQCHIP_IMMUTABLE,
++	GPIOCHIP_IRQ_RESOURCE_HELPERS,
++};
 +
 +static irqreturn_t aw9523b_irq_handler(int irq, void *dev_id)
 +{
@@ -377,15 +463,7 @@ index 000000000..8e71917b9
 +	if (client->irq) {
 +		struct gpio_irq_chip *girq = &aw->gc.irq;
 +
-+		aw->irqc.name		     = "aw9523b";
-+		aw->irqc.irq_mask	     = aw9523b_irq_mask;
-+		aw->irqc.irq_unmask	     = aw9523b_irq_unmask;
-+		aw->irqc.irq_bus_lock	     = aw9523b_irq_bus_lock;
-+		aw->irqc.irq_bus_sync_unlock = aw9523b_irq_bus_sync_unlock;
-+		aw->irqc.flags		     = IRQCHIP_IMMUTABLE;
-+		INIT_LIST_HEAD(&aw->irqc.irq_eoi_list);
-+
-+		girq->chip		= &aw->irqc;
++		gpio_irq_chip_set_chip(girq, &aw9523b_irq_chip);
 +		girq->handler		= handle_simple_irq;
 +		girq->default_type	= IRQ_TYPE_NONE;
 +		girq->threaded		= true;
@@ -450,78 +528,3 @@ index 000000000..8e71917b9
 +MODULE_AUTHOR("Gemini PDA Linux Project");
 +MODULE_DESCRIPTION("AWINIC AW9523B 16-bit I2C GPIO expander");
 +MODULE_LICENSE("GPL");
-diff --git a/Documentation/devicetree/bindings/gpio/awinic,aw9523b.yaml b/Documentation/devicetree/bindings/gpio/awinic,aw9523b.yaml
-new file mode 100644
-index 000000000..fe482e1c3
---- /dev/null
-+++ b/Documentation/devicetree/bindings/gpio/awinic,aw9523b.yaml
-@@ -0,0 +1,69 @@
-+# SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause
-+%YAML 1.2
-+---
-+$id: http://devicetree.org/schemas/gpio/awinic,aw9523b.yaml#
-+$schema: http://devicetree.org/meta-schemas/core.yaml#
-+
-+title: AWINIC AW9523B 16-bit I2C GPIO expander
-+
-+maintainers:
-+  - Gemini PDA Linux Project
-+
-+description: |
-+  The AW9523B provides two 8-bit GPIO ports (P0 = GPIO 0-7, P1 = GPIO 8-15)
-+  with per-pin direction control, interrupt generation, and optional LED mode.
-+  On the Gemini PDA it is used as a keyboard matrix controller.
-+
-+properties:
-+  compatible:
-+    const: awinic,aw9523b
-+
-+  reg:
-+    maxItems: 1
-+
-+  gpio-controller: true
-+
-+  '#gpio-cells':
-+    const: 2
-+
-+  interrupt-controller: true
-+
-+  '#interrupt-cells':
-+    const: 2
-+
-+  interrupts:
-+    maxItems: 1
-+    description: IRQ from the AW9523B INT pin (active-low, open-drain)
-+
-+  reset-gpios:
-+    maxItems: 1
-+    description: GPIO connected to the AW9523B SHDN (active-low reset) pin
-+
-+required:
-+  - compatible
-+  - reg
-+  - gpio-controller
-+  - '#gpio-cells'
-+
-+additionalProperties: false
-+
-+examples:
-+  - |
-+    #include <dt-bindings/gpio/gpio.h>
-+    #include <dt-bindings/interrupt-controller/irq.h>
-+
-+    i2c {
-+      #address-cells = <1>;
-+      #size-cells = <0>;
-+
-+      keyboard_gpio: gpio@58 {
-+        compatible = "awinic,aw9523b";
-+        reg = <0x58>;
-+        gpio-controller;
-+        #gpio-cells = <2>;
-+        interrupt-controller;
-+        #interrupt-cells = <2>;
-+        interrupts = <87 IRQ_TYPE_LEVEL_LOW>;
-+        reset-gpios = <&pio 58 GPIO_ACTIVE_LOW>;
-+      };
-+    };

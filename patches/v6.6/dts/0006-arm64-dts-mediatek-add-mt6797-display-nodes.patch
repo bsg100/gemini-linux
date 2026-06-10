@@ -1,5 +1,5 @@
 diff --git a/arch/arm64/boot/dts/mediatek/mt6797.dtsi b/arch/arm64/boot/dts/mediatek/mt6797.dtsi
-index c3677d77e..4022434bc 100644
+index c3677d77e..6c62dfce4 100644
 --- a/arch/arm64/boot/dts/mediatek/mt6797.dtsi
 +++ b/arch/arm64/boot/dts/mediatek/mt6797.dtsi
 @@ -8,6 +8,7 @@
@@ -10,7 +10,7 @@ index c3677d77e..4022434bc 100644
  
  / {
  	compatible = "mediatek,mt6797";
-@@ -452,6 +453,137 @@ mmsys: syscon@14000000 {
+@@ -452,6 +453,150 @@ mmsys: syscon@14000000 {
  		#clock-cells = <1>;
  	};
  
@@ -28,8 +28,8 @@ index c3677d77e..4022434bc 100644
 +		clocks = <&mmsys CLK_MM_SMI_LARB0>,
 +			 <&mmsys CLK_MM_SMI_LARB0>;
 +		clock-names = "apb", "smi";
++		status = "disabled";
 +	};
-+
 +	/*
 +	 * SMI common (Streaming Memory Interface shared bus arbiter).
 +	 * Address 0x14022000 confirmed from vendor kernel DTB embedded in
@@ -44,8 +44,8 @@ index c3677d77e..4022434bc 100644
 +		clocks = <&mmsys CLK_MM_SMI_COMMON>,
 +			 <&mmsys CLK_MM_SMI_COMMON>;
 +		clock-names = "apb", "smi";
++		status = "disabled";
 +	};
-+
 +	disp_ovl0: disp-ovl0@1400b000 {
 +		compatible = "mediatek,mt6797-disp-ovl";
 +		reg = <0 0x1400b000 0 0x1000>;
@@ -53,8 +53,8 @@ index c3677d77e..4022434bc 100644
 +		power-domains = <&scpsys MT6797_POWER_DOMAIN_MM>;
 +		clocks = <&mmsys CLK_MM_DISP_OVL0>;
 +		mediatek,larb = <&larb0>;
++		status = "disabled";
 +	};
-+
 +	disp_ovl_2l0: disp-ovl2l0@1400d000 {
 +		compatible = "mediatek,mt6797-disp-ovl-2l";
 +		reg = <0 0x1400d000 0 0x1000>;
@@ -62,8 +62,8 @@ index c3677d77e..4022434bc 100644
 +		power-domains = <&scpsys MT6797_POWER_DOMAIN_MM>;
 +		clocks = <&mmsys CLK_MM_DISP_OVL0_2L>;
 +		mediatek,larb = <&larb0>;
++		status = "disabled";
 +	};
-+
 +	disp_rdma0: disp-rdma0@1400f000 {
 +		compatible = "mediatek,mt6797-disp-rdma";
 +		reg = <0 0x1400f000 0 0x1000>;
@@ -73,63 +73,63 @@ index c3677d77e..4022434bc 100644
 +		mediatek,larb = <&larb0>;
 +		width-in-pixel = <1440>;
 +		fifo-size = <1536>;
++		status = "disabled";
 +	};
-+
 +	disp_color0: disp-color0@14013000 {
 +		compatible = "mediatek,mt6797-disp-color";
 +		reg = <0 0x14013000 0 0x1000>;
 +		interrupts = <GIC_SPI 221 IRQ_TYPE_LEVEL_LOW>;
 +		power-domains = <&scpsys MT6797_POWER_DOMAIN_MM>;
 +		clocks = <&mmsys CLK_MM_DISP_COLOR>;
++		status = "disabled";
 +	};
-+
 +	disp_ccorr0: disp-ccorr0@14014000 {
 +		compatible = "mediatek,mt6797-disp-ccorr";
 +		reg = <0 0x14014000 0 0x1000>;
 +		interrupts = <GIC_SPI 222 IRQ_TYPE_LEVEL_LOW>;
 +		power-domains = <&scpsys MT6797_POWER_DOMAIN_MM>;
 +		clocks = <&mmsys CLK_MM_DISP_CCORR>;
++		status = "disabled";
 +	};
-+
 +	disp_aal0: disp-aal0@14015000 {
 +		compatible = "mediatek,mt6797-disp-aal";
 +		reg = <0 0x14015000 0 0x1000>;
 +		interrupts = <GIC_SPI 223 IRQ_TYPE_LEVEL_LOW>;
 +		power-domains = <&scpsys MT6797_POWER_DOMAIN_MM>;
 +		clocks = <&mmsys CLK_MM_DISP_AAL>;
++		status = "disabled";
 +	};
-+
 +	disp_gamma0: disp-gamma0@14016000 {
 +		compatible = "mediatek,mt6797-disp-gamma";
 +		reg = <0 0x14016000 0 0x1000>;
 +		interrupts = <GIC_SPI 224 IRQ_TYPE_LEVEL_LOW>;
 +		power-domains = <&scpsys MT6797_POWER_DOMAIN_MM>;
 +		clocks = <&mmsys CLK_MM_DISP_GAMMA>;
++		status = "disabled";
 +	};
-+
 +	disp_od0: disp-od0@14017000 {
 +		compatible = "mediatek,mt6797-disp-od";
 +		reg = <0 0x14017000 0 0x1000>;
 +		interrupts = <GIC_SPI 225 IRQ_TYPE_LEVEL_LOW>;
 +		power-domains = <&scpsys MT6797_POWER_DOMAIN_MM>;
 +		clocks = <&mmsys CLK_MM_DISP_OD>;
++		status = "disabled";
 +	};
-+
 +	disp_dither0: disp-dither0@14018000 {
 +		compatible = "mediatek,mt6797-disp-dither";
 +		reg = <0 0x14018000 0 0x1000>;
 +		interrupts = <GIC_SPI 226 IRQ_TYPE_LEVEL_LOW>;
 +		power-domains = <&scpsys MT6797_POWER_DOMAIN_MM>;
 +		clocks = <&mmsys CLK_MM_DISP_DITHER>;
++		status = "disabled";
 +	};
-+
 +	mutex: mutex@1401f000 {
 +		compatible = "mediatek,mt6797-disp-mutex";
 +		reg = <0 0x1401f000 0 0x1000>;
 +		interrupts = <GIC_SPI 202 IRQ_TYPE_LEVEL_LOW>;
 +		power-domains = <&scpsys MT6797_POWER_DOMAIN_MM>;
++		status = "disabled";
 +	};
-+
 +	dsi0: dsi@1401c000 {
 +		compatible = "mediatek,mt6797-dsi";
 +		reg = <0 0x1401c000 0 0x1000>;
