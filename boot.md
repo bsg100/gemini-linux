@@ -79,6 +79,101 @@ memory node the same way is open — see blockers.md B-3.
 
 ---
 
+## First Serial Capture Attempt — UART alive, baud mismatch (2026-06-12)
+
+**Rig:** USB-C breakout board in the left port + genuine FTDI TTL232R-3V3
+(`/dev/cu.usbserial-FTBTA9WZ`). VBUS 5 V from the FTDI's red wire (VBUS
+pass-through). FTDI RX→D+, TX→D−. Loopback via shorted D+/D− pads passed at
+921600 (FTDI + wiring proven). Capture tooling:
+`scripts/ftdi-monitor.py` (listen-only; logs hex+ASCII with timestamps).
+
+**Result:** on plug-in (device previously off, Android `boot` partition
+active), continuous structured bytes were received at 921600 for ~1 minute
+(~300 KB raw, archived at
+`docs/captures-2026-06-12-921600-garbled.bin`), then the stream stopped.
+
+**Analysis:** not noise and not USB signalling — 46 % `0x00` bytes with the
+remainder dominated by single-set-bit values (`0x80 0x40 0x20 0x82 …`) is the
+oversampling signature of a UART transmitting **slower than 921600**. Volume
+(~75–100 KB of real text) is consistent with a full verbose boot log. So the
+preloader USB-UART mux works and the device transmits console output on D+;
+only the baud assumption was wrong for whatever boot stage was talking.
+
+**Follow-up same day (baud sweep + line swap — all garbled):** capturing at
+115200 was equally garbled, and run-length analysis of the bitstream shows
+*both* sub-bit-period pulses and long dead-low stretches at both rates — not
+a baud mismatch signature. Swapping FTDI RX to D− (TX disconnected) gave the
+same garbage (58 % zeros, single-set-bit bytes, zero readable fragments).
+Captures: `/tmp/gemini-uart-115200.log`, `/tmp/gemini-uart-swapped.log`
+(session-local). No boot text was recovered at any setting.
+
+**Root-cause candidates at session end:**
+1. ~~**VBUS sag**~~ — **ruled out** (measured same day: 4.9 V at the breakout
+   *with the Gemini attached and charging*, 5.10 V unloaded — the FTDI VCC
+   wire holds the rail; preloader cable-detect has solid VBUS).
+2. **1.8 V signal levels** — front-runner: if the mux passes raw SoC-level
+   UART, it is marginal against the FTDI 3V3's ~1.5 V input threshold.
+
+**Next session protocol:**
+1. Charge fully on a real charger first (device off the rig).
+2. Multimeter at boot logo: D+↔GND and D−↔GND —
+   steady ~3.3 V = UART idle (good), ~1.8 V = level shifter needed
+   (BSS138-type bidirectional board between breakout and FTDI),
+   bouncing ≈0–0.7 V = mux never switched.
+3. Re-capture at 921600 with FTDI RX on whichever line idles high.
+
+**Caution learned:** each VBUS plug-in boots the device into charging mode,
+but the FTDI's 5 V line (~75 mA budget) cannot actually charge it. Repeated
+test cycles drained the battery to 1 % and caused boot-looping (logo screens
+then reset — brownout signature; resolved after user reflash + real charge).
+Recharge on a real charger between test sessions; do not leave the device
+running off the rig.
+
+---
+
+## First Clean Serial Capture — console confirmed working (2026-07-04)
+
+**Rig:** USB-C breakout in the left port + selectable-voltage FTDI-style
+adapter, previously set to 1.8 V (matching the SoC's native UART pad voltage,
+but wrong for this mux path — see kernel.md), switched to **3.3 V** per the
+documented USB-C mux requirement. VBUS 5 V fed from the adapter's 5 V pin.
+Capture: `scripts/ftdi-monitor.py --log logs/2026-07-04-01-first-serial-attempt.log`,
+`/tmp/ftdi-venv` (pyserial 3.5), 921600 baud, listen-only.
+
+**Result:** fully clean, readable text from first byte — no garbling, no
+level-mismatch symptoms. This resolves the 2026-06-12 root-cause open
+question in favour of candidate 2 (1.8 V signal levels): the earlier garbled
+captures were the FTDI's 3.3 V threshold misreading marginal/1.8 V-ish
+levels, exactly as hypothesised. Switching the adapter's own I/O rail to
+3.3 V (rather than adding a discrete level shifter) was sufficient.
+
+**Content:** log captures the full stock MediaTek preloader → PMIC/DRAM
+init → GPT parse → LK bootloader → ATF (BL31) chain, ending at the jump to
+the Linux kernel (`[LK]jump to K64 0x40080000` / `el3_exit`, log line ~1944).
+LK explicitly loads the **`boot`** partition (line 572: `[PART_LK][get_part]
+boot`), i.e. this is the **stock Android 3.18 kernel**, not the Kali
+`boot2` kernel — no partition was reflashed this session. Confirms:
+- cmdline: `console=tty0 console=ttyMT0,921600n1 root=/dev/ram vmalloc=496M
+  slub_max_order=0 ... androidboot.hardware=mt6797 ...` — consistent with
+  kernel.md's documented UART0/921600 console.
+- GPT partition table matches hardware.md/CLAUDE.md's documented layout
+  exactly (`boot`, `boot2`, `linux`, etc., same offsets).
+- DRAM: 2 ranks, 0x40000000 + 0x80000000 (1 GiB) plus a further 1 GiB rank at
+  0x100000000 — 4 GB total, consistent with `[Enable 4GB Support]`.
+
+Log ends at the kernel jump because capture was stopped there, not because
+of a hang — the vendor 3.18 kernel's own console output was not captured
+this session (not needed: this run's purpose was cable/console validation,
+not a 6.6 boot attempt).
+
+**Significance:** this is the Phase 3 milestone the driver-work freeze
+(CLAUDE.md, blockers.md B-1) was gating on. Cable, wiring, VBUS mux, and
+baud are now all proven end-to-end on real hardware. The freeze can be
+revisited — next step is flashing a Linux 6.6 `boot2` image and capturing
+its console output the same way.
+
+---
+
 ## Future Entries
 
 Boot logs from kernel bring-up attempts will be appended here as Phase 3 progresses.

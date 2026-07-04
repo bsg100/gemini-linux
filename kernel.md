@@ -34,6 +34,57 @@ Note that mainline `mt6797.dtsi`'s default `uart0_pins_a` muxes GPIO234/235 —
 **wrong for the Gemini**. The board DTS overrides with GPIO97/98
 (`uart0_gemini_pins`).
 
+## Physical console access — UART over USB-C (documented 2026-06-12)
+
+No mainboard soldering is required. The MediaTek preloader muxes UART0 onto
+the USB 2.0 data lines of the **left** USB-C port (the one next to the
+Esc/power button) when it detects VBUS with no USB host enumeration.
+
+| UART signal | USB wire | USB-C pin | Standard USB-A wire colour | FTDI side |
+|-------------|----------|-----------|---------------------------|-----------|
+| Gemini TX (console out) | Data+ | A6/B6 | Green | RX |
+| Gemini RX (console in) | Data− | A7/B7 | White | TX |
+| VBUS 5 V — **required for cable detect** | VBUS | A4/B4/A9/B9 | Red | VCC (5 V) |
+| GND | GND | A1/B1/A12/B12 | Black | GND |
+
+- Data lines run at **3.3 V** in this mode (USB levels, not the 1.8 V of the
+  raw SoC pads). Use a 3.3 V-signal FTDI cable (e.g. TTL-232R-3V3). Never a
+  5 V-signal variant. If your adapter has a selectable I/O-voltage jumper
+  (1.8/3.3/5 V), it must be set to **3.3 V** for this USB-C mux path — 1.8 V
+  is the wrong setting here even though it matches the SoC's native UART pad
+  voltage, because this path rides on standard USB D+/D− logic levels, not
+  the raw pads.
+- Without 5 V on VBUS the preloader never switches the mux and no output
+  appears.
+- Cable recipe (no fine-pitch work): USB-C–to–A adapter + a sacrificial
+  **4-wire** USB-A cable (2-wire charge cables won't work), cut and stripped,
+  joined to the FTDI's dupont ends.
+- **Breakout-board variant (our rig, 2026-06-12):** a USB-C breakout board in
+  the left port + 3.3 V FTDI cable. VBUS 5 V comes from the FTDI's red VCC
+  wire — on a genuine TTL-232R-3V3 that wire is USB VBUS pass-through (5 V;
+  only the signals are 3.3 V) — *verify ~5 V red-to-black with a multimeter
+  first*. If the adapter's VCC is 3.3 V, feed VBUS from any external 5 V USB
+  source instead, grounds tied together. The PMIC's VBUS detect triggers the
+  mux; CC and SBU stay unconnected. Breakouts expose D+/D− twice (A6/A7 and
+  B6/B7) — only one pair may reach the PHY per plug orientation, so if silent,
+  flip the plug or use the other pair (or bridge A6→B6, A7→B7).
+- Procedure: Gemini **off** → terminal open on the FTDI at 921600
+  (`screen /dev/cu.usbserial-XXXX 921600`) → plug into the left USB-C port.
+  Preloader output appears immediately, before pressing power.
+- Community boot logs over this path show full vendor-kernel output
+  (`console=ttyMT0,921600n1`), so the mux persists past the preloader through
+  LK and kernel boot — at least while the kernel does not re-enable USB on
+  that port. Phase 3 kernels build with USB disabled, so this is not a
+  concern until USB enablement, at which point console access must be
+  re-verified.
+
+Sources (original blog now returns HTTP 500; archive link is the durable one):
+- Omegamoon, "MediaTek USB-UART on Gemini-PDA" (2018-06-26):
+  <https://web.archive.org/web/20210802183928/https://www.omegamoon.com/blog/index.php?entry=entry180626-210224>
+- OESF thread with boot log: <https://www.oesf.org/forum/index.php?topic=35286.0>
+- hivebriq, debug cable build (same scheme, 921600 baud confirmed):
+  <https://hivebriqblog.wordpress.com/2018/07/25/debug-serial-cable-for-geminipda/>
+
 ## Required console-related config (Phase 3)
 
 ```

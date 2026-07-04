@@ -9,26 +9,42 @@ milestone · 🟢 resolved (kept for history)
 
 ---
 
-## Operating decision: driver-work freeze (2026-06-10)
+## Operating decision: driver-work freeze (2026-06-10, LIFTED 2026-07-04)
 
 **No new driver code until first serial output on hardware.** Six subsystems
-are already "code complete" against a device that has never booted anything
+were already "code complete" against a device that had never booted anything
 newer than 3.18, and several carry verification-blocked findings that only
-hardware or datasheets can clear. Until Phase 3 produces serial output, the
-only permitted work is: documentation, evidence extraction (vendor DTB / spec
+hardware or datasheets can clear. While the freeze was in effect, the only
+permitted work was: documentation, evidence extraction (vendor DTB / spec
 PDF / boot images), Phase-3 build/packaging scripts, and fixes to *existing*
 patches required for the minimal boot (e.g. B-4). Rationale: fable-report.md §4.3.
 
+**Lifted 2026-07-04** — see B-1 (resolved) and boot.md's "First Clean Serial
+Capture" entry. First serial output on hardware has been achieved (stock
+Android boot chain, over the now-working FTDI rig). Driver work may resume.
+Note: the previously "code complete" driver subsystems are still unverified
+against real hardware running Linux 6.6 (that requires B-2, the first 6.6
+boot) — resuming work does not retroactively validate them.
+
 ---
 
-## 🔴 B-1 — FTDI serial cable not yet arrived
+## 🟢 B-1 — FTDI serial cable not yet arrived (RESOLVED 2026-07-04)
 
-The primary Phase 3 blocker. All hardware verification is gated on it.
-- **Unblocks:** cable delivery (ordered).
-- **First action on arrival:** capture a **known-good 3.18 Kali boot** over the
-  FTDI UART *before* flashing anything new. This validates the cable, wiring,
-  and 921600 baud, and finally gives boot.md a baseline log. A 6.6 flash that
-  produces nothing is then meaningful evidence about the kernel, not the cable.
+The primary Phase 3 blocker. All hardware verification was gated on it.
+- **Resolution:** cable arrived; a 1.8V/3.3V-selectable adapter was initially
+  wired at 1.8 V (matching the SoC's native pad voltage but wrong for the
+  USB-C mux path, which rides standard 3.3 V USB D+/D− logic — see
+  kernel.md). Switching the adapter to 3.3 V produced a fully clean capture
+  of the stock Android preloader → LK → ATF boot chain at 921600 baud on the
+  first attempt. This also retroactively confirms the 2026-06-12 garbled
+  captures (see boot.md) were caused by signal-level mismatch, not a wiring
+  or baud fault.
+- **Evidence:** `logs/2026-07-04-01-first-serial-attempt.log`; full writeup
+  in [boot.md](boot.md) under "First Clean Serial Capture — console
+  confirmed working (2026-07-04)".
+- **Unblocked:** the driver-work freeze condition ("first serial output on
+  hardware") is now satisfied. Next: flash a Linux 6.6 `boot2` image and
+  capture its console the same way (see B-2).
 
 ## 🔴 B-2 — LK → mainline kernel handoff unverified
 

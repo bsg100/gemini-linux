@@ -15,11 +15,12 @@ files in archive/ refelct previous attempts.  they could contain details of less
 
 # Current Operating Decisions
 
-**Driver-work freeze (2026-06-10):** no new driver code until the first serial
-output on hardware (Phase 3). Permitted work: documentation, evidence
-extraction (vendor DTB / spec PDF / boot images), Phase-3 build and packaging
-scripts, and fixes to existing patches required for the minimal boot. See
-[blockers.md](blockers.md) for rationale and the full blocker list.
+**Driver-work freeze (2026-06-10, LIFTED 2026-07-04):** was in effect until
+first serial output on hardware (Phase 3). That condition is now met — a
+clean capture of the stock Android boot chain over the now-working FTDI rig
+(see [boot.md](boot.md), B-1 in [blockers.md](blockers.md)). Driver work may
+resume. This note is kept for history; see [blockers.md](blockers.md) for
+rationale and the full blocker list.
 
 **Console (resolved 2026-06-10):** debug console is UART0 @ 0x11002000
 (vendor `ttyMT0`, mainline `ttyS0`), 921600 baud, RX=GPIO97 / TX=GPIO98.
@@ -46,270 +47,26 @@ project documents.
 
 ---
 
-# Phase 1: Hardware Inventory
-
-The first task is to create hardware.md.
-
-The purpose of this document is to inventory all device-specific hardware and determine the status of upstream Linux support.
-
-Information sources include:
-
-- Vendor kernel source tree
-- Device tree files
-- Kernel configuration files
-- Board support files
-- Boot logs
-- Existing Gemini Linux projects
-- Hardware teardowns
-- Linux kernel source code
-- Community documentation
-
-The inventory must focus on actual hardware present in the Gemini PDA rather than generic MediaTek platform capabilities.
-
----
-
-# hardware.md
-
-Maintain the following table structure:
-
-| Subsystem | Hardware / Chip | Function | Vendor Driver / Path | Device Tree Node | Mainline Status | Required Tier | Action | Notes / Evidence |
-|------------|----------------|-----------|---------------------|------------------|-----------------|---------------|--------|------------------|
-
-## Mainline Status Values
-
-- Upstreamed
-- Partial
-- Not Upstreamed
-- Unknown
-- Not Required
-
-## Required Tier Values
-
-### Boot Critical
-
-Required for kernel boot:
-
-- CPU
-- Memory
-- Interrupt controller
-- Clocks
-- Regulators
-- GPIO
-- Pinctrl
-- Storage
-- UART serial console
-
-### Usability Critical
-
-Required for a useful Gemini PDA:
-
-- Display
-- Keyboard
-- USB
-- Battery monitoring
-- Charging
-- Wi-Fi
-
-### Optional
-
-Can be deferred:
-
-- LTE modem
-- Bluetooth
-- Audio
-- Camera
-- Sensors
-- GPS
-- Suspend / Resume
-- Miscellaneous peripherals
-
-## Action Values
-
-- Use Upstream
-- Port Driver
-- Stub / Disable
-- Research Further
-- Defer
-
----
-
-# Phase 2: Upstream Analysis
-
-For every hardware component:
-
-1. Identify the vendor implementation.
-2. Determine whether equivalent support exists in mainline Linux.
-3. Identify all dependencies.
-4. Record findings in hardware.md.
-5. Determine the preferred implementation strategy.
-
-The completed inventory should clearly identify:
-
-- Hardware already supported upstream.
-- Hardware partially supported upstream.
-- Hardware requiring driver porting.
-- Hardware that can be disabled.
-- Hardware requiring further investigation.
-
-No implementation work should begin until the inventory is substantially complete.
-
----
-
-# Phase 3: Minimal Kernel Bring-Up
-
-The objective of this phase is to establish a reliable kernel bring-up and debugging environment before attempting to enable user-facing hardware.
-
-The target is not a usable system.
-
-The target is a modern Linux kernel that boots and produces diagnostic output.
-
-Use an FTDI serial adapter connected to the Gemini PDA debug UART to capture all boot output.
-
-Configure the kernel with:
-
-- Early console support
-- Serial console logging
-- Maximum boot verbosity
-- Debug symbols
-- Kernel diagnostics enabled
-
-Create a repeatable workflow for:
-
-- Building kernels
-- Deploying kernels
-- Capturing logs
-- Reproducing failures
-
-Only enable hardware required for a minimal boot:
-
-- CPU
-- Memory
-- Interrupt controller
-- Clocks
-- Regulators
-- GPIO / Pinctrl
-- Storage
-- UART serial console
-
-All other hardware should be disabled, stubbed or deferred unless required for the current milestone.
-
-The primary deliverable of this phase is a kernel that boots far enough to provide reliable serial output and enable root cause analysis.
-
-Success criteria:
-
-- Kernel image loads successfully
-- Early console output visible over FTDI
-- Boot progress observable
-- Panic and crash information captured
-- Boot process repeatable
-- Development can continue without display, keyboard or networking
-
-The FTDI serial console is the primary debugging interface until the system reaches a stable and repeatable boot state.
-
----
-
-# Phase 4: Storage and Userspace
-
-Enable boot from internal storage.
-
-Goals:
-
-- eMMC operational
-- Stable root filesystem
-- Reliable userspace startup
-- Repeatable boot process
-
-Success criteria:
-
-- System boots from internal storage
-- Root filesystem mounts successfully
-- Userspace launches correctly
-
----
-
-# Phase 5: Display Enablement
-
-Enable display support using the simplest practical approach.
-
-Priorities:
-
-1. Existing upstream support
-2. Minimal framebuffer output
-3. DRM support
-
-Goals:
-
-- Visible local console
-- Local debugging capability
-
-Do not prioritize acceleration or advanced graphics features.
-
----
-
-# Phase 6: Keyboard Enablement
-
-The keyboard is one of the defining features of the Gemini PDA.
-
-Goals:
-
-- Full keyboard functionality
-- Correct key mapping
-- Stable operation
-
-Keyboard support should be considered a high-priority usability milestone.
-
----
-
-# Phase 7: Power Management
-
-Enable:
-
-- Battery monitoring
-- Charging support
-- Safe operation
-
-Advanced power management and suspend functionality may be deferred until later phases.
-
-Goals:
-
-- Accurate battery reporting
-- Reliable charging
-- Thermal stability
-
----
-
-# Phase 8: Networking
-
-Enable networking using the simplest available path.
-
-Priorities:
-
-1. Existing upstream support
-2. USB networking if necessary
-3. Internal Wi-Fi
-
-Goals:
-
-- Reliable network connectivity
-- Remote administration capability
-
----
-
-# Phase 9: Optional Hardware
-
-Evaluate and enable optional hardware as resources permit.
-
-Potential candidates:
-
-- Audio
-- Bluetooth
-- LTE modem
-- Camera
-- Sensors
-- GPS
-- Suspend / Resume
-
-Optional hardware should never block progress toward earlier milestones.
+# Project Phases
+
+The full phase plan, including per-phase goals, success criteria and the
+hardware.md table specification, lives in [plan.md](plan.md). Consult it when
+working within a phase or planning the next one — do not duplicate its content
+here.
+
+| Phase | Scope | Status |
+|-------|-------|--------|
+| 1 | Hardware inventory (hardware.md) | Complete |
+| 2 | Upstream analysis | Complete |
+| 3 | Minimal kernel bring-up (serial console over FTDI) | **In progress — current phase.** FTDI console path proven 2026-07-04 (stock Android boot captured cleanly); still need first Linux 6.6 boot with diagnostic output. |
+| 4 | Storage and userspace | Not started |
+| 5 | Display enablement | Not started |
+| 6 | Keyboard enablement | Not started |
+| 7 | Power management | Not started |
+| 8 | Networking | Not started |
+| 9 | Optional hardware | Not started |
+
+Update the Status column as phases complete or open.
 
 ---
 
@@ -445,6 +202,11 @@ Maintain the following project documents:
 
 Project strategy and operating instructions.
 
+## plan.md
+
+The phase-by-phase project plan: goals, success criteria and constraints for
+each phase. Phase status is tracked in the table in CLAUDE.md.
+
 ## hardware.md
 
 Hardware inventory and upstream support tracking.
@@ -540,3 +302,36 @@ When updating project documentation:
 2. Preserve existing content.
 3. Maintain consistency across all project files.
 4. Explain what was changed and why.
+
+# Logging Requirements
+
+Every boot attempt must be diagnosable after the fact. A serial log with no
+record of what was flashed is worthless — the build, the flash and the capture
+must be traceable to each other.
+
+## Serial Capture
+
+- Capture all boot attempts over FTDI with `scripts/ftdi-monitor.py --log <file>`.
+  It records every byte timestamped in hex + ASCII, so wrong-baud garbage is
+  still visible evidence (garbage = electrical activity; silence = wiring).
+- Never rely on terminal scrollback. Always write a log file.
+- Never use `--beacon` while wired to the Gemini — loopback testing only.
+
+## Per-Attempt Provenance
+
+Each boot attempt gets a raw capture under `logs/` named
+`YYYY-MM-DD-NN-short-desc.log`, plus the following recorded alongside it or in
+the boot.md entry:
+
+- Kernel base tag (e.g. v6.6) and the `gemini_linux` repo commit, which
+  together identify the exact patch set applied
+- The `.config` used (copy it next to the log)
+- DTB and boot.img identity (`sha256sum`)
+- Partition flashed and the exact `mtk w` command
+- Outcome: what was observed on serial, how far boot progressed
+
+## boot.md
+
+`boot.md` is the index and analysis layer: one entry per attempt linking the
+raw log file, with observations, hypotheses and conclusions. Raw logs are
+evidence and are never edited; analysis lives in boot.md.
