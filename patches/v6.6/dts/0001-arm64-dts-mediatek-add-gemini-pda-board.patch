@@ -12,10 +12,10 @@ index c99c3372a..ffe1ab530 100644
  dtb-$(CONFIG_ARCH_MEDIATEK) += mt7622-bananapi-bpi-r64.dtb
 diff --git a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
 new file mode 100644
-index 000000000..3ba6ccc18
+index 000000000..87bb1a6bc
 --- /dev/null
 +++ b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
-@@ -0,0 +1,524 @@
+@@ -0,0 +1,726 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Device tree for Planet Computers Gemini PDA
@@ -124,23 +124,48 @@ index 000000000..3ba6ccc18
 +			no-map;
 +		};
 +
-+		/* vendor: mediatek,mt6797-atf-reserved-memory —
-+		 * ARM Trusted Firmware; no-map in vendor DTB too */
-+		atf@44600000 {
++		/*
++		 * ARM Trusted Firmware carve-outs. The vendor LK searches the
++		 * DTB by these exact compatible strings before jumping to the
++		 * kernel; if the atf-ramdump node is missing LK prints "Can not
++		 * find atf ram dump!" and panics at mt_boot.c:1226 (confirmed on
++		 * hardware 2026-07-04, logs/2026-07-04-15). The compatible is
++		 * mandatory for the handoff — do NOT drop it. no-map matches the
++		 * vendor DTB.
++		 */
++		atf-reserved-memory@44600000 {
++			compatible = "mediatek,mt6797-atf-reserved-memory";
 +			reg = <0 0x44600000 0 0x10000>;
 +			no-map;
 +		};
 +
-+		/* vendor: mediatek,mt6797-atf-ramdump-memory */
-+		atf-ramdump@44610000 {
++		atf-ramdump-memory@44610000 {
++			compatible = "mediatek,mt6797-atf-ramdump-memory";
 +			reg = <0 0x44610000 0 0x30000>;
 +			no-map;
 +		};
 +
-+		/* vendor: mediatek,cache-dump-memory */
-+		cache-dump@44640000 {
++		cache-dump-memory@44640000 {
++			compatible = "mediatek,cache-dump-memory";
 +			reg = <0 0x44640000 0 0x30000>;
 +			no-map;
++		};
++
++		/*
++		 * SCP shared memory. After the atf-ramdump fix LK advanced to
++		 * platform_fdt_scp() and panicked at mt_boot.c:1226 (confirmed on
++		 * hardware 2026-07-04, logs/2026-07-04-17). LK searches the DTB by
++		 * this exact compatible before handoff, so the node is mandatory
++		 * even though no 6.6 driver claims it. Dynamic-allocation form
++		 * copied verbatim from the vendor DTB (scp_share, 16 MiB in the
++		 * 0x40000000-0x90000000 window).
++		 */
++		scp-share {
++			compatible = "mediatek,reserve-memory-scp_share";
++			no-map;
++			size = <0 0x1000000>;
++			alignment = <0 0x1000000>;
++			alloc-ranges = <0 0x40000000 0 0x50000000>;
 +		};
 +
 +		/* vendor: mediatek,preloader */
@@ -154,6 +179,26 @@ index 000000000..3ba6ccc18
 +			reg = <0 0x46000000 0 0x400000>;
 +			no-map;
 +		};
++	};
++
++	/*
++	 * SCP (System Companion Processor) device node. Mainline mt6797.dtsi
++	 * has no scp node at all, but the vendor LK's platform_fdt_scp() looks
++	 * up this node by compatible "mediatek,scp" and sets its status before
++	 * handoff — on a stock boot the very next line is "status=okay". With
++	 * the node absent LK asserts at mt_boot.c:1226 (confirmed on hardware
++	 * 2026-07-04, logs/2026-07-04-17 and -19: adding the scp_share
++	 * reserved-memory node alone did NOT clear it — LK needs THIS node).
++	 * Values verbatim from the vendor DTB (scp@10020000). Kept "disabled":
++	 * no 6.6 driver drives the SCP; the node exists only for the LK fixup.
++	 */
++	scp@10020000 {
++		compatible = "mediatek,scp";
++		reg = <0 0x10020000 0 0x80000>,
++		      <0 0x100a0000 0 0x1000>,
++		      <0 0x100a4000 0 0x1000>;
++		interrupts = <GIC_SPI 199 IRQ_TYPE_LEVEL_HIGH>;
++		status = "disabled";
 +	};
 +
 +	/* Fixed 1.8V rail for I2C pull-ups and digital logic (Phase 3 stub) */
@@ -301,6 +346,33 @@ index 000000000..3ba6ccc18
 +		enable-active-high;
 +	};
 +};
++
++/*
++ * CPU clock-frequency — required by the vendor LK DTB fixup, NOT by Linux.
++ *
++ * The Gemini's LK bootloader runs target_fdt_cpus() over the /cpus node
++ * before jumping to the kernel and requires every cpu node to carry a
++ * clock-frequency property. Mainline mt6797.dtsi omits it (Linux derives
++ * clocks from the cpufreq/clk nodes instead). Without these properties LK
++ * spins in that fixup (~54k iterations of "cpu 228 clock-frequency not
++ * found") until its watchdog resets the SoC — it never reaches
++ * "jump to K64", so our kernel never runs. Confirmed on hardware
++ * 2026-07-04 (logs/2026-07-04-13-boot-slot-6.6.log); see boot.md.
++ *
++ * Values are copied per-cluster from the vendor DTB
++ * (docs/vendor-dtb/gemini_kali_boot.dts): A53 little 1.391 GHz, A53 big
++ * 1.95 GHz, A72 2.288 GHz.
++ */
++&cpu0 { clock-frequency = <0x52e8f9c0>; };
++&cpu1 { clock-frequency = <0x52e8f9c0>; };
++&cpu2 { clock-frequency = <0x52e8f9c0>; };
++&cpu3 { clock-frequency = <0x52e8f9c0>; };
++&cpu4 { clock-frequency = <0x743aa380>; };
++&cpu5 { clock-frequency = <0x743aa380>; };
++&cpu6 { clock-frequency = <0x743aa380>; };
++&cpu7 { clock-frequency = <0x743aa380>; };
++&cpu8 { clock-frequency = <0x88601c00>; };
++&cpu9 { clock-frequency = <0x88601c00>; };
 +
 +/*
 + * UART0 serial console.
@@ -539,4 +611,134 @@ index 000000000..3ba6ccc18
 +
 +&mipi_tx0 {
 +	status = "disabled";
++};
++
++/*
++ * MSDC0 / eMMC — Phase 4 (B-7).
++ *
++ * Mainline mt6797.dtsi has no MSDC node at all (MT6797 MSDC support was
++ * never upstreamed into the SoC dtsi); this is added here, board-local,
++ * rather than waiting on that. Register base, IRQ and clock index are
++ * copied verbatim from the vendor DTB (docs/vendor-dtb/gemini_kali_boot.dts,
++ * msdc0@11230000): reg 0x11230000, interrupts <0 0x4f 0x08> (SPI 79, level
++ * high), clocks <infracfg CLK_INFRA_MSDC0> (index 0x21 in the vendor DTB's
++ * own phandle numbering maps to CLK_INFRA_MSDC0=33 in mainline's
++ * mt6797-clk.h — same clock, mainline's binding just uses named indices).
++ * bus-width and non-removable also copied verbatim (Gemini's eMMC is
++ * soldered-down, 8-bit bus).
++ *
++ * compatible: mainline's drivers/mmc/host/mtk-sd.c has no MT6797 entry —
++ * the vendor kernel's "mediatek,mt6797-mmc" string is unrecognised by the
++ * upstream driver's of_device_id table. Using "mediatek,mt6795-mmc"
++ * instead: MT6795 (Helio X10) is the closest upstream-supported MSDC IP
++ * generation to MT6797 (Helio X27), same SoC family lineage. This is a
++ * deliberate compatibility-string substitution, NOT confirmed
++ * register-identical hardware — if probe fails or data corrupts under
++ * load, the pad-tune/timing constants in mt6795_compat (drivers/mmc/host/
++ * mtk-sd.c) are the first thing to re-derive against real MT6797 values.
++ * See blockers.md B-7.
++ *
++ * DEFERRED 2026-07-04: enabling this node (even after adding the
++ * "state_uhs" pinctrl state and assigned-clocks routing below) produces a
++ * silent post-probe hang -- no further printk, ATF aee_wdt_dump fires
++ * ~36s later (logs/2026-07-04-29-msdc0-uhs-boot.log,
++ * logs/2026-07-04-31-msdc0-assigned-clocks-boot.log; both hang at the
++ * *identical* PC/LR/timestamp even with different clock routing, so it is
++ * NOT the CKSTB clock-wait theory -- root cause still unknown). Since the
++ * Gemini has a removable SD card and MMC is not required to prove kernel
++ * bootability (CLAUDE.md principle 5), this node is disabled and the whole
++ * eMMC/MSDC investigation deferred; the milestone target is now booting to
++ * an initramfs shell (rdinit=/bin/sh) instead of switch_root-ing onto
++ * eMMC. Resume by symbolicating the hang PC (nokaslr is enabled in
++ * gemini-cmdline.config for exactly this) before re-attempting.
++ */
++&pio {
++	msdc0_pins_default: msdc0-default {
++		pins-cmd-dat {
++			pinmux = <MT6797_GPIO122__FUNC_MSDC0_CMD>,
++				 <MT6797_GPIO114__FUNC_MSDC0_DAT0>,
++				 <MT6797_GPIO115__FUNC_MSDC0_DAT1>,
++				 <MT6797_GPIO116__FUNC_MSDC0_DAT2>,
++				 <MT6797_GPIO117__FUNC_MSDC0_DAT3>,
++				 <MT6797_GPIO118__FUNC_MSDC0_DAT4>,
++				 <MT6797_GPIO119__FUNC_MSDC0_DAT5>,
++				 <MT6797_GPIO120__FUNC_MSDC0_DAT6>,
++				 <MT6797_GPIO121__FUNC_MSDC0_DAT7>;
++			input-enable;
++			bias-pull-up;
++		};
++		pins-clk {
++			pinmux = <MT6797_GPIO123__FUNC_MSDC0_CLK>;
++			bias-pull-down;
++		};
++		pins-rst {
++			pinmux = <MT6797_GPIO125__FUNC_MSDC0_RSTB>;
++			bias-pull-up;
++		};
++	};
++
++	/*
++	 * mtk-sd.c hard-requires a "state_uhs" pinctrl state to probe at all
++	 * (drivers/mmc/host/mtk-sd.c: pinctrl_lookup_state(..., "state_uhs"),
++	 * goto host_free on failure) even though this is a fixed 8-bit eMMC
++	 * bus with no UHS signalling. The vendor DTB has no equivalent second
++	 * state (single pinctl phandle only) since the vendor's own MSDC
++	 * driver doesn't have this requirement. Reusing the same mux as
++	 * default satisfies the probe; drive-strength tuning for HS200/HS400
++	 * (as done via MTK_DRIVE_* in other mt65xx/mt81xx board DTS uhs
++	 * states) is deferred until basic block I/O is confirmed working.
++	 */
++	msdc0_pins_uhs: msdc0-uhs {
++		pins-cmd-dat {
++			pinmux = <MT6797_GPIO122__FUNC_MSDC0_CMD>,
++				 <MT6797_GPIO114__FUNC_MSDC0_DAT0>,
++				 <MT6797_GPIO115__FUNC_MSDC0_DAT1>,
++				 <MT6797_GPIO116__FUNC_MSDC0_DAT2>,
++				 <MT6797_GPIO117__FUNC_MSDC0_DAT3>,
++				 <MT6797_GPIO118__FUNC_MSDC0_DAT4>,
++				 <MT6797_GPIO119__FUNC_MSDC0_DAT5>,
++				 <MT6797_GPIO120__FUNC_MSDC0_DAT6>,
++				 <MT6797_GPIO121__FUNC_MSDC0_DAT7>;
++			input-enable;
++			bias-pull-up;
++		};
++		pins-clk {
++			pinmux = <MT6797_GPIO123__FUNC_MSDC0_CLK>;
++			bias-pull-down;
++		};
++		pins-rst {
++			pinmux = <MT6797_GPIO125__FUNC_MSDC0_RSTB>;
++			bias-pull-up;
++		};
++	};
++};
++
++/ {
++	msdc0: mmc@11230000 {
++		compatible = "mediatek,mt6795-mmc";
++		reg = <0 0x11230000 0 0x1000>;
++		interrupts = <GIC_SPI 79 IRQ_TYPE_LEVEL_HIGH>;
++		clocks = <&infrasys CLK_INFRA_MSDC0>, <&topckgen CLK_TOP_MUX_MSDC50_0>;
++		clock-names = "source", "hclk";
++		/*
++		 * Without this, CLK_TOP_MUX_MSDC50_0 (a MUX_GATE) may sit
++		 * ungated/unrouted at reset, so msdc_init_hw()'s
++		 * readl_poll_timeout(..., MSDC_CFG_CKSTB, 0, 0) (NO timeout,
++		 * spins forever) never sees the clock-stable bit assert --
++		 * total silent hang, ATF watchdog reset ~36s later, confirmed
++		 * on hardware 2026-07-04 (logs/2026-07-04-29-msdc0-uhs-boot.log).
++		 * Route the mux to msdcpll_d2, mirroring the mt8173 pattern in
++		 * Documentation/devicetree/bindings/mmc/mtk-sd.yaml.
++		 */
++		assigned-clocks = <&topckgen CLK_TOP_MUX_MSDC50_0>;
++		assigned-clock-parents = <&topckgen CLK_TOP_MSDCPLL_D2>;
++		pinctrl-names = "default", "state_uhs";
++		pinctrl-0 = <&msdc0_pins_default>;
++		pinctrl-1 = <&msdc0_pins_uhs>;
++		bus-width = <8>;
++		max-frequency = <200000000>;
++		cap-mmc-highspeed;
++		non-removable;
++		status = "disabled";
++	};
 +};

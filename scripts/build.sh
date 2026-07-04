@@ -19,6 +19,7 @@ set -euo pipefail
 
 LINUX_SRC="${LINUX_SRC:-$HOME/linux-6.6}"
 PATCHES_DIR="${PATCHES_DIR:-$HOME/gemini_linux/patches/v6.6}"
+CONFIG_FRAGMENTS="${CONFIG_FRAGMENTS:-$HOME/gemini_linux/configs}"
 JOBS="${JOBS:-$(nproc)}"
 ARCH=arm64
 
@@ -44,8 +45,14 @@ config)
     cd "$LINUX_SRC"
     # TODO: replace defconfig with gemini_defconfig once created
     make ARCH=$ARCH defconfig
-    # Disable options known to cause issues on macOS host tool builds
-    # (not needed on Linux VM, kept for reference)
+    if [[ -d "$CONFIG_FRAGMENTS" ]]; then
+        frags=$(find "$CONFIG_FRAGMENTS" -name '*.config' | sort)
+        if [[ -n "$frags" ]]; then
+            echo "==> Merging config fragments: $frags"
+            ./scripts/kconfig/merge_config.sh -m .config $frags
+            make ARCH=$ARCH olddefconfig
+        fi
+    fi
     echo "==> .config written"
     ;;
 

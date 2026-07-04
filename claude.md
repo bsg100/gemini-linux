@@ -58,8 +58,8 @@ here.
 |-------|-------|--------|
 | 1 | Hardware inventory (hardware.md) | Complete |
 | 2 | Upstream analysis | Complete |
-| 3 | Minimal kernel bring-up (serial console over FTDI) | **In progress — current phase.** FTDI console path proven 2026-07-04 (stock Android boot captured cleanly); still need first Linux 6.6 boot with diagnostic output. |
-| 4 | Storage and userspace | Not started |
+| 3 | Minimal kernel bring-up (serial console over FTDI) | **Complete 2026-07-04.** First full Linux 6.6 boot to userspace achieved (`Run /init as init process`) with diagnostic serial output throughout. See blockers.md B-2 (resolved) and boot.md's "SEVENTH RESULT" entry. |
+| 4 | Storage and userspace | **In progress — current phase.** Blocked on B-7: no eMMC/MMC controller DT node exists yet (init panics in `switch_root` on `/dev/mmcblk0p29`). Also carries the SMP-secondary-CPU-hang and clk-gating workarounds from Phase 3 (`maxcpus=1`, `clk_ignore_unused`) as follow-up items to properly fix rather than work around. |
 | 5 | Display enablement | Not started |
 | 6 | Keyboard enablement | Not started |
 | 7 | Power management | Not started |
