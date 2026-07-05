@@ -1,0 +1,158 @@
+
+kali login: 
+kali login: root
+[  286.248180] mtk-msdc 11230000.mmc: GEMINI-DEBUG: ungate: src=191999939Hz hclk=273000000Hz MSDC_CFG=02000193
+Password: [  286.949172] mtk-msdc 11230000.mmc: GEMINI-DEBUG: ungate: src=191999939Hz hclk=273000000Hz MSDC_CFG=02000193
+
+[  289.454785] mtk-msdc 11230000.mmc: GEMINI-DEBUG: ungate: src=191999939Hz hclk=273000000Hz MSDC_CFG=02000193
+Linux kali 6.6.0-dirty #38 SMP PREEMPT Sun Jul  5 04:39:41 UTC 2026 aarch64
+
+The programs included with the Kali GNU/Linux system are free software;
+the exact distribution terms for each program are described in the
+individual files in /usr/share/doc/*/copyright.
+
+Kali GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+permitted by applicable law.
+[  289.535190] systemd[1]: Created slice User Slice of UID 0.
+[  289.541608] systemd[1]: Created slice system-user\x2druntime\x2ddir.slice.
+[  289.557662] systemd[1]: Started /run/user/0 mount wrapper.
+[  289.568459] systemd[1]: Starting User Manager for UID 0...
+[  289.650240] systemd[1]: Started Session 1 of user root.
+[  289.674733] mtk-msdc 11230000.mmc: GEMINI-DEBUG: ungate: src=191999939Hz hclk=273000000Hz MSDC_CFG=02000193
+[  290.147151] mtk-msdc 11230000.mmc: GEMINI-DEBUG: ungate: src=191999939Hz hclk=273000000Hz MSDC_CFG=02000193
+[  290.258509] systemd[1]: Started User Manager for UID 0.
+[  290.410065] mtk-msdc 11230000.mmc: GEMINI-DEBUG: ungate: src=191999939Hz hclk=273000000Hz MSDC_CFG=02000193
+root@kali:~# reboot
+[  295.253134] mtk-msdc 11230000.mmc: GEMINI-DEBUG: ungate: src=191999939Hz hclk=273000000Hz MSDC_CFG=02000193
+[  295.288967] systemd[1]: Closed LVM2 poll daemon socket.
+[[0;32m  OK  [0m] Closed LVM2 poll daemon socket.
+[  295.293518] systemd[1]: Stopping Daemon for power management...
+         Stopping Daemon for pow[  295.297318] systemd[1]: Stopped target Timers.
+er management...
+[[0;32m  OK  [0m] Stopped target Timers.
+[  295.304128] systemd[1]: Stopping Session 1 of user root.
+         Stopping Session 1 of user root.
+[  295.321161] systemd[1]: Stopped Daily Cleanup of Temporary Directories.
+[[0;32m  OK  [0m] Stopped Daily Cleanup of Temporary Directories.
+[  295.336504] systemd[1]: user-runtime-dir@0.service: Unit not needed anymore. Stopping.
+[  295.341302] systemd[1]: Stopping User Manager for UID 0...
+         Stopping User Manager for UID 0...
+[  295.356581] systemd[1]: Stopped target Graphical Interface.
+[[0;32m  OK  [0m] Stopped target Graphical Interface.
+[  295.360389] systemd[1]: Stopping Simple Desktop Display Manager...
+         Stopping Simple Desktop Display Manager...
+[  295.364041] systemd[1]: Stopped target Multi-User System.
+[[0;32m  OK  [0m] Stopped target Multi-User System.
+         Stopping System Logging Service...
+         Stopping OpenBSD Secure Shell server...
+[  295.397599] mtk-msdc 11230000.mmc: GEMINI-DEBUG: ungate: src=191999939Hz hclk=273000000Hz MSDC_CFG=02000193
+         Stopping LXC Container Initialization and Autoboot Code...
+         Stopping Regular background program processing daemon...
+         Stopping monitor and control system power state...
+[[0;32m  OK  [0m] Stopped target Login Prompts.
+         Stopping Getty on tty1...
+         Stopping Serial Getty on ttyS0...
+[[0;32m  OK  [0m] Stopped target System Time Synchronized.
+[[0;32m  OK  [0m] Stopped Serial Getty on ttyS0.
+[[0;32m  OK  [0m] Stopped Regular background program processing daemon.
+[[0;32m  OK  [0m] Stopped Getty on tty1.
+[[0;32m  OK  [0m] Stopped OpenBSD Secure Shell server.
+[[0;32m  OK  [0m] Stopped Daemon for power management.
+[[0;32m  OK  [0m] Stopped System Logging Service.
+[[0;32m  OK  [0m] Stopped User Manager for UID 0.
+[[0;32m  OK  [0m] Stopped Session 1 of user root.
+[[0;32m  OK  [0m] Stopped Simple Desktop Display Manager.
+[  295.645788] mtk-msdc 11230000.mmc: GEMINI-DEBUG: ungate: src=191999939Hz hclk=273000000Hz MSDC_CFG=02000193
+[[0;32m  OK  [0m] Stopped monitor and control system power state.
+[[0;32m  OK  [0m] Stopped LXC Container Initialization and Autoboot Code.
+         Stopping LXC network bridge setup...
+         Stopping Control Gemini PDA LEDs...
+         Stopping Login Service...
+         Stopping /run/user/0 mount wrapper...
+[[0;32m  OK  [0m] Removed slice User Slice of UID 0.
+[[0;32m  OK  [0m] Removed slice system-getty.slice.
+         Stopping Permit User Sessions...
+[[0;32m  OK  [0m] Removed slice system-serial\x2dgetty.slice.
+[[0;32m  OK  [0m] Unmounted /run/user/0.
+[[0;32m  OK  [0m] Stopped Control Gemini PDA LEDs.
+[[0;32m  OK  [0m] Stopped LXC network bridge setup.
+[[0;32m  OK  [0m] Stopped /run/user/0 mount wrapper.
+[[0;32m  OK  [0m] Stopped Permit User Sessions.
+[[0;32m  OK  [0m] Stopped target Network.
+         Stopping Raise network interfaces...
+[  295.990543] mtk-msdc 11230000.mmc: GEMINI-DEBUG: ungate: src=191999939Hz hclk=273000000Hz MSDC_CFG=02000193
+         Stopping WPA supplicant...
+         Stopping Connection service...
+[[0;32m  OK  [0m] Stopped target Remote File Systems.
+[[0;32m  OK  [0m] Removed slice system-user\x2druntime\x2ddir.slice.
+[[0;32m  OK  [0m] Stopped WPA supplicant.
+[  296.073043] mtk-msdc 11230000.mmc: GEMINI-DEBUG: ungate: src=191999939Hz hclk=273000000Hz MSDC_CFG=02000193
+[[0;32m  OK  [0m] Stopped Connection service.
+[[0;32m  OK  [0m] Stopped Raise network interfaces.
+         Stopping D-Bus System Message Bus...
+[[0;32m  OK  [0m] Stopped Login Service.
+[[0;32m  OK  [0m] Stopped D-Bus System Message Bus.
+[[0;32m  OK  [0m] Stopped target Basic System.
+[[0;32m  OK  [0m] Stopped target Sockets.
+[[0;32m  OK  [0m] Closed Syslog Socket.
+[[0;32m  OK  [0m] Stopped target Slices.
+[[0;32m  OK  [0m] Removed slice User and Session Slice.
+[[0;32m  OK  [0m] Stopped target Paths.
+[[0;32m  OK  [0m] Closed D-Bus System Message Bus Socket.
+[[0;32m  OK  [0m] Stopped target System Initialization.
+         Stopping Update UTMP about System Boot/Shutdown...
+         Stopping Load/Save Random Seed...
+[[0;32m  OK  [0m] Stopped Apply Kernel Variables.
+         Stopping udev Kernel Device Manager...
+         Stopping Network Time Synchronization...
+[[0;32m  OK  [0m] Stopped target Swap.
+[[0;32m  OK  [0m] Stopped target Local Encrypted Volumes.
+[[0;32m  OK  [0m] Stopped Forward Password Requests to Wall Directory Watch.
+[[0;32m  OK  [0m] Stopped Dispatch Password Requests to Console Directory Watch.
+[[0;32m  OK  [0m] Stopped Load Kernel Modules.
+[[0;32m  OK  [0m] Stopped Network Time Synchronization.
+[[0;32m  OK  [0m] Stopped udev Kernel Device Manager.
+[[0;32m  OK  [0m] Stopped Load/Save Random Seed.
+         Unmounting mount system.img...
+[  296.579586] mtk-msdc 11230000.mmc: GEMINI-DEBUG: ungate: src=191999939Hz hclk=273000000Hz MSDC_CFG=02000193
+[[0;32m  OK  [0m] Stopped Update UTMP about System Boot/Shutdown.
+[  296.607249] EXT4-fs (loop0): unmounting filesystem da594c53-9beb-f85c-85c5-cedf76546f7a.
+[[0;32m  OK  [0m] Unmounted mount system.img.
+[[0;32m  OK  [0m] Stopped Create Volatile Files and Directories.
+[[0;32m  OK  [0m] Stopped target Local File Systems.
+         Unmounting /protect_f...
+         Unmounting /protect_s...
+[  296.697501] mtk-msdc 11230000.mmc: GEMINI-DEBUG: ungate: src=191999939Hz hclk=273000000Hz MSDC_CFG=02000193
+[  296.705215] EXT4-fs (mmcblk0p8): unmounting filesystem 57f8f4bc-abf4-655f-bf67-946fc0f9f25b.
+         Unmounting /cache...
+[  296.745178] EXT4-fs (mmcblk0p9): unmounting filesystem 57f8f4bc-abf4-655f-bf67-946fc0f9f25b.
+[[0;32m  OK  [0m] Unmounted /protect_f.
+[  296.750743] EXT4-fs (mmcblk0p28): unmounting filesystem f73de97f-7017-ca5e-9b47-ca9c8f633e83.
+[[0;32m  OK  [0m] Unmounted /protect_s.
+[[0;32m  OK  [0m] Unmounted /cache.
+[[0;32m  OK  [0m] Reached target Unmount All Filesystems.
+[[0;32m  OK  [0m] Stopped target Local File Systems (Pre).
+[[0;32m  OK  [0m] Stopped Create Static Device Nodes in /dev.
+[[0;32m  OK  [0m] Stopped Create System Users.
+[[0;32m  OK  [0m] Stopped Remount Root and Kernel File Systems.
+[[0;32m  OK  [0m] Reached target Shutdown.
+[[0;32m  OK  [0m] Reached target Final Step.
+         Starting Reboot...
+[  296.945117] watchdog: watchdog0: watchdog did not stop!
+[  296.946238] mtk-msdc 11230000.mmc: GEMINI-DEBUG: ungate: src=191999939Hz hclk=273000000Hz MSDC_CFG=02000193
+[  296.954334] printk: systemd-shutdow: 184 output lines suppressed due to ratelimiting
+[  296.992677] systemd-shutdown[1]: Syncing filesystems and block devices.
+[  297.015210] systemd-shutdown[1]: Sending SIGTERM to remaining processes...
+[  297.023018] systemd-journald[107]: Received SIGTERM from PID 1 (systemd-shutdow).
+[  297.028285] systemd-shutdown[1]: Sending SIGKILL to remaining processes...
+[  297.035678] systemd-shutdown[1]: Hardware watchdog 'mtk-wdt', version 0
+[  297.038941] systemd-shutdown[1]: Unmounting file systems.
+[  297.044051] [634]: Remounting '/' read-only in with options '(null)'.
+[  297.064196] EXT4-fs (mmcblk0p29): re-mounted 19120ae6-53ce-42b4-9ad5-11fc5de52f44 ro. Quota mode: none.
+[  297.079433] systemd-shutdown[1]: All filesystems unmounted.
+[  297.080180] systemd-shutdown[1]: Deactivating swaps.
+[  297.081670] systemd-shutdown[1]: All swaps deactivated.
+[  297.082346] systemd-shutdown[1]: Detaching loop devices.
+[  297.087085] systemd-shutdown[1]: All loop devices detached.
+[  297.110926] kvm: exiting hardware virtualization
+[  297.111542] reboot: Restarting system

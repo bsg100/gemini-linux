@@ -1,0 +1,50 @@
+diff --git a/drivers/pmdomain/mediatek/mtk-scpsys.c b/drivers/pmdomain/mediatek/mtk-scpsys.c
+index b374d01fd..d7b686a0d 100644
+--- a/drivers/pmdomain/mediatek/mtk-scpsys.c
++++ b/drivers/pmdomain/mediatek/mtk-scpsys.c
+@@ -470,6 +470,18 @@ static struct scp *init_scp(struct platform_device *pdev,
+ 		struct scp_domain *scpd = &scp->domains[i];
+ 		const struct scp_domain_data *data = &scp_domain_data[i];
+ 
++		/*
++		 * Some SoC domain tables (e.g. mt6797's MFG/MFG_CORE0-3 slots)
++		 * are sized to the highest designated-initializer index in use
++		 * and leave unused indices implicitly zero-filled, including
++		 * name == NULL. devm_regulator_get_optional() treats a NULL id
++		 * as a fatal -EINVAL rather than "no supply", which would abort
++		 * this whole provider's probe and take every domain down with
++		 * it. Skip those unpopulated slots instead.
++		 */
++		if (!data->name)
++			continue;
++
+ 		scpd->supply = devm_regulator_get_optional(&pdev->dev, data->name);
+ 		if (IS_ERR(scpd->supply)) {
+ 			if (PTR_ERR(scpd->supply) == -ENODEV)
+@@ -488,6 +500,9 @@ static struct scp *init_scp(struct platform_device *pdev,
+ 		struct generic_pm_domain *genpd = &scpd->genpd;
+ 		const struct scp_domain_data *data = &scp_domain_data[i];
+ 
++		if (!data->name)
++			continue;
++
+ 		pd_data->domains[i] = genpd;
+ 		scpd->scp = scp;
+ 
+@@ -526,6 +541,16 @@ static void mtk_register_power_domains(struct platform_device *pdev,
+ 		struct generic_pm_domain *genpd = &scpd->genpd;
+ 		bool on;
+ 
++		/*
++		 * Domain-table slots left unpopulated by a designated
++		 * initializer (name == NULL) were never set up in init_scp()
++		 * above -- skip them here too, rather than powering on a
++		 * genpd with a zeroed ctl_offs/sta_mask, which would hit
++		 * whatever real register happens to live at offset 0.
++		 */
++		if (!scpd->data)
++			continue;
++
+ 		/*
+ 		 * Initially turn on all domains to make the domains usable
+ 		 * with !CONFIG_PM and to get the hardware in sync with the

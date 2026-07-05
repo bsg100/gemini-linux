@@ -12,10 +12,10 @@ index c99c3372a..ffe1ab530 100644
  dtb-$(CONFIG_ARCH_MEDIATEK) += mt7622-bananapi-bpi-r64.dtb
 diff --git a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
 new file mode 100644
-index 000000000..87bb1a6bc
+index 000000000..2caeca572
 --- /dev/null
 +++ b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
-@@ -0,0 +1,726 @@
+@@ -0,0 +1,835 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Device tree for Planet Computers Gemini PDA
@@ -207,6 +207,25 @@ index 000000000..87bb1a6bc
 +		regulator-name = "vdd_1v8";
 +		regulator-min-microvolt = <1800000>;
 +		regulator-max-microvolt = <1800000>;
++		regulator-always-on;
++		regulator-boot-on;
++	};
++
++	/*
++	 * eMMC core supply: PMIC MT6351 VEMC_3V3 rail, left on by the
++	 * bootloader (LK boots from this eMMC, so the rail is provably up
++	 * when we start). No mainline MT6351 regulator driver yet, so model
++	 * it as fixed always-on. 3.0 V is the MT6351 VEMC default; anything
++	 * in the eMMC OCR window (2.7-3.6 V) satisfies mmc_regulator_get_supply.
++	 * Without a vmmc-supply the host has an empty ocr_avail and every
++	 * card init fails with "no support for card's volts" / -EINVAL
++	 * (logs/2026-07-05-31-msdc0-irq-levellow-boot.log).
++	 */
++	vemc_fixed: regulator-vemc {
++		compatible = "regulator-fixed";
++		regulator-name = "vemc";
++		regulator-min-microvolt = <3000000>;
++		regulator-max-microvolt = <3000000>;
 +		regulator-always-on;
 +		regulator-boot-on;
 +	};
@@ -575,11 +594,57 @@ index 000000000..87bb1a6bc
 + * ENP/ENN bias enable: GPIO60 / GPIO251 via fixed-regulators above.
 + *
 + * NOTE: R63419 requires dual-DSI (port0 + port1). Mainline MT6797 DRM does
-+ * not yet support dual-DSI. Single-port is wired here for initial testing.
-+ * The panel will be kept disabled until the DRM pipeline is verified working.
++ * not yet support dual-DSI. Single-port is wired here for initial testing
++ * per driver_ports.md's documented plan (single-DSI first, reduced
++ * bandwidth expected, dual-DSI deferred). This is the first hardware test
++ * of the whole pipeline -- MMSYS/DDP, MIPITX PHY and panel driver are all
++ * code-complete/compile-clean (2026-06-10) but previously untested on the
++ * device. Enabling the full OVL0->RDMA0->COLOR->CCORR->AAL->GAMMA->OD->
++ * DITHER->DSI0 chain below (2026-07-04) to attempt first light.
 + */
++&mmsys {
++	/* mmsys is a syscon, always active -- no status property; listed
++	 * here only as the anchor comment for the pipeline it clocks. */
++};
++
++&disp_ovl0 {
++	status = "okay";
++};
++
++&disp_rdma0 {
++	status = "okay";
++};
++
++&disp_color0 {
++	status = "okay";
++};
++
++&disp_ccorr0 {
++	status = "okay";
++};
++
++&disp_aal0 {
++	status = "okay";
++};
++
++&disp_gamma0 {
++	status = "okay";
++};
++
++&disp_od0 {
++	status = "okay";
++};
++
++&disp_dither0 {
++	status = "okay";
++};
++
++&mutex {
++	status = "okay";
++};
++
 +&dsi0 {
-+	status = "disabled";
++	status = "okay";
 +	#address-cells = <1>;
 +	#size-cells = <0>;
 +
@@ -610,7 +675,7 @@ index 000000000..87bb1a6bc
 +};
 +
 +&mipi_tx0 {
-+	status = "disabled";
++	status = "okay";
 +};
 +
 +/*
@@ -629,30 +694,46 @@ index 000000000..87bb1a6bc
 + *
 + * compatible: mainline's drivers/mmc/host/mtk-sd.c has no MT6797 entry —
 + * the vendor kernel's "mediatek,mt6797-mmc" string is unrecognised by the
-+ * upstream driver's of_device_id table. Using "mediatek,mt6795-mmc"
-+ * instead: MT6795 (Helio X10) is the closest upstream-supported MSDC IP
-+ * generation to MT6797 (Helio X27), same SoC family lineage. This is a
-+ * deliberate compatibility-string substitution, NOT confirmed
-+ * register-identical hardware — if probe fails or data corrupts under
-+ * load, the pad-tune/timing constants in mt6795_compat (drivers/mmc/host/
-+ * mtk-sd.c) are the first thing to re-derive against real MT6797 values.
++ * upstream driver's of_device_id table. We first substituted
++ * "mediatek,mt6795-mmc" (closest SoC lineage) — that prediction failed on
++ * hardware exactly as warned: mt6795_compat's 8-bit divider / pad-tune@0xec
++ * assumptions don't match MT6797's 12-bit divider / PAD_TUNE0@0xf0 (vendor
++ * msdc_reg.h), producing CRC -84 on every command
++ * (logs/2026-07-05-33-msdc0-vmmc-supply-boot.log). Now using
++ * "mediatek,mt2701-mmc", whose compat data matches the vendor register
++ * layout — see the comment at the node's compatible property below.
 + * See blockers.md B-7.
 + *
-+ * DEFERRED 2026-07-04: enabling this node (even after adding the
-+ * "state_uhs" pinctrl state and assigned-clocks routing below) produces a
-+ * silent post-probe hang -- no further printk, ATF aee_wdt_dump fires
++ * DEFERRED 2026-07-04, RESUMED 2026-07-05: enabling this node previously
++ * produced a silent post-probe hang -- no further printk, ATF aee_wdt_dump
 + * ~36s later (logs/2026-07-04-29-msdc0-uhs-boot.log,
-+ * logs/2026-07-04-31-msdc0-assigned-clocks-boot.log; both hang at the
-+ * *identical* PC/LR/timestamp even with different clock routing, so it is
-+ * NOT the CKSTB clock-wait theory -- root cause still unknown). Since the
-+ * Gemini has a removable SD card and MMC is not required to prove kernel
-+ * bootability (CLAUDE.md principle 5), this node is disabled and the whole
-+ * eMMC/MSDC investigation deferred; the milestone target is now booting to
-+ * an initramfs shell (rdinit=/bin/sh) instead of switch_root-ing onto
-+ * eMMC. Resume by symbolicating the hang PC (nokaslr is enabled in
-+ * gemini-cmdline.config for exactly this) before re-attempting.
++ * logs/2026-07-04-31-msdc0-assigned-clocks-boot.log). The "identical PC"
++ * in both ATF dumps turned out to be garbage: symbolicating against the
++ * exact failing Image.gz (kallsyms recovered via vmlinux-to-elf) puts the
++ * dumped PC *past _etext*, in rodata -- the core was too wedged to deliver
++ * a valid context ("Kernel WDT not ready" in the same dump), so the
++ * identical-PC observation ruled nothing out. Two defects found on resume:
++ *   1. "hclk" was wired to CLK_TOP_MUX_MSDC50_0 -- the *source* mux --
++ *      instead of CLK_TOP_MUX_MSDC50_0_HCLK (msdc50_0_hclk_sel), fixed
++ *      below.
++ *   2. mtk-sd.c msdc_set_mclk() polls MSDC_CFG_CKSTB with NO timeout
++ *      (readl_poll_timeout(..., 0, 0)) on the set_ios path that runs
++ *      post-probe from mmc_add_host() -- matching the silent post-probe
++ *      hang exactly. Instrumented via
++ *      patches/v6.6/mmc/0001-mmc-mtk-sd-gemini-debug-instrumentation.patch
++ *      so the next attempt logs each stage and bounds that poll.
 + */
 +&pio {
++	/*
++	 * pinmux ONLY -- no bias or input-enable pinconf. Upstream pinctrl-mt6797.c
++	 * implements just mode/dir/di/do field ranges; every pinconf property
++	 * fails ("pin_config_group_set op failed for group 122"), which makes
++	 * the whole state apply revert and leaks a pin claim (the recurring
++	 * "pin GPIO125 already requested by ;" in
++	 * logs/2026-07-05-33-msdc0-vmmc-supply-boot.log). Pad bias is left as
++	 * the bootloader configured it -- known-good, since LK boots from this
++	 * eMMC with these pads.
++	 */
 +	msdc0_pins_default: msdc0-default {
 +		pins-cmd-dat {
 +			pinmux = <MT6797_GPIO122__FUNC_MSDC0_CMD>,
@@ -664,16 +745,12 @@ index 000000000..87bb1a6bc
 +				 <MT6797_GPIO119__FUNC_MSDC0_DAT5>,
 +				 <MT6797_GPIO120__FUNC_MSDC0_DAT6>,
 +				 <MT6797_GPIO121__FUNC_MSDC0_DAT7>;
-+			input-enable;
-+			bias-pull-up;
 +		};
 +		pins-clk {
 +			pinmux = <MT6797_GPIO123__FUNC_MSDC0_CLK>;
-+			bias-pull-down;
 +		};
 +		pins-rst {
 +			pinmux = <MT6797_GPIO125__FUNC_MSDC0_RSTB>;
-+			bias-pull-up;
 +		};
 +	};
 +
@@ -699,26 +776,50 @@ index 000000000..87bb1a6bc
 +				 <MT6797_GPIO119__FUNC_MSDC0_DAT5>,
 +				 <MT6797_GPIO120__FUNC_MSDC0_DAT6>,
 +				 <MT6797_GPIO121__FUNC_MSDC0_DAT7>;
-+			input-enable;
-+			bias-pull-up;
 +		};
 +		pins-clk {
 +			pinmux = <MT6797_GPIO123__FUNC_MSDC0_CLK>;
-+			bias-pull-down;
 +		};
 +		pins-rst {
 +			pinmux = <MT6797_GPIO125__FUNC_MSDC0_RSTB>;
-+			bias-pull-up;
 +		};
 +	};
 +};
 +
 +/ {
 +	msdc0: mmc@11230000 {
-+		compatible = "mediatek,mt6795-mmc";
++		/*
++		 * mt2701, not mt6795: the vendor MT6797 msdc_reg.h
++		 * (gemini-linux-kernel-3.18, drivers/mmc/host/mediatek/mt6797/)
++		 * defines MSDC_PAD_TUNE0 at 0xf0 (nothing at 0xec) and a
++		 * 12-bit MSDC_CFG_CKDIV. mt6795_compat assumes an 8-bit
++		 * divider and pad-tune at 0xec, so it wrote the clock-mode
++		 * bits into the middle of the divider field -- wrong card
++		 * clock, CRC on every command, `mmc0: error -84`
++		 * (logs/2026-07-05-33-msdc0-vmmc-supply-boot.log).
++		 * mt2701_compat matches the vendor layout: clk_div_bits=12,
++		 * pad_tune_reg=PAD_TUNE0, async_fifo, data_tune.
++		 */
++		compatible = "mediatek,mt2701-mmc";
 +		reg = <0 0x11230000 0 0x1000>;
-+		interrupts = <GIC_SPI 79 IRQ_TYPE_LEVEL_HIGH>;
-+		clocks = <&infrasys CLK_INFRA_MSDC0>, <&topckgen CLK_TOP_MUX_MSDC50_0>;
++		/*
++		 * Vendor DTB: <0 0x4f 0x08> = SPI 79 level-LOW, inverted to
++		 * level-high by the sysirq intpol controller. With LEVEL_HIGH
++		 * here the polarity is wrong and the line reads permanently
++		 * asserted: a silent IRQ storm with MSDC_INT=0/MSDC_INTEN=0
++		 * (logs/2026-07-05-29, storm-guard register dump).
++		 */
++		interrupts = <GIC_SPI 79 IRQ_TYPE_LEVEL_LOW>;
++		/*
++		 * source: CLK_INFRA_MSDC0 gate (parent msdc50_0_sel) -- same
++		 * gate-as-source pattern as mt8173's CLK_PERI_MSDC30_0.
++		 * hclk: msdc50_0_hclk_sel, the MSDC register-bus clock mux.
++		 * (Until 2026-07-05 this cell wrongly pointed at
++		 * CLK_TOP_MUX_MSDC50_0, the source mux, leaving the real hclk
++		 * mux untouched.)
++		 */
++		clocks = <&infrasys CLK_INFRA_MSDC0>,
++			 <&topckgen CLK_TOP_MUX_MSDC50_0_HCLK>;
 +		clock-names = "source", "hclk";
 +		/*
 +		 * Without this, CLK_TOP_MUX_MSDC50_0 (a MUX_GATE) may sit
@@ -738,7 +839,15 @@ index 000000000..87bb1a6bc
 +		bus-width = <8>;
 +		max-frequency = <200000000>;
 +		cap-mmc-highspeed;
++		/*
++		 * vmmc = eMMC VCC (PMIC VEMC 3.0V), vqmmc = I/O rail (PMIC
++		 * VIO18 1.8V, modelled by the existing fixed 1.8V stub). Both
++		 * rails are already on from the bootloader; these fixed
++		 * regulators exist so the MMC core gets a non-empty ocr_avail.
++		 */
++		vmmc-supply = <&vemc_fixed>;
++		vqmmc-supply = <&vdd_fixed_1v8>;
 +		non-removable;
-+		status = "disabled";
++		status = "okay";
 +	};
 +};

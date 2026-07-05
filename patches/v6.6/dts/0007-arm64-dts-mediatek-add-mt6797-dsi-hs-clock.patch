@@ -1,0 +1,16 @@
+diff --git a/arch/arm64/boot/dts/mediatek/mt6797.dtsi b/arch/arm64/boot/dts/mediatek/mt6797.dtsi
+index 6c62dfc..6d5fe0c 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6797.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6797.dtsi
+@@ -575,8 +575,9 @@
+ 		interrupts = <GIC_SPI 229 IRQ_TYPE_LEVEL_LOW>;
+ 		power-domains = <&scpsys MT6797_POWER_DOMAIN_MM>;
+ 		clocks = <&mmsys CLK_MM_DSI0_MM_CLOCK>,
+-			 <&mmsys CLK_MM_DSI0_INTERFACE_CLOCK>;
+-		clock-names = "engine", "digital";
++			 <&mmsys CLK_MM_DSI0_INTERFACE_CLOCK>,
++			 <&mipi_tx0>;
++		clock-names = "engine", "digital", "hs";
+ 		phys = <&mipi_tx0>;
+ 		phy-names = "dphy";
+ 		status = "disabled";

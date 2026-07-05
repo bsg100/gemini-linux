@@ -1,0 +1,102 @@
+diff --git a/drivers/gpu/drm/mediatek/mtk_dsi.c b/drivers/gpu/drm/mediatek/mtk_dsi.c
+index bb91844..b50a5f8 100644
+--- a/drivers/gpu/drm/mediatek/mtk_dsi.c
++++ b/drivers/gpu/drm/mediatek/mtk_dsi.c
+@@ -205,6 +205,14 @@ struct mtk_dsi {
+ 	int refcount;
+ 	bool enabled;
+ 	bool lanes_ready;
++	/*
++	 * Tracks whether host_attach actually reached drm_bridge_add().
++	 * host_attach can bail out earlier (e.g. devm_drm_of_get_bridge()
++	 * deferring), and host_detach must not undo a step that never ran --
++	 * drm_bridge_remove() on a bridge whose list_head was never added
++	 * calls list_del_init() on {NULL,NULL}, a NULL+8 write that panics.
++	 */
++	bool bridge_added;
+ 	u32 irq_data;
+ 	wait_queue_head_t irq_wait_queue;
+ 	const struct mtk_dsi_driver_data *driver_data;
+@@ -906,11 +914,13 @@ static int mtk_dsi_host_attach(struct mipi_dsi_host *host,
+ 		return PTR_ERR(dsi->next_bridge);
+ 
+ 	drm_bridge_add(&dsi->bridge);
++	dsi->bridge_added = true;
+ 
+ 	ret = component_add(host->dev, &mtk_dsi_component_ops);
+ 	if (ret) {
+ 		DRM_ERROR("failed to add dsi_host component: %d\n", ret);
+ 		drm_bridge_remove(&dsi->bridge);
++		dsi->bridge_added = false;
+ 		return ret;
+ 	}
+ 
+@@ -922,8 +932,12 @@ static int mtk_dsi_host_detach(struct mipi_dsi_host *host,
+ {
+ 	struct mtk_dsi *dsi = host_to_dsi(host);
+ 
++	if (!dsi->bridge_added)
++		return 0;
++
+ 	component_del(host->dev, &mtk_dsi_component_ops);
+ 	drm_bridge_remove(&dsi->bridge);
++	dsi->bridge_added = false;
+ 	return 0;
+ }
+ 
+@@ -1102,6 +1116,22 @@ static int mtk_dsi_probe(struct platform_device *pdev)
+ 
+ 	dsi->host.ops = &mtk_dsi_ops;
+ 	dsi->host.dev = dev;
++
++	/*
++	 * mipi_dsi_host_register() below can synchronously call back into
++	 * mtk_dsi_host_attach() (if a panel/bridge child is already bound),
++	 * which does drm_bridge_add(&dsi->bridge) unconditionally. bridge
++	 * fields must therefore be valid *before* registering the host --
++	 * previously they were set at the end of a successful probe, so any
++	 * later failure/deferral (e.g. a clock not yet available) unwound
++	 * through mipi_dsi_host_unregister() -> mtk_dsi_host_detach() ->
++	 * drm_bridge_remove() on a bridge added with .funcs still NULL,
++	 * causing a NULL-pointer panic in PID 1 during Gemini bring-up.
++	 */
++	dsi->bridge.funcs = &mtk_dsi_bridge_funcs;
++	dsi->bridge.of_node = dev->of_node;
++	dsi->bridge.type = DRM_MODE_CONNECTOR_DSI;
++
+ 	ret = mipi_dsi_host_register(&dsi->host);
+ 	if (ret < 0) {
+ 		dev_err(dev, "failed to register DSI host: %d\n", ret);
+@@ -1114,6 +1144,10 @@ static int mtk_dsi_probe(struct platform_device *pdev)
+ 	if (IS_ERR(dsi->engine_clk)) {
+ 		ret = PTR_ERR(dsi->engine_clk);
+ 
++		/* TEMPORARY Gemini bring-up diagnostic, see fixed.c. Remove
++		 * once B-15 is resolved. */
++		dev_info(dev, "GEMINI-DEBUG: engine clk get failed: %d\n", ret);
++
+ 		if (ret != -EPROBE_DEFER)
+ 			dev_err(dev, "Failed to get engine clock: %d\n", ret);
+ 		goto err_unregister_host;
+@@ -1123,6 +1157,10 @@ static int mtk_dsi_probe(struct platform_device *pdev)
+ 	if (IS_ERR(dsi->digital_clk)) {
+ 		ret = PTR_ERR(dsi->digital_clk);
+ 
++		/* TEMPORARY Gemini bring-up diagnostic, see fixed.c. Remove
++		 * once B-15 is resolved. */
++		dev_info(dev, "GEMINI-DEBUG: digital clk get failed: %d\n", ret);
++
+ 		if (ret != -EPROBE_DEFER)
+ 			dev_err(dev, "Failed to get digital clock: %d\n", ret);
+ 		goto err_unregister_host;
+@@ -1167,10 +1205,6 @@ static int mtk_dsi_probe(struct platform_device *pdev)
+ 
+ 	platform_set_drvdata(pdev, dsi);
+ 
+-	dsi->bridge.funcs = &mtk_dsi_bridge_funcs;
+-	dsi->bridge.of_node = dev->of_node;
+-	dsi->bridge.type = DRM_MODE_CONNECTOR_DSI;
+-
+ 	return 0;
+ 
+ err_unregister_host:

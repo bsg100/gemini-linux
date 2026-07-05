@@ -59,11 +59,11 @@ here.
 | 1 | Hardware inventory (hardware.md) | Complete |
 | 2 | Upstream analysis | Complete |
 | 3 | Minimal kernel bring-up (serial console over FTDI) | **Complete 2026-07-04.** First full Linux 6.6 boot to userspace achieved (`Run /init as init process`) with diagnostic serial output throughout. See blockers.md B-2 (resolved) and boot.md's "SEVENTH RESULT" entry. |
-| 4 | Storage and userspace | **In progress — current phase.** Blocked on B-7: no eMMC/MMC controller DT node exists yet (init panics in `switch_root` on `/dev/mmcblk0p29`). Also carries the SMP-secondary-CPU-hang and clk-gating workarounds from Phase 3 (`maxcpus=1`, `clk_ignore_unused`) as follow-up items to properly fix rather than work around. |
-| 5 | Display enablement | Not started |
+| 4 | Storage and userspace | **In progress — current phase.** **Essentially complete 2026-07-05:** eMMC works (`mediatek,mt2701-mmc` compat, boot.md FIFTEENTH RESULT) and the 2019 Kali userspace boots fully under 6.6 — login prompt on ttyS0, B-7 resolved (boot.md SIXTEENTH RESULT). Follow-up: disable vendor droid-hal-init/charger units on p29 (they force the rootfs read-only ~28s in). Also carries the SMP-secondary-CPU-hang and clk-gating workarounds from Phase 3 (`maxcpus=1`, `clk_ignore_unused`) as follow-up items to properly fix rather than work around. |
+| 5 | Display enablement | **In progress — current phase.** First hardware test 2026-07-05: DTS/build/config chain confirmed correct (full pipeline enabled, patches applied cleanly, no boot regression), but blocked on B-13 (upstream `mtk-scpsys.c` MT6797 domain-table bug breaks the shared `MM` power domain every display component needs). A splash seen on-screen during this test is the vendor LK bootloader's own splash, unrelated to our kernel/DRM work. See boot.md "NINTH RESULT". |
 | 6 | Keyboard enablement | Not started |
 | 7 | Power management | Not started |
-| 8 | Networking | Not started |
+| 8 | Networking | **SSH-over-USB fast-tracked 2026-07-05:** build #40 adds mtu3 gadget + T-PHY (patches/v6.6/dts/0009, configs/gemini-usb.config, g_ether built-in) and the Debian rootfs has usb0 = 10.15.19.82/24 + sshd ready — awaiting flash/test (boot.md BUILD #40). Note the left USB-C port is shared with the UART console mux: serial and USB are mutually exclusive. WiFi (no mainline driver) remains not started. |
 | 9 | Optional hardware | Not started |
 
 Update the Status column as phases complete or open.
@@ -184,6 +184,17 @@ Environment variables: `LINUX_SRC`, `PATCHES_DIR`, `JOBS` (see script header).
 
 The build script will grow to include defconfig customisation and a `gemini_defconfig` target as Phase 3 progresses.
 
+## Full-Cycle Script (Mac)
+
+`scripts/build-pack.sh <NN> <short-desc> [--dtb-grep <pattern>]` runs an
+entire build iteration from the Mac with the VM up: sync patches/configs,
+reset + patch + build the kernel in the VM, pack `new_kali_boot.img`, create
+the `logs/YYYY-MM-DD-NN-<desc>/` provenance dir (image, `.config`,
+`System.map`, sha256), verify the packed kernel's banner and headless
+invariants, and print the flash/capture commands. `build.sh` remains the
+in-VM primitive it calls. The `/build-pack` skill wraps this plus the
+documentation follow-ups (boot.md entry, blockers.md update).
+
 ## GCC Version Note
 
 GCC 15.2.0 in the VM is confirmed working with both Linux 6.6 LTS and the 3.18 BSP kernel (Kali/Gemian). The GCC ≤ 4.9 requirement mentioned in earlier project notes was not substantiated by testing.
@@ -281,17 +292,28 @@ If the device needs a full reflash, use the SP Flash Tool on an x86 Linux machin
 - Scatter file: `Scatter_Gemini_x25_x27_A30GB_L26GB_Multi_Boot.txt`
 - Images from: `Gemini_x25_x27_06052019/` and `kali/`
 
-# Open Questions
+# Root Filesystem
 
-## Userspace / Root Filesystem Compatibility
+**Resolved 2026-07-05 (was an Open Question).** The 2019 Kali `linux.img`
+userspace (systemd 239) boots fully under Linux 6.6 (blockers.md B-7, boot.md
+SIXTEENTH RESULT) — but it is a dead 7-year-old rolling snapshot with vendor
+sabotage units (droid-hal-init/kpoc_charger had to be masked). It is being
+superseded by a **fresh Debian 13 (trixie) arm64 rootfs** built by
+`scripts/mkrootfs.sh` (run inside the build VM, native arm64): mmdebstrap
+minbase + serial/ssh/debug tools, kernel modules installed from the current
+build, packed as a sparse 4 GiB ext4 image and flashed to the `linux`
+partition (p29, 25.8 GiB) with `mtk w linux <img>`. After first boot,
+`resize2fs /dev/mmcblk0p29` grows it to the full partition.
 
-The Planet Computers Kali `linux.img` (from `kali(2).zip`, dated Feb 2019) was built against and ships with kernel **3.18.41-kali+** (confirmed 2026-06-07 by inspecting `kali_boot.img`). When we boot a Linux 6.6 kernel against this filesystem, userspace binaries and init scripts that depend on 3.18-specific kernel interfaces, module names, or `/proc`/`/sys` layouts may fail.
+Key facts (verified from the vendor ramdisk, which our boot images keep
+unchanged): its "Mer Boat Loader" `/init` mounts p29 with a bare busybox
+`mount` (kernel autodetect, no fs-feature constraints beyond what the running
+kernel supports) and then `exec switch_root /target /sbin/init
+--log-target=kmsg`, preferring `/sbin/preinit` if executable (Debian ships
+none). So rootfs swaps require no boot-chain changes at all.
 
-**TODO:** Determine whether the existing `linux.img` userspace will boot cleanly under Linux 6.6, or whether a new root filesystem must be built. Considerations:
-
-- glibc and systemd/init generally tolerate kernel upgrades well, but module loading, udev rules, and device node names may differ.
-- If a new filesystem is needed, options include: debootstrap a fresh Kali arm64 rootfs, or adapt an existing arm64 Kali image.
-- This does not block Phase 3 (serial console bring-up), but must be resolved before Phase 4 (userspace startup).
+**Recovery:** the 2019 image is kept at `planet/linux.img` — reflash with
+`mtk w linux planet/linux.img` (5.5 GB, slow but proven).
 
 # Change Requests
 

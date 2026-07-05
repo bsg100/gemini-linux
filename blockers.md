@@ -269,7 +269,18 @@ binding will match. Unverified; if it does not bind, Phase 8 needs a small
 compatible/device-table patch.
 - **Unblocks:** hardware test once Phase 4 is stable.
 
-## 🟡 B-7 — Rootfs / userspace compatibility (Phase 4)
+## 🟢 B-7 — Rootfs / userspace compatibility (RESOLVED 2026-07-05 — 2019 Kali userspace boots under 6.6)
+
+**Resolution (boot.md SIXTEENTH RESULT):** with eMMC working, the vendor
+ramdisk's `switch_root` onto `/dev/mmcblk0p29` succeeds and the 2019 Kali
+userspace boots fully under Linux 6.6 — systemd 239, udev, sshd, connman,
+`kali login:` prompt on ttyS0 at 22.5s, multi-user + graphical targets
+reached. **No fresh rootfs needed.** One follow-up (userspace, not kernel):
+the vendor `kpoc_charger`/droid-hal-init daemon misreads the charging state
+(vendor battery sysfs paths don't exist under 6.6), triggers its power-off
+path and sysrq-remounts everything read-only ~28s in; disable/mask
+`droid-hal-init`, `lxc@android` and the charger units on p29. Original
+blocker text and the msdc0 bring-up chronicle below for history.
 
 The 2019 Kali `linux.img` userspace was built against kernel 3.18. Running it
 under 6.6 is plausible but unproven (module loading, udev, device names).
@@ -323,6 +334,64 @@ under 6.6 is plausible but unproven (module loading, udev, device names).
   anything else; a genuine register-layout mismatch (needing a proper
   `mt6797_compat` table entry in `mtk-sd.c` rather than the `mt6795`
   stand-in) is the leading remaining hypothesis.
+- **Update 2026-07-05 (msdc0 resumed, root cause found):** with the display
+  fragment disabled (B-13, boot.md TENTH RESULT) and the headless `#32` build
+  actually booting (after a stale-`boot`-slot detour — boot.md ELEVENTH
+  RESULT), msdc0 finally probed: hclk-mux fix works (hclk 273 MHz),
+  `msdc_init_hw` completes. The old "silent hang" is now diagnosed as an
+  **MSDC IRQ storm**: ATF's watchdog dump (real PC this time, `nokaslr`)
+  lands in `__irq_resolve_mapping` with hwirq 111 = GIC SPI 79 = msdc0.
+  `msdc_irq()` always returns `IRQ_HANDLED` so the spurious detector never
+  trips, and with `maxcpus=1` the storm starves everything, including printk.
+  The mt6795-compat register-layout-mismatch hypothesis is still open as the
+  reason the line screams. A storm guard (mask + dump raw
+  `MSDC_INT/INTEN/PS` after 100k hits, disable line) is in the mtk-sd
+  instrumentation patch; next boot (`#33`,
+  `logs/2026-07-05-28-msdc0-irqstorm-guard/`) will name the stuck bit.
+- **Update 2026-07-05 (storm root cause = IRQ polarity; first shell):** the
+  `#33` storm-guard boot (boot.md TWELFTH RESULT,
+  `logs/2026-07-05-29-msdc0-irqstorm-guard-boot.log`) dumped
+  `MSDC_INT=0 MSDC_INTEN=0 MSDC_PS=81ff0002` — the storm is not from the MSDC
+  event logic at all. Vendor DTB declares msdc0's IRQ as SPI 79
+  **level-LOW**; our DTS said level-HIGH, so the idle line read permanently
+  asserted. With the guard disabling the line, boot reached
+  `Run /bin/sh as init process` and a live serial shell (MMC commands then
+  time out, interrupt-less). Fix: `IRQ_TYPE_LEVEL_LOW` in the board DTS
+  (patch 0001 regenerated); build `#34` in
+  `logs/2026-07-05-30-msdc0-irq-levellow/` awaits flashing. The
+  mt6795-register-layout hypothesis is likely retired as the storm cause.
+- **Update 2026-07-05 (polarity confirmed; next failure = empty OCR):** `#34`
+  boot (boot.md THIRTEENTH RESULT,
+  `logs/2026-07-05-31-msdc0-irq-levellow-boot.log`): storm guard silent —
+  polarity fix confirmed. Card init now fails with `no support for card's
+  volts` / `-22`: no `vmmc-supply`/`vqmmc-supply` in our msdc0 node →
+  empty `ocr_avail`. Fixed in build `#35`
+  (`logs/2026-07-05-32-msdc0-vmmc-supply/`) with fixed always-on regulators
+  (vemc 3.0 V → vmmc, vdd_1v8 stub → vqmmc); awaits flashing.
+- **Update 2026-07-05 (vmmc confirmed; -84 CRC = mt6795 compat mismatch —
+  the layout hypothesis returns, now proven):** `#35` boot (boot.md
+  FOURTEENTH RESULT): volts error gone, card now fails with CRC `-84`.
+  Vendor MT6797 `msdc_reg.h` proves `mt6795_compat` wrong on two counts:
+  MT6797 has a 12-bit CKDIV (mt6795 data assumes 8-bit, so CKMOD bits
+  landed inside the divider → wrong card clock) and PAD_TUNE0 at 0xf0
+  (mt6795 writes 0xec, which doesn't exist). Switched compatible to
+  `mediatek,mt2701-mmc` (12-bit div, PAD_TUNE0, async_fifo, data_tune).
+  Also stripped all bias/input-enable pinconf from the msdc0 pin groups —
+  upstream `pinctrl-mt6797.c` has no pinconf support, the failures
+  reverted state application and leaked a GPIO125 pin claim. Build `#37`
+  in `logs/2026-07-05-34-msdc0-mt2701-compat/` awaits flashing.
+- **Update 2026-07-05 (eMMC WORKS — controller half of B-7 resolved):** `#37`
+  boot (boot.md FIFTEENTH RESULT,
+  `logs/2026-07-05-35-msdc0-mt2701-compat-boot.log`): banner matches, storm
+  guard silent, no pinctrl errors, no CRC. `mmc0: new high speed MMC card at
+  address 0001` → `mmcblk0: mmc0:0001 DF4064 58.2 GiB` with **all 33
+  partitions** (p1–p33, incl. the p29 Kali rootfs), plus boot0/boot1/rpmb.
+  The mt2701-compat + pinmux-only fix is confirmed. Card runs at legacy
+  "high speed" (52 MHz) — fine for bring-up; HS200/HS400 tuning is a later
+  optimisation. What remains of B-7 is the original rootfs question: point
+  init at `/dev/mmcblk0p29` (drop `rdinit=/bin/sh`, let the vendor ramdisk
+  `switch_root`) and see whether the 2019 Kali userspace survives 6.6, or
+  build a fresh mmdebstrap rootfs.
 - **Unblocks:** decision + a Phase 4 build session; does not block Phase 3.
 
 ## 🟡 B-8 — R63419 panel requires dual-DSI for native resolution
@@ -420,6 +489,133 @@ Impact by phase:
 - **Long-term:** a real MT6351 MFD + regulator driver port (mt6397-family
   pattern, vendor `drivers/misc/mediatek/pmic/` as register reference) is a
   new driver_ports.md item — **queued behind the freeze**.
+
+---
+
+## 🟡 B-13 — mtk-scpsys `mt6797` domain table has unpopulated GPU slots, breaks ALL power domains
+
+**Update 2026-07-05 (evening):** severity upgraded — this is no longer just
+"DRM never binds". With `CONFIG_COMMON_CLK_MT6797_MMSYS=y` (added to fix the
+DSI engine-clk -517 defer), the kernel **hard-hangs silently at ~0.52s**
+(identical final line/timestamp in `logs/2026-07-05-21-…` and `-23-…`;
+minutes-long capture, no further output, no watchdog dump). Registering the
+mm-domain clocks leads to an MM-domain register access with the domain
+unpowered/unmanaged, wedging the bus. Until B-13 is fixed, the display
+fragment is disabled: `configs/gemini-display.config` →
+`gemini-display.config.disabled-b13`. See boot.md TENTH RESULT.
+
+Discovered 2026-07-05 during first Phase 5 display bring-up hardware test
+(`logs/2026-07-05-02-phase5-display-boot.log`). The full display pipeline
+(`disp_ovl0` → `disp_rdma0` → `disp_color0` → `disp_ccorr0` → `disp_aal0` →
+`disp_gamma0` → `disp_od0` → `disp_dither0` → `mutex` → `dsi0` → panel, plus
+`mipi_tx0`) was enabled in the board DTS for the first time, and
+`CONFIG_DRM_MEDIATEK`/`CONFIG_PHY_MTK_MIPI_DSI`/`CONFIG_DRM_PANEL_RENESAS_R63419`/
+`CONFIG_MTK_MMSYS`/`CONFIG_MTK_CMDQ`/`CONFIG_BACKLIGHT_CLASS_DEVICE` forced
+built-in (new fragment `configs/gemini-display.config` — required since the
+`rdinit=/bin/sh` initramfs shell has no modprobe path, see B-7). Kernel and
+DTB built and booted cleanly (no hang, no regression to the Phase 4
+milestone), but the DRM driver never bound:
+
+```
+[    0.320587] mtk-scpsys: probe of 10006000.power-controller failed with error -22
+[    0.370139] mediatek-drm mediatek-drm.1.auto: Failed to find disp-mutex node
+...
+[   10.738979] platform lcd-avee-regulator: deferred probe pending
+[   10.739758] platform lcd-avdd-regulator: deferred probe pending
+[   10.740509] platform 1401c000.dsi: deferred probe pending
+```
+
+**Root cause (confirmed by reading driver source in the VM, not guessed):**
+`drivers/pmdomain/mediatek/mtk-scpsys.c`'s `scp_domain_data_mt6797[]` uses
+C99 designated initializers indexed by the `MT6797_POWER_DOMAIN_*` enum
+(`include/dt-bindings/power/mt6797-power.h`): `VDEC`=0, `VENC`=1, `ISP`=2,
+`MM`=3, `AUDIO`=4, `MFG_ASYNC`=5, `MFG`=6, `MFG_CORE0..3`=7-10, `MJC`=11. Only
+7 of these 12 slots have an initializer (`VDEC`, `VENC`, `ISP`, `MM`,
+`AUDIO`, `MFG_ASYNC`, `MJC`) — the designated-initializer array's size is
+fixed by the highest index used (`MJC`=11), so it's actually 12 elements,
+and the 5 GPU-related slots (`MFG`, `MFG_CORE0`-`MFG_CORE3`) are silently
+zero-filled (`.name = NULL`). `scpsys_probe()` → `init_scp()` loops
+`for (i = 0; i < num; i++)` over **all 12** and calls
+`devm_regulator_get_optional(&pdev->dev, data->name)` unconditionally. For
+the 5 empty slots this passes `id == NULL` into `_regulator_get()`
+(`drivers/regulator/core.c:2179`), which treats a NULL identifier as a hard
+error (`pr_err("get() with no identifier\n"); return ERR_PTR(-EINVAL);`) —
+**not** the "-ENODEV, no supply configured" path `devm_regulator_get_optional`
+is meant to tolerate. `init_scp()` doesn't distinguish this from a real
+error and aborts, so `scpsys_probe()` returns -EINVAL for the **whole
+device**, not just the GPU domains. Since our `MM` domain (index 3, fully
+populated, needed for the entire display path) lives on the same platform
+device, every display component's `power-domains = <&scpsys
+MT6797_POWER_DOMAIN_MM>` reference fails to resolve and every consumer sits
+in permanent deferred probe.
+
+This is a genuine upstream Linux 6.6 gap in MT6797 support, not a Gemini
+board-DTS mistake — confirmed the DTS is unaffected: `mipi_tx0`/`dsi0`/all
+`disp_*` nodes compile and show `status = "okay"` correctly in the built
+DTB, and their DT wiring (`power-domains`, `clocks`, `mediatek,larb`) matches
+the mt8173 reference pattern. The bug is entirely inside
+`mtk-scpsys.c`'s MT6797 domain table + its all-domains probe loop.
+
+**Not yet fixed** — a correct fix needs real SPM register offsets
+(`ctl_offs`, `sta_mask`, `sram_pdn_bits`/`sram_pdn_ack_bits`) for the `MFG`/
+`MFG_CORE0-3` domains, which are GPU (Mali T860, Panfrost) power gates that
+are explicitly out of scope for Phase 5 (hardware.md: GPU work "Defer until
+display works"). No verified register values for these are in the project
+yet (B-5 gap: no full datasheet). Fabricating placeholder register offsets
+for GPU-domain gating is exactly the kind of guess CLAUDE.md principle 7
+(documented rationale, no guessing on hardware values) warns against —
+wrong `ctl_offs` values here risk toggling live SPM state incorrectly.
+
+**Two real fix paths, next session:**
+1. **Correct:** source real MT6797 `MFG`/`MFG_CORE0-3` SPM register values
+   (likely obtainable from the vendor 3.18 BSP's own SPM/scpsys driver in
+   `drivers/misc/mediatek/base/power/mt6797/`, not yet checked) and add
+   proper `scp_domain_data_mt6797[]` entries for indices 6-10.
+2. **Safe workaround, less correct:** patch `init_scp()`'s probe loop (and
+   the mirrored loop in `mtk_register_power_domains()`) to `continue` when
+   `data->name == NULL`, i.e. skip unpopulated domain-table slots instead of
+   treating them as fatal. This is a generically-applicable driver
+   robustness fix (protects any future SoC with sparse domain tables, not
+   Gemini-specific), and doesn't require GPU register values since it just
+   stops the driver from tripping over its own data-table gap. Recommended
+   starting point — unblocks `MM`/display without touching GPU power state
+   at all.
+- **Unblocks:** the actual kernel-driven display test (today's result was
+  proof the DTS/build/config chain is right, not proof the panel can be
+  driven — the LK bootsplash seen on screen is unrelated, confirmed by its
+  timing: static and present from very early in boot, i.e. rendered by LK's
+  own `logo`-partition splash code before Linux ever runs, not by our new
+  DRM/panel patches).
+
+---
+
+## 🟡 B-14 — Software reboot does not reset the SoC (hangs after `reboot: Restarting system`)
+
+**Opened:** 2026-07-05. **Severity: low** — hard power-cycle works; costs
+convenience, not progress. Not a Phase 4/5 gate.
+
+**Evidence:** boot.md EIGHTEENTH RESULT
+(`logs/2026-07-05-39-reboot-test-boot.log`). A clean systemd shutdown ran to
+completion; the final line is `reboot: Restarting system`
+(`machine_restart()`), then nothing — no preloader/LK output, manual
+power-cycle required. The mtk-wdt, left armed by systemd-shutdown as a
+backstop (`watchdog did not stop!`), also never fired.
+
+**Candidate mechanisms (undistinguished):**
+1. Vendor ATF's PSCI `SYSTEM_RESET` hangs given the SoC state our 6.6 boot
+   leaves behind (`maxcpus=1`, `clk_ignore_unused`, no scpsys domains) —
+   plausibly the same PSCI/SPM oddity behind the B-list SMP secondary-CPU
+   hang.
+2. The mainline mtk-wdt `restart_handler` (toprgu `WDT_SWRST`) is what
+   actually ran and it fails/deasserts on MT6797 — it may also explain the
+   silent watchdog (the handler reprograms `WDT_MODE` first).
+
+**Next diagnostic step:** on a live system check `/sys/kernel/reboot` (or
+boot once with `initcall_debug`/restart-handler tracing) to learn whether
+PSCI or mtk-wdt owns the restart; then test the other path via the `reboot=`
+cmdline parameter. Revisit alongside the `maxcpus=1` SMP fix — if PSCI
+`CPU_ON` is broken, PSCI `SYSTEM_RESET` being broken too would point at a
+single ATF-interface cause.
 
 ---
 

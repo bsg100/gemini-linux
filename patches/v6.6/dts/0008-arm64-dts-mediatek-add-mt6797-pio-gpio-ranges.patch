@@ -1,0 +1,12 @@
+diff --git a/arch/arm64/boot/dts/mediatek/mt6797.dtsi b/arch/arm64/boot/dts/mediatek/mt6797.dtsi
+index 6d5fe0c..5554f65 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6797.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6797.dtsi
+@@ -135,6 +135,7 @@
+ 			    "iocfgr", "iocfgt";
+ 		gpio-controller;
+ 		#gpio-cells = <2>;
++		gpio-ranges = <&pio 0 0 262>;
+ 
+ 		uart0_pins_a: uart0 {
+ 			pins0 {

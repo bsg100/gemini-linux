@@ -1,0 +1,92 @@
+diff --git a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+index 2caeca572..da0c101fc 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+@@ -21,6 +21,7 @@
+ #include "mt6797.dtsi"
+ #include <dt-bindings/gpio/gpio.h>
+ #include <dt-bindings/input/input.h>
++#include <dt-bindings/phy/phy.h>
+ 
+ / {
+ 	model = "Planet Computers Gemini PDA";
+@@ -833,3 +834,79 @@ msdc0: mmc@11230000 {
+ 		status = "okay";
+ 	};
+ };
++
++/*
++ * SSUSB (MTU3) device controller + T-PHY -- USB gadget ethernet for SSH
++ * over the left USB-C port.
++ *
++ * Hardware values from the vendor DTB (docs/vendor-dtb/gemini_kali_boot.dts,
++ * nodes usb3@11270000 / usb3_sif@11280000 / usb3_sif2@11290000 / usb3_phy),
++ * mapped onto the mainline MT8173 mtu3 layout (same SSUSB/T-PHY generation,
++ * same 0x1129xxxx PHY base): MAC at ssusb_base+0x1000, IPPC at sif+0x700,
++ * T-PHY = sif2. Vendor device-controller interrupt is SPI 127 ("musb-hdrc",
++ * type 8 = level-low -- same convention as the MSDC SPI-79 lesson).
++ * Clocks: infracfg SSUSB_SYS/SSUSB_REF, per the vendor usb3_phy clock list
++ * (CLK_INFRA_SSUSB_* ids 69/75/76). MT6797 scpsys has no USB power domain
++ * (USB sits on the always-on infra fabric), so no power-domains property.
++ *
++ * Peripheral-only (dr_mode): gadget mode needs no XHCI/OTG/extcon, and the
++ * Gemini's left port is the device-role port. High-speed only: u3port is
++ * left unwired until USB3 is needed -- fewer PHY/clock unknowns for first
++ * light. Note the left port is shared with the UART console mux: USB tests
++ * require the FTDI rig unplugged.
++ */
++/ {
++	u3phy: t-phy@11290000 {
++		compatible = "mediatek,generic-tphy-v1";
++		reg = <0 0x11290000 0 0x800>;
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++		status = "okay";
++
++		u2port0: usb-phy@11290800 {
++			reg = <0 0x11290800 0 0x100>;
++			clocks = <&clk26m>;
++			clock-names = "ref";
++			#phy-cells = <1>;
++			status = "okay";
++		};
++	};
++
++	ssusb: usb@11271000 {
++		compatible = "mediatek,mtu3";
++		reg = <0 0x11271000 0 0x3000>,
++		      <0 0x11280700 0 0x0100>;
++		reg-names = "mac", "ippc";
++		interrupts = <GIC_SPI 127 IRQ_TYPE_LEVEL_LOW>;
++		/*
++		 * mcu_ck = CLK_INFRA_SSUSB_BUS, the SSUSB wrapper's AXI/register
++		 * bus clock (clk-mt6797.c: "infra_ssusb_bus", parent axi_sel).
++		 * Build #40 omitted it and the boot hung silently at t=0.40s,
++		 * right after mtu3's "u2p_dis_msk" print -- the first register
++		 * access into SSUSB space (T-PHY init at 0x11290800) stalled
++		 * the bus, same failure mode as the MSDC CKSTB hang
++		 * (logs/2026-07-05-40-debian13-first-boot.log, tail). LK does
++		 * not enable SSUSB clocks (Android gates USB until a cable
++		 * event), so clk_ignore_unused does not save us here.
++		 * mtu3 enables the clk bulk before ssusb_phy_init(), so this
++		 * also clocks the PHY bank for tphy's register writes.
++		 */
++		clocks = <&infrasys CLK_INFRA_SSUSB_SYS>,
++			 <&infrasys CLK_INFRA_SSUSB_REF>,
++			 <&infrasys CLK_INFRA_SSUSB_BUS>;
++		clock-names = "sys_ck", "ref_ck", "mcu_ck";
++		/*
++		 * infra_ssusb_sys's parent is the ssusb_top_sys_sel mux; route
++		 * it to univpll3_d2 per the vendor usb3_phy clock list
++		 * (ssusb_univpll3_d2_clk) -- same explicit-mux-routing pattern
++		 * as MSDC's assigned-clocks (boot.md 2026-07-04-29 lesson).
++		 */
++		assigned-clocks = <&topckgen CLK_TOP_MUX_SSUSB_TOP_SYS>;
++		assigned-clock-parents = <&topckgen CLK_TOP_UNIVPLL3_D2>;
++		phys = <&u2port0 PHY_TYPE_USB2>;
++		dr_mode = "peripheral";
++		maximum-speed = "high-speed";
++		status = "okay";
++	};
++};

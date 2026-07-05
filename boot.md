@@ -944,6 +944,341 @@ per B-7 and is the next concrete piece of Phase 4 to resume.
 
 ---
 
+## NINTH RESULT — Phase 5 first display pipeline test: scpsys probe failure blocks DRM bind, LK splash misattributed (2026-07-05)
+
+First hardware test of the display pipeline documented as code-complete in
+driver_ports.md since 2026-06-10 (MMSYS/DDP, MT6797 DSI variant, MIPITX PHY,
+R63419 panel driver). Enabled the whole chain in the board DTS: `disp_ovl0`,
+`disp_rdma0`, `disp_color0`, `disp_ccorr0`, `disp_aal0`, `disp_gamma0`,
+`disp_od0`, `disp_dither0`, `mutex`, `dsi0` (+ panel node), `mipi_tx0`, all
+`status = "okay"`. Added `configs/gemini-display.config` forcing
+`CONFIG_DRM=y`, `CONFIG_DRM_KMS_HELPER=y`, `CONFIG_MTK_MMSYS=y`,
+`CONFIG_MTK_CMDQ=y`, `CONFIG_MTK_CMDQ_MBOX=y`, `CONFIG_DRM_MEDIATEK=y`,
+`CONFIG_PHY_MTK_MIPI_DSI=y`, `CONFIG_DRM_PANEL_RENESAS_R63419=y`,
+`CONFIG_BACKLIGHT_CLASS_DEVICE=y` — all previously `=m` or unset in
+defconfig, which matters because the `rdinit=/bin/sh` initramfs (B-7 / Phase
+4) has no modprobe path, so anything not built-in would never load.
+
+Two build-time issues fixed along the way (not hardware issues):
+- `CONFIG_MTK_MMSYS`/`CONFIG_DRM_MEDIATEK` silently reverted to `=m` after
+  `olddefconfig` because `MTK_MMSYS` transitively depends on
+  `MTK_CMDQ || MTK_CMDQ=n` and `MTK_CMDQ` defaulted to `=m` — a `y` symbol
+  cannot depend on an `=m` one. Fixed by also forcing `CONFIG_MTK_CMDQ=y` /
+  `CONFIG_MTK_CMDQ_MBOX=y`.
+- Link failure `undefined reference to devm_of_find_backlight` in
+  `panel-renesas-r63419.o` — `CONFIG_BACKLIGHT_CLASS_DEVICE` was `=m` while
+  the panel driver (now built-in) needs it built-in too. Fixed by forcing it
+  `=y`.
+- Initial board-DTS edit enabled the `disp_*`/`dsi0` nodes but missed
+  `mipi_tx0` (still `status = "disabled"`, leftover from the pre-Phase-5
+  placeholder) — caught by decompiling the built DTB with `dtc -I dtb -O
+  dts` and grepping every node for `status`, not by assumption. Fixed and
+  rebuilt.
+
+**Result** (`logs/2026-07-05-02-phase5-display-boot.log`, image
+`logs/2026-07-05-01-phase5-display/new_boot.img`, sha256
+`3e48c7ed9b8ee5f970772cc06417b0bf0b71d66e9cc1f5d86a953e97ecbc3724`):
+
+Kernel booted cleanly to the `/bin/sh` shell exactly as in the EIGHTH
+RESULT milestone — **no regression, no hang**. However the display driver
+chain did not bind:
+
+```
+[    0.283996] mediatek-mipi-tx 10215000.mipi-dphy: can't get nvmem_cell_get, ignore it
+[    0.313933] mtk-mmsys 14000000.syscon: error -2 can't parse gce-client-reg property (0)
+[    0.320092] get() with no identifier
+[    0.320587] mtk-scpsys: probe of 10006000.power-controller failed with error -22
+...
+[    0.370139] mediatek-drm mediatek-drm.1.auto: Failed to find disp-mutex node
+...
+[   10.738979] platform lcd-avee-regulator: deferred probe pending
+[   10.739758] platform lcd-avdd-regulator: deferred probe pending
+[   10.740509] platform 1401c000.dsi: deferred probe pending
+```
+
+Root-caused to a genuine upstream Linux 6.6 bug, not a Gemini DTS mistake —
+full analysis in blockers.md **B-13**. Short version: `mtk-scpsys.c`'s MT6797
+domain table has 5 unpopulated (zero-initialized) slots for GPU domains
+(`MFG`, `MFG_CORE0-3`); the probe loop iterates all of them unconditionally
+and calls `devm_regulator_get_optional()` with a NULL supply name for the
+gaps, which the regulator core treats as fatal (`-EINVAL`), aborting the
+*entire* scpsys device — including the `MM` domain that every display
+component depends on.
+
+**A splash screen was visible on the physical display during this boot**,
+but confirmed (asked the user directly, timing was "appeared early, static
+throughout") to be the vendor LK bootloader's own `logo`-partition splash,
+rendered before Linux even starts — **not** evidence of our kernel DRM/panel
+code working. This is an important distinction: the screen lighting up at
+all during a test session is easy to mistake for progress, but LK has
+always rendered this splash regardless of what the Linux side does; it is
+static and unrelated to the `dsi0`/panel patches under test.
+
+**Phase 5 status:** DTS wiring, build config and patch set are all
+confirmed correct (no DT or compile-time errors); the remaining blocker is
+purely the upstream scpsys driver bug (B-13). Next step is patching
+`mtk-scpsys.c`'s `init_scp()` to skip domain-table slots with `data->name ==
+NULL` (recommended: lowest-risk, doesn't touch GPU register state, doesn't
+require unverified MFG SPM offsets) rather than sourcing real MFG domain
+register values, per B-13's fix-path discussion.
+
+---
+
+## TENTH RESULT — msdc0 re-enable attempt: silent 0.52s hang traced to mm-clk driver (B-13), not MSDC; display fragment disabled for Phase 4 (2026-07-05)
+
+**Build:** `logs/2026-07-05-22-msdc0-hclk-fix/` (`new_kali_boot.img` sha256
+`50e52d3c…650e`, `.config` + `System.map` alongside). Flashed with
+`mtk.py w boot2`. **Capture:** `logs/2026-07-05-23-msdc0-hclk-fix-boot.log`
+(monitor ran for several minutes).
+
+Changes under test:
+1. **msdc0 hclk DTS bug fixed** — `hclk` had been wired to
+   `CLK_TOP_MUX_MSDC50_0` (the *source* mux) instead of
+   `CLK_TOP_MUX_MSDC50_0_HCLK`; corrected, node set `status = "okay"`
+   (patch `dts/0001` regenerated).
+2. **mtk-sd.c instrumented** (`patches/v6.6/mmc/0001-mmc-mtk-sd-gemini-debug-instrumentation.patch`):
+   probe-stage markers, clock rates at ungate, and the *infinite*
+   CKSTB `readl_poll_timeout(…, 0, 0)` in `msdc_set_mclk()` bounded to 1s.
+3. Prior conclusion invalidated: the "identical hang PC" from the 07-04
+   ATF `aee_wdt_dump` is **garbage** — kallsyms recovered from the exact
+   failing `Image.gz` (vmlinux-to-elf) shows the dumped PC lands past
+   `_etext`, in rodata, and the dump itself says "Kernel WDT not ready".
+   The CKSTB infinite-poll theory is back in play, untested.
+
+**Result: the MSDC test never ran.** The log ends abruptly at
+`[0.515614] mtk-dsi … engine clk get failed: -517` — byte-for-byte the
+same final line and timestamp as `2026-07-05-21-mmsys-fix-boot.log`. A
+minutes-long capture with no further output (and no ATF watchdog dump)
+proves the earlier "captures end at 0.5s" observations were not
+early-stopped captures: **every build with
+`CONFIG_COMMON_CLK_MT6797_MMSYS=y` hard-hangs silently at ~0.52s**, right
+where the mm clk driver registers MM-domain clocks. This is B-13's
+signature — with the scpsys MT6797 domain table broken, the `MM` power
+domain is unmanaged, and the first MM-domain register access wedges the
+bus (no printk, no WDT rescue). It also answers the parked Phase 5
+question: the mmsys clk config fix cannot be evaluated until B-13 is
+fixed, because adding the mm clk driver introduces this hang.
+
+No `GEMINI-DEBUG` msdc lines, no `11230000.mmc` output at all — msdc0
+probe was never reached, so the hclk fix and instrumentation remain
+untested.
+
+**Action:** `configs/gemini-display.config` renamed to
+`gemini-display.config.disabled-b13` (build.sh merges `*.config` only), so
+Phase 4 headless builds exclude the entire display stack. Rebuilt:
+`logs/2026-07-05-24-msdc0-headless/new_kali_boot.img` (sha256
+`20e91db21afcd26d76c0d8c2d7c6f409a1b96199d3af4b41e94744bc35aedb3e`),
+`MMC_MTK=y`, mm-clk configs off, DRM back to =m (inert under
+`rdinit=/bin/sh`). Awaiting flash + capture.
+
+---
+
+## ELEVENTH RESULT — stale-slot detour resolved; headless build boots, MSDC probes, then MSDC IRQ storm hangs CPU0 until HW watchdog (2026-07-05)
+
+**Detour first (logs -25/-26):** captures `2026-07-05-25` and `-26` again
+showed the old `#29` kernel banner and the same 0.5158s mm-clk hang, despite a
+verified-good flash of the `-24` headless image to boot2 (readback sha256
+matched). Readback of the **boot** partition
+(`/tmp/boot-readback.img`, sha256 `6108e1d2…f2653e`) proved it contained the
+stale `#29` test kernel — plain power-on boots the `boot` slot, so the recent
+boot2 flashes were never actually tested. Resolution: the headless image was
+also flashed to `boot` (targeted `mtk w boot …`, no GPT touch; stock Android
+boot.img remains available in `Gemini_x25_x27_06052019/` and in the readback).
+Lesson: **always check the `Linux version` banner build number against the
+provenance dir before trusting a capture.**
+
+**Real result (log `2026-07-05-27-msdc0-headless-boot.log`, kernel `#32`
+from `logs/2026-07-05-24-msdc0-headless/`):**
+
+- Correct kernel booted (`#32 SMP PREEMPT Sun Jul 5 03:15:17 UTC 2026`).
+- The mm-clk 0.52s hang is gone — confirms TENTH RESULT's B-13 attribution.
+- msdc0 probed for the first time:
+  `GEMINI-DEBUG: ungate: src=191999939Hz hclk=273000000Hz MSDC_CFG=02200199`,
+  `msdc_init_hw done` at 0.435s. The hclk fix works (hclk now 273 MHz).
+  Known pinctrl group-122 config failure still present (non-fatal).
+- Then a **silent hang at ~0.437s** (last line `ledtrig-cpu`). At 36s the
+  hardware watchdog fired and ATF dumped real CPU0 state:
+  `pc:<ffff8000801048e4>` = inside `__irq_resolve_mapping` (System.map `#32`),
+  `x20 = 0x6f` = hwirq 111 = **GIC SPI 79 + 32 = msdc0's interrupt**.
+  Diagnosis: level-high MSDC IRQ storm. `msdc_irq()` always returns
+  `IRQ_HANDLED`, so the generic spurious-IRQ detector never trips; with
+  `maxcpus=1` the storm starves printk forever — hence silence.
+
+**Action:** added a storm guard to
+`patches/v6.6/mmc/0001-mmc-mtk-sd-gemini-debug-instrumentation.patch`: after
+100k handler entries it masks MSDC_INTEN, clears MSDC_INT, disables the irq
+line and dev_err's the raw `MSDC_INT/MSDC_INTEN/MSDC_PS` values, so the next
+boot survives and names the stuck status bit. Rebuilt headless:
+`logs/2026-07-05-28-msdc0-irqstorm-guard/new_kali_boot.img` (kernel `#33
+04:05:05 UTC`, sha256
+`7323aba227cb339d0a5386706cbfb587a71167a7b512221271ef0013a7d03789`), with
+`.config` + `System.map` alongside. Flash to **both** `boot` and `boot2`.
+Awaiting capture (`logs/2026-07-05-29-msdc0-irqstorm-guard-boot.log`).
+
+---
+
+## TWELFTH RESULT — storm guard fires, first shell prompt over serial; storm root cause = wrong IRQ polarity in DTS (2026-07-05)
+
+**Raw log:** `logs/2026-07-05-29-msdc0-irqstorm-guard-boot.log`
+**Flashed:** `logs/2026-07-05-28-msdc0-irqstorm-guard/new_kali_boot.img` (`#33`) to both `boot` and `boot2`.
+
+**Observations:**
+- Correct banner (`#33 ... 04:05:05 UTC`). msdc0 probe markers all present
+  (hclk 273 MHz, `msdc_init_hw done` at 0.449s).
+- At 0.690s the storm guard fired:
+  `IRQ storm (100000 hits): MSDC_INT=00000000 MSDC_INTEN=00000000
+  MSDC_PS=81ff0002 -- irq disabled`.
+- With the line disabled, boot **completed for the first time**:
+  `Run /bin/sh as init process` and a live `~ #` prompt on serial.
+  MMC requests then time out every ~5s (`msdc_request_timeout`, CMD52/0/8/5/55/1)
+  because the controller now has no working interrupt.
+
+**Diagnosis — the register dump exonerates the MSDC event logic:**
+`MSDC_INT=0` and `MSDC_INTEN=0` while the line storms means the assertion is
+not coming from the controller's interrupt-status machinery at all — it's a
+polarity problem. The vendor DTB (`docs/vendor-dtb/gemini_kali_boot.dts`,
+msdc0 node) declares `interrupts = <0 0x4f 0x08>` = SPI 79 **IRQ_TYPE_LEVEL_LOW**
+(MT6797 routes peripheral IRQs through the `sysirq` intpol inverter). Our DTS
+said `IRQ_TYPE_LEVEL_HIGH`, so the idle (de-asserted) line level was read as
+permanently asserted — an unconditional storm the instant the IRQ was enabled,
+independent of any MSDC register state. `MSDC_PS=81ff0002` (WP + CMD + all DAT
+lines high, CDSTS set) is consistent with an idle bus. This also likely
+retires the mt6795-register-layout-mismatch hypothesis as the storm cause.
+
+**Action:** changed msdc0 `interrupts` to `IRQ_TYPE_LEVEL_LOW` in
+`mt6797-gemini-pda.dts` (vendor-sourced), regenerated
+`patches/v6.6/dts/0001-arm64-dts-mediatek-add-gemini-pda-board.patch`
+(checked: patches 0006–0008 only touch `mt6797.dtsi`, so no layering
+conflict; SPI 199 on the disabled scp stub is level-high in the vendor DTB
+too, so unchanged). Rebuilt headless:
+`logs/2026-07-05-30-msdc0-irq-levellow/new_kali_boot.img` (kernel `#34
+04:13:39 UTC`, sha256
+`cafa7d7b3ba3ab206a54dc2044aa130598f88fc26200334faad60707602e1f0f`),
+`.config` + `System.map` alongside; built DTB verified to contain
+`interrupts = <0x00 0x4f 0x08>`, storm guard still in (as a tripwire — it
+should now stay silent). Flash to **both** slots:
+
+```bash
+/tmp/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot  logs/2026-07-05-30-msdc0-irq-levellow/new_kali_boot.img
+/tmp/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 logs/2026-07-05-30-msdc0-irq-levellow/new_kali_boot.img
+```
+
+Expected next capture (`logs/2026-07-05-31-msdc0-irq-levellow-boot.log`):
+banner `#34`, no storm-guard message, `mmc0: new ... eMMC` card enumeration
+and `mmcblk0` partitions.
+
+---
+
+## THIRTEENTH RESULT — polarity fix verified, storm gone; card init now fails on empty OCR (no vmmc-supply) (2026-07-05)
+
+**Log:** `logs/2026-07-05-31-msdc0-irq-levellow-boot.log`
+**Kernel:** `#34 SMP PREEMPT Sun Jul 5 04:13:39 UTC 2026` (build dir
+`logs/2026-07-05-30-msdc0-irq-levellow/`, flashed to both `boot` and `boot2`
+after one aborted attempt caused by a relative path run from inside `logs/` —
+DAXFlash "Filename doesn't exists"; no write occurred, no corruption).
+
+**Observed:**
+
+- Storm-guard tripwire **silent** — the LEVEL_LOW polarity fix is confirmed.
+  `msdc_init_hw done` at 0.447s, `mmc_add_host returned 0` at 0.477s, no
+  `IRQ storm` line anywhere in the capture.
+- Boot completes to shell again (`Run /bin/sh as init process`, `~ #`).
+- New failure, repeating every retry:
+  `mtk-msdc 11230000.mmc: no support for card's volts` followed by
+  `mmc0: error -22 whilst initialising MMC card`.
+
+**Diagnosis:** the card responds now (we got far enough to compare OCRs — an
+interrupt-level win), but the host advertises an empty voltage window. Our
+msdc0 node had no `vmmc-supply`/`vqmmc-supply`; with no regulator and no
+fallback, `ocr_avail` is empty, so `mmc_select_voltage()` fails with -EINVAL.
+The vendor DTB has no regulator properties either — the 3.18 vendor driver
+drove the MT6351 PMIC rails from hardcoded platform code, an interface the
+upstream driver doesn't have.
+
+**Fix (build `#35`):** fixed always-on regulators in the board DTS, honest
+because LK boots from this eMMC so both rails are provably up at handoff:
+
+- `vemc_fixed` 3.0 V (PMIC MT6351 VEMC) → `vmmc-supply`
+- existing `vdd_fixed_1v8` stub (PMIC VIO18) → `vqmmc-supply`
+
+Patch `dts/0001` regenerated; built DTB verified to contain both
+`*-supply` properties.
+
+**Build:** `logs/2026-07-05-32-msdc0-vmmc-supply/new_kali_boot.img`, kernel
+`#35 SMP PREEMPT Sun Jul 5 04:21:10 UTC 2026`, sha256
+`c016f1dba0ebba43404a4a167d337caca3f10b25b104825ecbe1e89a812a43c5`, `.config`
++ `System.map` alongside; storm guard still present as tripwire. Flash to
+**both** slots (absolute paths):
+
+```bash
+/tmp/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot  /Volumes/extdata/github/gemini_linux/logs/2026-07-05-32-msdc0-vmmc-supply/new_kali_boot.img
+/tmp/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 /Volumes/extdata/github/gemini_linux/logs/2026-07-05-32-msdc0-vmmc-supply/new_kali_boot.img
+```
+
+Expected next capture (`logs/2026-07-05-33-msdc0-vmmc-supply-boot.log`):
+banner `#35`, no volts error, `mmc0: new ... eMMC` and `mmcblk0` partitions
+(which would clear B-7).
+
+---
+
+## FOURTEENTH RESULT — vmmc fix verified; CRC -84 traced to wrong compat data (mt6795 vs MT6797 register layout) + unsupported pinconf (2026-07-05)
+
+**Log:** `logs/2026-07-05-33-msdc0-vmmc-supply-boot.log`
+**Kernel:** `#35 SMP PREEMPT Sun Jul 5 04:21:10 UTC 2026`
+(`logs/2026-07-05-32-msdc0-vmmc-supply/`, flashed to both slots).
+
+**Observed:**
+
+- The `no support for card's volts` / -22 error is **gone** — the
+  vmmc/vqmmc fixed-regulator fix is confirmed.
+- New failure: `mmc0: error -84 whilst initialising MMC card` (EILSEQ =
+  CRC error), 4 retries then the MMC core gives up. Boot still reaches the
+  serial shell.
+- Pinctrl noise around each retry:
+  `pin_config_group_set op failed for group 122` during the *default*
+  state apply at probe, then
+  `pin GPIO125 already requested by ; cannot claim for 11230000.mmc` on
+  every subsequent state switch.
+
+**Diagnosis (two independent defects):**
+
+1. **Wrong MSDC compat data.** The vendor MT6797 `msdc_reg.h`
+   (lukefor/gemini-linux-kernel-3.18,
+   `drivers/mmc/host/mediatek/mt6797/msdc_reg.h`) defines
+   `MSDC_PAD_TUNE0 = 0xf0` (nothing at 0xec) and
+   `MSDC_CFG_CKDIV = 0xfff << 8` (**12-bit** divider). Our
+   `mediatek,mt6795-mmc` substitution selects `mt6795_compat` with
+   `clk_div_bits = 8` and `pad_tune_reg = 0xec`: the driver wrote the
+   clock-mode bits (CKMOD, bits 16–17 in the 8-bit layout) into the middle
+   of the real 12-bit CKDIV field (bits 8–19), producing a wrong card
+   clock and CRC on every command — exactly the failure mode the original
+   substitution comment predicted. `mt2701_compat` matches the vendor
+   layout (`clk_div_bits = 12`, `pad_tune_reg = PAD_TUNE0`, async_fifo,
+   data_tune). **Fix: `compatible = "mediatek,mt2701-mmc"`.**
+2. **Unsupported pinconf.** Upstream `pinctrl-mt6797.c` implements only
+   mode/dir/di/do field ranges — no bias or input-enable. Every pinconf
+   property in our msdc0 pin groups failed, reverting the whole state
+   apply (leaking the GPIO125 claim, hence "already requested by ;").
+   **Fix: pinmux-only pin groups**; pad bias stays as the bootloader
+   configured it (known-good — LK boots from this eMMC).
+
+**Build `#37`** (first produced via the new `scripts/build-pack.sh`):
+`logs/2026-07-05-34-msdc0-mt2701-compat/new_kali_boot.img`, sha256
+`3d964c61dbd22c99432c9f0600351b0bf6a06edbc27df6f842e0837b8c1b244a`,
+banner `#37 SMP PREEMPT Sun Jul 5 04:33:25 UTC 2026`; DTB verified to
+contain `mediatek,mt2701-mmc`. Flash to **both** slots:
+
+```bash
+/tmp/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot  /Volumes/extdata/github/gemini_linux/logs/2026-07-05-34-msdc0-mt2701-compat/new_kali_boot.img
+/tmp/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 /Volumes/extdata/github/gemini_linux/logs/2026-07-05-34-msdc0-mt2701-compat/new_kali_boot.img
+```
+
+Expected next capture (`logs/2026-07-05-35-msdc0-mt2701-compat-boot.log`):
+banner `#37`, no -84/CRC errors, no group-122/GPIO125 pinctrl errors,
+`mmc0: new ... MMC card` + `mmcblk0` partitions (clears B-7).
+
+---
+
 ## Future Entries
 
 Boot logs from kernel bring-up attempts will be appended here as Phase 3 progresses.
@@ -951,3 +1286,495 @@ Boot logs from kernel bring-up attempts will be appended here as Phase 3 progres
 **First entry on FTDI cable arrival (per blockers.md B-1):** baseline serial
 capture of the known-good 3.18 Kali boot — validates cable/wiring/baud before
 any 6.6 flash.
+
+## FIFTEENTH RESULT — eMMC ENUMERATES: mt2701-compat + pinmux-only fix confirmed, all 33 partitions visible (2026-07-05)
+
+**Log:** `logs/2026-07-05-35-msdc0-mt2701-compat-boot.log`
+**Kernel:** `#37 SMP PREEMPT Sun Jul 5 04:33:25 UTC 2026`
+(`logs/2026-07-05-34-msdc0-mt2701-compat/`, sha256
+`3d964c61dbd22c99432c9f0600351b0bf6a06edbc27df6f842e0837b8c1b244a`,
+flashed to both `boot` and `boot2` with targeted `mtk w`).
+
+**Observed:**
+
+- Banner matches the flashed build. Storm guard silent, zero `error -84`,
+  zero pinctrl failures (no `group 122`, no `GPIO125 already requested`).
+- Probe clean: hclk 273 MHz, `msdc_init_hw` done, `mmc_add_host` returned 0.
+- `Run /bin/sh as init process` → live shell, then asynchronously:
+  - `mmc0: new high speed MMC card at address 0001`
+  - `mmcblk0: mmc0:0001 DF4064 58.2 GiB` with partitions **p1–p33**
+    (including p29, the Kali rootfs target)
+  - `mmcblk0boot0/boot1` (4 MiB each) and `mmcblk0rpmb` chardev.
+
+**Conclusions:**
+
+- The CRC -84 root cause was exactly the register-layout mismatch: MT6797's
+  MSDC is mt2701-generation (12-bit CKDIV, PAD_TUNE0 @ 0xf0), not
+  mt6795-generation. `mediatek,mt2701-mmc` is the correct upstream compat.
+- Stripping bias/input-enable pinconf (unsupported by `pinctrl-mt6797.c`)
+  cleared the state-apply failures and the GPIO125 pin-claim leak.
+- Card negotiated legacy "high speed" (52 MHz, per `cap-mmc-highspeed`).
+  HS200/HS400 needs tuning support + pad-tune values — deferred optimisation.
+- **The eMMC half of B-7 is resolved.** Next: drop `rdinit=/bin/sh` from the
+  cmdline and let the vendor ramdisk `switch_root` onto `/dev/mmcblk0p29`,
+  to answer the original B-7 question (does the 2019 Kali userspace boot
+  under 6.6?).
+
+## BUILD #38 — switch_root test: rdinit=/bin/sh removed, vendor init will try /dev/mmcblk0p29 (2026-07-05)
+
+**Provenance:** `logs/2026-07-05-36-switchroot-p29/` — sha256
+`0592142d48f62a437b4a0552a8a7f9bc3877b2ab9fb2fa6d1551e578e4a2d2d3`,
+banner `#38 SMP PREEMPT Sun Jul 5 04:39:41 UTC 2026`.
+
+**Change:** only `configs/gemini-cmdline.config` — dropped `rdinit=/bin/sh`
+so the vendor 2019 Kali ramdisk's `/init` runs and does its unconditional
+`switch_root` onto `/dev/mmcblk0p29` (now exists — FIFTEENTH RESULT). This is
+the remaining half of B-7: does the 2019 Kali (3.18-era) userspace boot
+under Linux 6.6?
+
+**Expected capture** (`logs/2026-07-05-37-switchroot-p29-boot.log`):
+banner `#38`; possible outcomes:
+- **Best:** switch_root succeeds, systemd/init from p29 starts, maybe a
+  login prompt on ttyS0 → 2019 userspace works, B-7 fully resolved.
+- **Race risk:** the card enumerated asynchronously ~40 ms after init
+  started last boot; if the vendor init doesn't wait for the device,
+  switch_root may race enumeration and fail even though eMMC works —
+  distinguishable from a userspace failure by whether `mmcblk0p29` had
+  appeared before the panic/error.
+- **Userspace failure:** switch_root succeeds but init from p29 crashes or
+  stalls (3.18-era assumptions) → go the fresh-mmdebstrap route.
+
+## SIXTEENTH RESULT — FULL KALI USERSPACE BOOTS: switch_root works, login prompt on ttyS0; vendor charger daemon then forces rootfs read-only (2026-07-05)
+
+**Log:** `logs/2026-07-05-37-switchroot-p29-boot.log`
+**Kernel:** `#38 SMP PREEMPT Sun Jul 5 04:39:41 UTC 2026`
+(`logs/2026-07-05-36-switchroot-p29/`, flashed to both slots).
+
+**Observed:**
+
+- eMMC enumerates again (0.54s), vendor init's `switch_root` succeeds:
+  `EXT4-fs (mmcblk0p29): mounted filesystem ... r/w` at 2.73s.
+- **systemd 239 starts, "Welcome to Kali GNU/Linux Rolling!"**, hostname
+  `kali`, all core services up (journald, udev, D-Bus, sshd, connman,
+  login service). `kali login:` **prompt on ttyS0 at 22.5s**. Multi-User +
+  Graphical targets reached; `Startup finished in 3.129s (kernel) +
+  23.809s (userspace)`.
+- Then the Android-side stack (droid-hal-init / `kpoc_charger`) runs:
+  `charger: is_charging_source_available(), usb:0 ac:0 wireless:0` — the
+  vendor charger daemon decides no power source is present and initiates
+  its power-off path: `sysrq: Emergency Remount R/O` at 28.6s (all ext4
+  volumes remounted ro, one benign ext4 WARN during the forced remount),
+  `lxc@android.service` fails. The power-off itself never completes, so
+  the system limps on with a read-only root (`ext4_do_writepages ...
+  err -30` repeating). Minor: `haveged.service` failed;
+  "Initialize lights on Gemini" failed; android `system` partition lookup
+  failed (`/dev/block/platform/mtk-msdc.0/...` vendor path, expected).
+
+**Conclusions:**
+
+- **B-7 is answered: the 2019 Kali userspace runs fine under 6.6.** glibc,
+  systemd 239, udev, getty all work. No fresh rootfs is required for
+  Phase 4.
+- The remaining defect is the vendor charger/Android compatibility layer:
+  it misreads the charging state (no vendor battery/charger drivers exist
+  under 6.6 — `/sys/devices/platform/battery_meter/...` missing) and
+  emergency-remounts the disk. Fix is in userspace: disable
+  `droid-hal-init`/`lxc@android`/charger units on p29 (mount it from the
+  initramfs shell or via a boot with `rdinit=/bin/sh` and edit), or mask
+  the services. Alternatively test with a charger plugged in, but
+  disabling is the right long-term move — the Android container is dead
+  weight under this kernel.
+
+## SEVENTEENTH RESULT — clean stable boot: Android units masked, no emergency remount, login prompt persists (2026-07-05)
+
+**Log:** `logs/2026-07-05-38-masked-android-boot.log`
+**Kernel:** same `#38` build (no reflash; userspace change only —
+`droid-hal-init`/`lxc@android` masked on p29 from the live serial session).
+
+**Observed:**
+
+- Boot reached `kali login:` on ttyS0 and **stayed healthy**: no
+  `sysrq: Emergency Remount`, no `err -30` writeback spam, no charger
+  daemon output. The rootfs remains read-write. lxc@android shows
+  `masked/failed` in `--failed` (expected for a masked unit), plus the two
+  known-benign failures (haveged, gemini-lights).
+- **User logged into Kali over serial** — first interactive login of the
+  project (previous boot, same build).
+- Software `reboot` untested: the user had to drop the tty session to
+  start the FTDI capture and hard-reset instead. PSCI reboot path remains
+  an open test item.
+- The only remaining log noise is the GEMINI-DEBUG instrumentation
+  (32 lines, mostly the mtk-msdc runtime-PM `ungate` print firing on every
+  MMC runtime resume). Its diagnostic purpose (msdc bring-up) is complete.
+
+**Conclusions:** Phase 4 storage/userspace is functionally complete on the
+2019 Kali image. Cleanup candidates for the next build: drop the four
+temporary GEMINI-DEBUG patches (mmc instrumentation incl. storm guard,
+pinctrl, gpiolib-of, regulator-fixed debug) and update build-pack.sh's
+`IRQ storm` tripwire check accordingly. Open items: software-reboot test,
+`maxcpus=1`, `clk_ignore_unused`, `nokaslr` removal, B-13 (display).
+
+## EIGHTEENTH RESULT — software `reboot` does NOT reset the SoC: hang after `reboot: Restarting system` (2026-07-05)
+
+**Log:** `logs/2026-07-05-39-reboot-test-boot.log`
+**Kernel:** same `#38` build (no reflash). First use of
+`ftdi-monitor.py --interactive` — logged in, ran `reboot`, and captured the
+whole shutdown in one session (the tty-vs-capture port conflict is solved).
+
+**Observed:**
+
+- Orderly, complete systemd shutdown: all units stopped, filesystems
+  unmounted cleanly (p29 remounted ro, loop/system.img detached, swaps off),
+  `Reached target Final Step`, `Starting Reboot...`.
+- `[  296.945] watchdog: watchdog0: watchdog did not stop!` — systemd-shutdown
+  takes over the hardware watchdog (`Hardware watchdog 'mtk-wdt', version 0`)
+  as its reboot backstop.
+- Final line: `[  297.111] reboot: Restarting system` — this is
+  `machine_restart()` invoking the PSCI `SYSTEM_RESET` SMC into ATF.
+  **Nothing after it.** The device never re-entered the boot chain (no
+  preloader/LK output); the user power-cycled manually.
+- The armed mtk-wdt also never fired (no reset ~30s later), so either the
+  restart path disabled it (mtk_wdt has a restart handler that reprograms
+  WDT_MODE) or the SoC is wedged at a level below the watchdog.
+
+**Analysis:** two candidate mechanisms, not yet distinguished:
+
+1. **ATF PSCI SYSTEM_RESET broken/hung** under our boot state. The vendor
+   ATF's reset path may depend on SoC state (e.g. SPM/clock state the vendor
+   kernel maintains) that our 6.6 boot — with `clk_ignore_unused`, no scpsys
+   domains, `maxcpus=1` — leaves different.
+2. **mtk-wdt restart handler** — mainline registers a restart_handler that
+   resets via the toprgu WDT_SWRST register; if the kernel is using that
+   (priority 128) rather than PSCI, the failure is in the toprgu path
+   instead. Which handler actually ran is not visible in the log; adding
+   `reboot=` debug or checking `/sys/kernel/reboot` on the next boot would
+   disambiguate.
+
+**Conclusions:** filed as blocker **B-14** (low severity — hard power-cycle
+works, this costs convenience not progress; likely tangled with the same
+SMP/PSCI oddity behind `maxcpus=1`). Not a Phase 4 gate. The interactive
+capture workflow is validated.
+
+## BUILD #39 — debug-instrumentation cleanup (2026-07-05, not yet flashed)
+
+**Provenance:** `logs/2026-07-05-39-debug-cleanup/` — sha256
+`0f1140a78d54272e7db42f578ae50aab88caf2d501b979ef3b33dc4f567c1c13`, banner
+`#39 SMP PREEMPT Sun Jul  5 05:01:02 UTC 2026`.
+
+**Changes vs #38:** removed the four temporary GEMINI-DEBUG patches
+(`mmc/0001` instrumentation incl. IRQ-storm guard, `pinctrl/0001`,
+`gpio/0002`, `regulator/0002`) — their msdc bring-up diagnostic purpose is
+complete (FIFTEENTH–SEVENTEENTH RESULTs). 15 patches remain. build-pack.sh
+updated: the `IRQ storm` presence tripwire is now inverted to a
+`GEMINI-DEBUG` **absence** check (fails if any instrumentation sneaks back
+in), and the patches rsync gained `--delete` so patch removals propagate to
+the VM. No functional kernel changes expected; boot should be identical to
+#38 minus the 32 debug lines.
+
+**Companion change:** first Debian 13 rootfs image built by the new
+`scripts/mkrootfs.sh` (see next entry when flashed) — the #39 flash and the
+p29 rootfs flash can be done in the same preloader session.
+
+## ROOTFS IMAGE — Debian 13 (trixie) arm64, first build (2026-07-05, not yet flashed)
+
+**Built by:** `scripts/mkrootfs.sh` (new; runs in the build VM, native
+arm64, mmdebstrap minbase).
+**Image:** `~/gemini-build/OUTPUT/debian13-rootfs.img` — 1.5 GiB shipped
+(built at 4 GiB, resize2fs-shrunk to cut preloader-USB flash time; grow on
+device with `resize2fs /dev/mmcblk0p29`). sha256
+`9426af99deb0407639ae83ffe43358c58d087d4414ef19e70a76a64e4a26ece4`.
+e2fsck clean after shrink.
+
+**Contents verified by loop-mount in the VM:** systemd 257
+(`/sbin/init` → `../lib/systemd/systemd`), fstab `/dev/mmcblk0p29 / ext4
+defaults,noatime`, kernel modules `6.6.0-dirty` (from the #39 tree),
+root password `toor`, sshd `PermitRootLogin yes`, hostname `gemini`.
+Packages: base (systemd,udev,dbus,kmod,util-linux,e2fsprogs,apt) + net
+(openssh-server,iproute2,ifupdown,isc-dhcp-client — idle until Phase 8) +
+tools (i2c-tools,mmc-utils,evtest,usbutils,less,vim-tiny,htop).
+
+**Pre-check (vendor ramdisk, unchanged in our boot images):** its Mer Boat
+Loader `/init` mounts p29 with bare busybox `mount` (kernel autodetect) and
+`exec switch_root /target /sbin/init --log-target=kmsg`; prefers
+`/sbin/preinit` if executable (Debian ships none). So no ramdisk/boot-chain
+change is needed for the rootfs swap.
+
+**Flash plan (same preloader session as kernel #39):**
+```
+/tmp/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot  logs/2026-07-05-39-debug-cleanup/new_kali_boot.img
+/tmp/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 logs/2026-07-05-39-debug-cleanup/new_kali_boot.img
+/tmp/mtk-venv/bin/python3 ~/mtkclient/mtk.py w linux ~/gemini-build/OUTPUT/debian13-rootfs.img
+```
+Recovery: `mtk w linux planet/linux.img` restores the 2019 Kali userspace.
+
+**First-boot expectations:** `gemini login:` on ttyS0; root/toor; systemd
+257; `systemctl --failed` should be clean or near-clean (no droid-hal,
+kpoc_charger, haveged or gemini-lights — none exist on this image); rootfs
+rw; then run `resize2fs /dev/mmcblk0p29` and confirm `df -h /` ≈ 25 GiB.
+Capture: `python3 scripts/ftdi-monitor.py --interactive --log
+logs/2026-07-05-40-debian13-first-boot.log`.
+
+## NINETEENTH RESULT — DEBIAN 13 FIRST BOOT: works first try; dbus failure root-caused to vendor-initramfs mdev clobbering devtmpfs modes (2026-07-05)
+
+**Flashed:** build #39 (`boot`+`boot2`, sha256 `0f1140a7…c13`) and
+`debian13-rootfs.img` (`linux` p29, sha256 `9426af99…ce4`). User-driven flash
+and first-boot session (interactive capture); follow-up diagnosis run by
+Claude directly over the FTDI serial line (scripted pyserial commands against
+the logged-in root shell).
+
+**Outcome:** Debian 13 boots first try — `gemini login:` on ttyS0, root/toor
+works, systemd 257, rootfs read-write. `resize2fs /dev/mmcblk0p29` grew the
+fs to the full 25.8 GiB partition. Only failures: `dbus.socket` +
+`dbus.service`.
+
+**dbus RCA (confirmed):**
+- Symptom: `dbus-daemon: fatal error setting up standard fds: Failed to open
+  /dev/null: Permission denied`, 5× between t=11.1s and t=17.5s, then
+  `service-start-limit-hit` — dbus stays failed forever.
+- `/dev` IS devtmpfs and `/dev/null` IS `crw-rw-rw- 1,3` once boot settles;
+  `runuser -u messagebus -- head -c0 /dev/null` succeeds; manual
+  `dbus-daemon --system` starts fine. So the denial was transient.
+- Cause: the vendor Mer boat loader initramfs runs
+  `echo /sbin/mdev > /proc/sys/kernel/hotplug; mdev -s` (its `/init` lines
+  126–127) against the kernel devtmpfs — the same instance the booted system
+  inherits. Busybox mdev with no `/etc/mdev.conf` re-creates/chmods nodes to
+  **0660 root:root**. Fingerprint: mdev-style `179:N -> ../mmcblk0pN`
+  symlinks litter `/dev`. systemd-udevd's coldplug eventually restores 0666
+  (trigger finishes t=10.6s but the queue drains slowly on `maxcpus=1`),
+  and dbus — the first *unprivileged* opener of `/dev/null` — loses the race.
+- Fix (applied live + in `scripts/mkrootfs.sh`): `/etc/tmpfiles.d/gemini-devnodes.conf`
+  with `z` (adjust-existing) lines restoring 0666 on
+  null/zero/full/random/urandom/tty/ptmx. Runs in
+  `systemd-tmpfiles-setup-dev-early.service` (t≈7s), safely before dbus.
+  Verified live: `systemctl reset-failed && start` → both units active,
+  `systemctl --failed` clean. Cold-boot verification pending next power cycle.
+- Also enabled: `systemd-networkd` + `/etc/systemd/network/usb0.network`
+  (10.15.19.82/24) on the live system and in mkrootfs.sh, ready for the
+  USB-gadget SSH work (build #40).
+
+**Lesson:** the vendor initramfs shares devtmpfs with the final system;
+anything it does to `/dev` (modes, stray symlinks) persists across
+switch_root. Any userspace that races udev's coldplug must not assume
+default node modes.
+
+## BUILD #40 — USB gadget ethernet (SSH over USB-C), first mtu3/T-PHY build (2026-07-05, not yet flashed)
+
+**Goal:** `ssh root@gemini` over the left USB-C port via g_ether — fast-track
+of Phase 8, no WiFi driver needed.
+
+**Changes:**
+- `patches/v6.6/dts/0009-arm64-dts-mediatek-add-gemini-ssusb-gadget.patch`:
+  SSUSB (mtu3) + generic-tphy-v1 nodes in the board DTS. Values from the
+  vendor DTB (`usb3@11270000`/sif/sif2/usb3_phy) mapped onto the MT8173 mtu3
+  layout: MAC 0x11271000, IPPC 0x11280700, T-PHY 0x11290000 (u2port0 at
+  +0x800). IRQ SPI 127 level-low. Clocks infracfg SSUSB_SYS/SSUSB_REF.
+  No power-domains — MT6797 scpsys has no USB domain (infra fabric), so
+  this does NOT depend on B-13. dr_mode="peripheral", high-speed only
+  (u3port deliberately unwired for first light).
+- `configs/gemini-usb.config`: USB_MTU3_GADGET (peripheral-only choice),
+  USB_ETH=y (g_ether built-in, CDC ECM + RNDIS).
+- Rootfs side already live (NINETEENTH RESULT): usb0 = 10.15.19.82/24 via
+  systemd-networkd; sshd enabled with root login.
+
+**Provenance:** `logs/2026-07-05-40-usb-gadget/` — sha256
+`ebdeb140522ffc1994c1780bcaa1ce7e1fbe886ab0b464fb7bbb41337daccf11`, banner
+`#40 SMP PREEMPT Sun Jul  5 06:32:05 UTC 2026`. DTB grep confirms
+`usb@11271000`; packed kernel contains g_ether/mtu3/mtk-tphy/CDC-Ethernet
+strings; GEMINI-DEBUG absent, display absent. 16 patches applied.
+
+**Test plan:** flash boot+boot2 → serial capture of one boot (confirm no
+regression, mtu3 probes, "using random self ethernet address" from g_ether)
+→ unplug FTDI (left port is shared with the UART mux!) → USB-C data cable to
+Mac → CDC ECM interface appears; give it 10.15.19.1/24 → `ssh
+root@10.15.19.82`. Serial and USB cannot be used simultaneously on that port.
+
+## TWENTIETH RESULT — build #40 hangs at mtu3 probe: missing SSUSB bus clock, watchdog boot-loop (2026-07-05)
+
+**Flashed:** #40 (`ebdeb140…c11`) to boot+boot2. Capture appended to
+`logs/2026-07-05-40-debian13-first-boot.log` (same interactive session file).
+
+**Observed:** boot proceeds normally to t=0.404s, last line
+`mtu3 11271000.usb: u2p_dis_msk: 0, u3p_dis_msk: 0`, then total silence;
+watchdog resets the SoC and it loops to the same point (both slots carry
+#40). `dr_mode: 2` confirms the DT parsed correctly.
+
+**RCA (source-confirmed):** after that print, `mtu3_probe` →
+`ssusb_rscs_init` → `clk_bulk_prepare_enable` → `ssusb_phy_init` — the
+T-PHY register write at 0x11290800 is the first access into SSUSB address
+space. The dts/0009 node wired only `sys_ck`/`ref_ck` (infra SSUSB_SYS/REF)
+and omitted **CLK_INFRA_SSUSB_BUS** ("infra_ssusb_bus", parent axi_sel,
+clk-mt6797.c:516) — the wrapper's AXI/register-bus clock and the *first*
+clock in the vendor usb3_phy list. With it gated, the PHY write stalls the
+bus: silent hang, no exception, ATF watchdog reset — the exact MSDC-CKSTB
+failure mode again. LK never enables SSUSB clocks (Android gates USB until
+a cable event), so `clk_ignore_unused` cannot preserve them.
+
+**Fix (build #41, dts/0009 revised):** add `mcu_ck = CLK_INFRA_SSUSB_BUS`
+to the mtu3 clock bulk (enabled before `ssusb_phy_init`, so it also clocks
+the PHY bank), and route the `ssusb_top_sys_sel` mux (parent of
+infra_ssusb_sys) to `univpll3_d2` via assigned-clocks, per the vendor clock
+list — the same explicit-mux-routing lesson as MSDC (2026-07-04-29).
+
+**Lesson (recurring, now twice):** on MT6797, any new IP block needs its
+*bus/hclk gate* wired explicitly, not just the functional clocks — the
+symptom of a missing one is always a silent hang at the first register
+access, ~36s before a watchdog reset. Check the vendor clock list for a
+`*_bus_clk` entry first.
+
+**Build #41 provenance:** `logs/2026-07-05-41-ssusb-bus-clk/` — sha256
+`f64e94acf6f3584bf528aa02bb32c7fb077f14935baa6f5a1a9f9fe41accf397`, banner
+`#41 SMP PREEMPT Sun Jul  5 06:39:24 UTC 2026`. DTB grep confirms
+`clock-names = "sys_ck", "ref_ck", "mcu_ck"`; GEMINI-DEBUG absent, display
+absent.
+
+## TWENTY-FIRST RESULT — build #41 still hangs at the same point: bus clock was not (the only) missing enable (2026-07-05)
+
+**Raw log:** `logs/2026-07-05-42-ssusb-bus-clk-boot.log` (banner confirms `#41`,
+so the flash took and the mcu_ck DTS was running).
+
+**Observation:** identical failure signature to #40 — last line is
+`[0.404240] mtu3 11271000.usb: u2p_dis_msk: 0, u3p_dis_msk: 0`, then silence
+and watchdog reboot. Adding `CLK_INFRA_SSUSB_BUS` (mcu_ck) plus the
+`ssusb_top_sys_sel → univpll3_d2` mux routing did not move the hang point.
+
+**What this rules out / confirms:**
+- The clock set now matches the vendor `usb3_phy` node exactly
+  (`ssusb_bus_clk` 0x45, `ssusb_sys_clk` 0x4b, `ssusb_ref_clk` 0x4c, top-sys
+  mux to univpll3_d2) — vendor DTB `usb3_phy` node is the source of truth.
+- The register map is confirmed correct against the MT6797 Functional Spec
+  §5.17 memory map: `ssusb_sifslv_ippc` = 0x11280700,
+  `ssusb_sifslv_u2phy_com` = 0x11290800, shared SIF bank base 0x11290000.
+  (Spec text extracted to scratchpad; table lists all SSUSB sub-banks.)
+- MT6797 scpsys has no USB power domain, so no power-domains property applies.
+- Therefore something *undocumented in the vendor DT* still gates the SSUSB
+  SIF bank (candidates: an infracfg module reset held, an IPPC-level power
+  state the BROM/preloader leaves different from MT8173, or the hang is not
+  where assumed).
+
+**Next step (build #42):** stop guessing; instrument. Pure trace build —
+`patches/v6.6/debug/0001-GEMINI-DEBUG-ssusb-probe-trace.patch` adds dev_info
+brackets around every step of `ssusb_rscs_init` (clk enable / phy_init /
+power_on / ip_sw_reset) and `mtk_phy_init` (clk / efuse / first SIF
+read-modify-write at U2PHYDTM0 = 0x11290868). The serial log will name the
+exact access that stalls the bus. Built with `ALLOW_DEBUG=1` (build-pack
+tripwire override); the debug patch must be deleted again once diagnosis is
+done.
+
+**Trace-build provenance:** `logs/2026-07-05-42-ssusb-probe-trace/` — sha256
+`ee09efb01fc7d6fd8b163f448667235504df389831cd0afdeefade4bdeeab8b8`, banner
+`#43 SMP PREEMPT Sun Jul 5 06:51:19 UTC 2026`. GEMINI-DEBUG present
+(deliberate, ALLOW_DEBUG=1). Same DTS/config as #41. (An earlier identical
+trace build, banner #42, was rebuilt and overwritten before flashing; the
+sha256 above is the image on disk.)
+
+## TWENTY-SECOND RESULT — trace build pins the hang to the first U2-PHY SIF read (2026-07-05)
+
+**Raw log:** `logs/2026-07-05-43-ssusb-probe-trace-boot.log` (banner `#43`).
+
+**Observation:** all GEMINI-DEBUG brackets before the PHY register access
+printed; the last line ever printed is
+`mtk-tphy: GEMINI-DEBUG: u2 init, first SIF read @... (U2PHYDTM0)` at
+t=0.410s. So `clk_bulk_prepare_enable` (mtu3 and tphy) succeeds and the hang
+is exactly the first read of the U2-PHY com bank at 0x11290868.
+
+**Conclusion:** the SSUSB SIF slave for the PHY does not decode even with the
+full vendor clock set on. Working hypothesis: on MT6797 the PHY SIF bank sits
+behind the SSUSB IP power/reset state controlled from IPPC
+(`SSUSB_IP_SW_RST` / `SSUSB_IP_DEV_PDN`), which LK never initialises (Android
+powers USB only on cable events). Mainline mtu3 touches IPPC only *after*
+phy_init — an order that works on MT8173 where the bootloader brings USB up
+for fastboot.
+
+**Next (build #44, `logs/2026-07-05-44-ssusb-ippc-first/`):** debug patch v2
+reads and prints `IP_PW_CTRL0`/`IP_PW_CTRL2` right after clock enable, then
+pulses `SSUSB_IP_SW_RST` and clears `SSUSB_IP_DEV_PDN` *before* phy_init.
+Outcomes: (a) IPPC read also hangs → the whole SSUSB IP is dead (infracfg
+reset / undocumented gate); (b) IPPC responds and the PHY read then works →
+root cause found, fix = do the IPPC power-up before phy init (proper patch to
+follow); (c) IPPC responds but PHY still hangs → PHY bank gated by something
+else. sha256
+`65cc5047c8a1d2b732158232048cbbd82618a9185f4fccc50985fb9319087314`, banner
+`#44 SMP PREEMPT Sun Jul 5 06:56:05 UTC 2026`, GEMINI-DEBUG present
+(deliberate).
+
+## TWENTY-THIRD RESULT — IPPC is alive; IP unreset+unPDN does NOT unblock the PHY SIF (2026-07-05)
+
+**Log:** `logs/2026-07-05-45-ssusb-ippc-first-boot.log` (build #44, sha
+`65cc5047…9314`, banner confirmed `#44 SMP PREEMPT Sun Jul 5 06:56:05 UTC 2026`).
+
+Outcome (c) from the TWENTY-SECOND entry's three-way experiment:
+
+```
+[0.407] GEMINI-DEBUG: IP_PW_CTRL0=00011001 IP_PW_CTRL2=00000001
+[0.408] GEMINI-DEBUG: IPPC alive, IP unreset+unPDN, ssusb_phy_init...
+[0.412] mtk-tphy: GEMINI-DEBUG: u2 init, first SIF read @... (U2PHYDTM0)   <- last line, hang + WDT
+```
+
+Findings:
+- The IPPC bank (0x11280700) reads fine — the SSUSB wrapper is clocked and
+  decoding. Only the PHY SIF bank (0x11290800) hangs.
+- LK leaves the IP held in reset: `IP_PW_CTRL0` bit0 (`SSUSB_IP_SW_RST`) = 1
+  and `IP_PW_CTRL2` bit0 (`SSUSB_IP_DEV_PDN`) = 1 at probe. Clearing both
+  (with a reset pulse) is evidently necessary-but-not-sufficient: the very
+  next U2PHYDTM0 read still hangs.
+- Remaining gate candidates: the per-port power-downs
+  (`SSUSB_U2_PORT_DIS|PDN` in `U3D_SSUSB_U2_CTRL_0P`, likewise U3), which
+  mainline mtu3 only clears in `mtu3_device_enable()` — long after phy_init —
+  and/or the MAC clock-stable handshake (`IP_PW_STS1/2`).
+
+**BUILD #45 (dir `logs/2026-07-05-46-ssusb-port-unpdn/`):** extends the
+experiment — after IP unreset+unPDN it also clears U2/U3 port
+DIS|PDN|HOST_SEL, waits 100µs, and prints `IP_PW_STS1/STS2` before phy_init.
+sha256
+`0ec038b36a610b8e91f3599557dfce237bc84a5f5a247f837f7ae917981a1667`, banner
+`#45 SMP PREEMPT Sun Jul 5 07:01:36 UTC 2026`, GEMINI-DEBUG present
+(deliberate, ALLOW_DEBUG=1). Capture to
+`logs/2026-07-05-47-ssusb-port-unpdn-boot.log`.
+
+## TWENTY-FOURTH RESULT — port unPDN + MAC clocks confirmed running; PHY SIF still dead → PMIC rails hypothesis (2026-07-05)
+
+**Log:** `logs/2026-07-05-47-ssusb-port-unpdn-boot.log` (build #45, sha
+`0ec038b3…1667`, banner confirmed).
+
+Build #45 cleared U2/U3 port DIS|PDN|HOST_SEL and dumped the IP power status
+before phy_init:
+
+```
+[0.407] GEMINI-DEBUG: ports unPDN, IP_PW_STS1=01000d0e STS2=00000001
+[0.412] mtk-tphy: GEMINI-DEBUG: u2 init, first SIF read @... (U2PHYDTM0)   <- last line, hang + WDT
+```
+
+`STS1` bit10 (`SSUSB_SYS125_RST_B_STS`) and bit8 (`SSUSB_REF_RST_B_STS`) set,
+`STS2` bit0 (`SSUSB_U2_MAC_SYS_RST_B_STS`) set — **the entire SSUSB MAC is
+clocked and out of reset**, yet the SIF2 PHY bank (0x11290800) still stalls
+the bus. IPPC/port state fully exonerated alongside clocks.
+
+**New evidence — vendor 3.18 mu3phy driver** (Meizu MX6 tree
+`github.com/mirsys/mt6797`, `drivers/misc/mediatek/mu3phy/mt6797/mtk-phy-asic.c`,
+saved to scratchpad): `phy_init_soc()` (and even the SIB debug helpers)
+unconditionally enable **PMIC MT6351 rails before any SIF access**:
+`RG_VUSB33_EN` (reg 0x0A16 bit1), `RG_VA10_EN` (0x0A6E bit1),
+`RG_VA10_VOSEL=1` → 0.95V (0x0B10 bits[10:8]) — then clocks, 50µs, first SIF
+write. VA10 is the USB PHY analog supply ("VDD10_USB_P0"); the vendor treats
+rails-on as a hard prerequisite of SIF register access. Our boots never power
+them (mtu3 vusb33 = dummy regulator; with FTDI on the left-port mux the
+preloader can't have brought USB up either). Hypothesis: **the PHY macro
+including its APB register file sits in the VA10/VUSB33 power domain — rails
+off = SIF slave doesn't respond = AXI stall.**
+
+Mainline support check: pwrap driver supports mt6797 host + mt6351 slave protocol,
+but there is **no MT6351 MFD/regulator driver in mainline 6.6** — a proper fix
+needs a small regulator patch or a port. pwrap probe also wants a "pwrap"
+reset line mainline mt6797 doesn't provide (though init is skipped when the
+preloader already did it — INIT_DONE2).
+
+**BUILD #46 (dir `logs/2026-07-05-48-ssusb-pmic-rails/`):** verification
+experiment — mtu3 probe pokes MT6351 directly via raw pwrap WACS2 transactions
+(ioremap 0x1000d000; preloader-initialized, clk_ignore_unused keeps it
+sha256
+`2a45b0d7f2517ca68b72341c48f12f6b76d2cfe8acd3e948f8b0bd6c52548749`. Prints VUSB33_CON0/VA10_CON0/VA10_ANA_CON0 before and after setting
+the three fields, 300µs settle, then phy_init. Banner
+`#46 SMP PREEMPT Sun Jul 5 07:13:09 UTC 2026`, GEMINI-DEBUG present
+(deliberate). If the SIF read survives, root cause = unpowered PHY rails and
+the proper fix is pwrap + MT6351 regulator support (new driver_ports.md
+entry). Capture to `logs/2026-07-05-49-ssusb-pmic-rails-boot.log`.
