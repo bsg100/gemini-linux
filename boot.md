@@ -1864,3 +1864,294 @@ mux):
 **Phase 8 SSH-over-USB fast-track is fully verified working end-to-end**:
 kernel gadget driver, host-side RNDIS enumeration, static IP, ping, and SSH
 login all confirmed on real hardware. See CLAUDE.md Phase 8 status update.
+
+## TWENTY-SEVENTH RESULT — clarification: console going dark at the mtu3 mux switch is not a boot stall (2026-07-06)
+
+Recurring user-facing question worth recording explicitly: does the boot
+process stop/wait at the `mtu3 ... u2p_dis_msk` line, resuming only once a
+USB cable is attached?
+
+**No.** The kernel does not pause or block there. Boot continues
+unconditionally, straight through rootfs mount, systemd, networkd and sshd
+coming up — all silently as far as UART is concerned. What actually happens:
+
+- The left USB-C port is a single physical mux shared between the UART debug
+  console (FTDI) and the USB device/gadget controller.
+- When the `mtu3`/`mtk-tphy` USB gadget driver initializes (~0.4s in), it
+  switches that port's signal lines from UART over to USB. The FTDI serial
+  link goes dark at that instant — not because the kernel stopped, but
+  because its only observation channel was just switched away.
+- Because it's a hardware mux, not a software toggle, FTDI serial and a
+  direct Gemini→Mac USB-C connection can never be observed at the same time.
+  Seeing the rest of boot requires physically swapping the cable from FTDI to
+  a direct-to-Mac connection (the "single-cable-swap protocol" used in the
+  TWENTY-SIXTH RESULT above) — at which point an RNDIS/Ethernet gadget
+  appears on the host, static IP + ping + SSH all succeed, proving the kernel
+  had already booted fully to a login-capable userspace.
+
+This is the same root cause as B-15 (documented mux behavior, not a driver
+defect) — recorded here separately because it answers a recurring "did it
+hang?" question distinct from the original build #40–#52 investigation.
+
+## BUILD #62 — clk-disable-unused tracer, prepared for Phase 4 workaround root-cause (2026-07-06, not yet flashed)
+
+Remaining Phase 4 technical debt (CLAUDE.md): the `maxcpus=1` CPU1 PSCI hang
+and the `clk_ignore_unused` "Disabling unused clocks" hang (first seen SIXTH
+RESULT, 2026-07-04) have only ever been worked around, never root-caused.
+Checked whether this is the same bug as B-13 (scpsys MT6797 domain-table
+gap): **it is not** — the clk hang predates all display/scpsys work by a day,
+and in this headless config `mtk-scpsys` fails its probe entirely (no domain
+gets genpd-managed at all), so there is no "touch an unpowered domain's
+register" path available the way there was for B-13's MM-domain hang. The two
+issues are coincidentally close in boot timestamp but structurally unrelated;
+this entry supersedes any assumption of a shared cause.
+
+**New patch:** `patches/v6.6/clk/0001-GEMINI-DEBUG-clk-trace-disable-unused-clock-names.patch`
+— adds `pr_info` before/after the `.disable_unused`/`.disable` call in
+`clk_disable_unused_subtree()` (`drivers/clk/clk.c`), printing the clock core
+name. Since `clk_ignore_unused` short-circuits `clk_disable_unused()` before
+this code path runs at all, the tracer is inert unless that cmdline flag is
+removed — so this build drops `clk_ignore_unused` from `CONFIG_CMDLINE`
+(VM-local edit only, not synced back to the repo's `configs/gemini-cmdline.config`)
+while keeping `maxcpus=1` in place, to isolate the clk hang from the SMP hang
+in one capture.
+
+**Build:** patched clean (all 17 project patches applied, including this new
+one), headless (`gemini-display.config` absent → B-13 guard active),
+`CONFIG_CMDLINE="console=ttyS0,921600n1 earlycon maxcpus=1 nokaslr"`.
+Image: `logs/2026-07-06-62-clk-debug-trace/new_kali_boot.img`
+(sha256 `5cf9e3db051eed6c8832567a87ed40ff6bf4881b76129ed5ba33afd5c09bd2c2`).
+Verified: banner `#1 SMP PREEMPT Mon Jul  6 05:36:27 UTC 2026`, GEMINI-DEBUG
+instrumentation present (expected, deliberate debug build), display driver
+absent (B-13 guard confirmed).
+
+**Expected outcome on hardware:** boot should proceed as before through
+driver init, `mtk-scpsys` probe failure (`-22`, pre-existing/unrelated), and
+"clk: Disabling unused clocks" — but now interleaved with
+`GEMINI-DEBUG: clk_disable_unused: disabling '<name>'` /
+`... disabled '<name>' OK` pairs for every clock actually gated. The last
+"disabling" line with **no matching "OK" line** names the clock whose
+`.disable`/`.disable_unused` callback wedges the bus (or, if the hang is
+lower down in the register write itself, it's simply the last line printed
+before silence).
+
+**Not yet flashed** — this is a `boot`/`boot2` slot test image; flashing and
+FTDI capture require the physical single-cable-swap protocol (B-15) since the
+device is presently reachable over the USB gadget as a live SSH host. Flash:
+```
+/tmp/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 logs/2026-07-06-62-clk-debug-trace/new_kali_boot.img
+```
+Capture: `python3 scripts/ftdi-monitor.py --log logs/2026-07-06-63-clk-debug-trace-boot.log`
+(FTDI cable, not the direct-to-Mac USB cable — see B-15).
+
+## BUILD #62/#65/#67/#69 — ROOT CAUSE FOUND AND FIXED: `clk_ignore_unused` workaround was masking a real 8250_mtk driver bug (2026-07-06)
+
+**Detour (build #62 capture, `logs/2026-07-06-63-...`):** first capture attempt
+showed zero `GEMINI-DEBUG` lines and died at the same `mtu3 ...
+u2p_dis_msk` line as every Phase 8 build — this build still had
+`gemini-usb.config` merged in (oversight), so the T-PHY/mux switch (B-15)
+stole the console before boot ever reached the clk-disable code. Also
+flashed to `boot2` first, which is never loaded on plain power-on (repeat of
+the ELEVENTH RESULT lesson) — corrected to flash `boot`.
+
+**Detour 2 (build #65, `logs/2026-07-06-66-...`):** rebuilt with
+`gemini-usb.config` removed, but `CONFIG_USB_MTU3_GADGET` unset alone still
+left `CONFIG_USB_MTU3_DUAL_ROLE=y` as the defconfig default — the `mtu3`
+T-PHY controller driver probes and touches the port mux for *any* enabled
+role, gadget or not, because our board DTS's ssusb node
+(`patches/v6.6/dts/0009`) is unconditionally `status = "okay"`. Same mux
+dead-end, same line. Fix: `scripts/config --disable CONFIG_USB_MTU3` +
+`make olddefconfig` to remove the driver from the build entirely, not just
+its gadget role.
+
+**Build #67 (`logs/2026-07-06-67-clk-debug-no-mtu3/`, capture
+`logs/2026-07-06-68-clk-debug-no-mtu3-boot.log`) — tracer finally worked:**
+with `mtu3` fully out of the build, the console survived past 0.4s and the
+`GEMINI-DEBUG: clk_disable_unused:` tracer (patches/v6.6/clk/0001-...) ran
+cleanly. Last lines:
+```
+[    0.630513] GEMINI-DEBUG: clk_disable_unused: disabled 'infra_uart1' OK
+[    0.631355] GEMINI-DEBUG: clk_disable_unused: disabling 'infra_uart0'
+```
+No matching "OK" line, no further output ever. **The clock the framework
+hangs on disabling is `infra_uart0` — the debug console's own baud clock.**
+
+**Root cause (read from driver source, not guessed):**
+`drivers/tty/serial/8250/8250_mtk.c`'s `mtk8250_probe_of()` fetches the
+`"baud"` clock (our board DTS: `clocks = <&infrasys CLK_INFRA_UART0>, <&infrasys
+CLK_INFRA_AP_DMA>; clock-names = "baud", "bus";` — confirmed mainline-style
+binding, already correct) with plain `devm_clk_get()`, and only ever calls
+`clk_get_rate()` on it (line 560) — it is **never enabled by the driver**,
+unlike the `"bus"` clock which correctly uses `devm_clk_get_enabled()`. The
+hardware clock is left running by the bootloader/earlycon, so
+`clk_core_is_enabled(core)` reads true, but Linux's own refcount
+(`enable_count`) stays 0 the whole boot. `late_initcall`'s
+`clk_disable_unused_subtree()` sees `enable_count == 0` and calls
+`.disable_unused()` on a clock still serving the only console — silently
+killing it (indistinguishable from a hang, since it's also the only
+diagnostic channel). This is a genuine upstream driver gap in
+`8250_mtk.c`, not MT6797-specific — any board relying on the named
+`"baud"`/`"bus"` binding without an always-on `CLK_IS_CRITICAL` flag at the
+SoC clk-driver level would hit it.
+
+**Fix:** `patches/v6.6/serial/0001-serial-8250_mtk-hold-baud-clock-enabled.patch`
+— changes both the `"baud"` and the legacy-unnamed-fallback `devm_clk_get()`
+calls to `devm_clk_get_enabled()`, matching the existing `"bus"` clock
+handling in the same function.
+
+**Validation (build #69, `logs/2026-07-06-69-uart-clk-fix-validation/`,
+capture `logs/2026-07-06-70-uart-clk-fix-validation-boot.log`):** built with
+the real fix in place of `clk_ignore_unused` (still `maxcpus=1`, still no
+`mtu3`, as isolation). Result: `clk_disable_unused` runs to completion —
+`infra_uart3`/`infra_uart2`/`infra_uart1` disabled and OK, then **`infra_uart0`
+is silently skipped** (its `enable_count > 0` now trips the framework's
+own "still in use" early-exit before the trace point is even reached), then
+`infra_disp_pwm`, `pwm_sel`, `infra_pmic_tmr` disabled OK, and boot continues
+uninterrupted through eMMC mount, systemd, `systemd-udevd`,
+`systemd-networkd`, `crng init done`, all the way into normal userspace.
+**`clk_ignore_unused` is no longer needed.** (Note: capture files in this
+session had stray non-UTF8 bytes near the very start from the preloader's
+own binary log preamble, which made plain `grep`/`grep -n` silently treat
+the whole file as binary and match nothing — use `LC_ALL=C grep -a` on these
+raw FTDI logs, not plain `grep`.)
+
+**Status:** one of Phase 4's two remaining workarounds (CLAUDE.md) is now a
+real, upstream-quality fix rather than a boot flag. `maxcpus=1` (CPU1 PSCI
+hang) remains open — same tracer methodology (targeted instrumentation +
+isolate-one-variable-at-a-time builds) should be applied next.
+
+---
+
+## BUILD #71 — fix folded back into production build (USB gadget re-added)
+
+**Goal:** confirm the `8250_mtk.c` clock fix holds with `gemini-usb.config`
+(mtu3 gadget) re-enabled, and make this the new baseline —
+`configs/gemini-cmdline.config` updated on the Mac-tracked repo to drop
+`clk_ignore_unused` for real (previously only a VM-local edit during
+diagnostics).
+
+**Build:** clean patch set — removed the diagnostic-only
+`clk/0001-GEMINI-DEBUG-...` tracer patch entirely (superseded by the real
+fix); all DTS/DRM/GPIO/panel/phy/regulator/pmdomain/serial/usb patches
+applied. `gemini-usb.config` merged back in alongside `gemini-cmdline.config`
+(cmdline now `console=ttyS0,921600n1 earlycon maxcpus=1 nokaslr` — no
+`clk_ignore_unused`). Packed as
+`logs/2026-07-06-71-usb-gadget-plus-uart-clk-fix/` (sha256
+`c38e176bf18870a17636d66d22081c2e463384f9587c322bd4de2d8fe484d98e`). Verified
+pre-flash: banner `#5 SMP PREEMPT Mon Jul 6 06:22:43 UTC 2026`, no
+`GEMINI-DEBUG` instrumentation, no display driver strings (headless per
+B-13).
+
+**Outcome:** flashed to both `boot` and `boot2`; FTDI capture
+(`logs/2026-07-06-72-usb-gadget-plus-uart-clk-fix-boot.log`) shows the
+expected UART→USB console mux switch once `mtu3`/the gadget activates
+(`u2p_dis_msk` line — per B-15, not a hang). Cable swapped to direct
+USB-to-Mac per the documented single-cable-swap protocol; `en12` brought up
+with `sudo ifconfig en12 inet 10.15.19.1 netmask 255.255.255.0`; device
+reachable at `ssh root@10.15.19.82` (password `toor`). Confirmed over SSH:
+
+- `uname -a`: `Linux gemini 6.6.0-dirty #5 SMP PREEMPT Mon Jul 6 06:22:43 UTC 2026 aarch64`
+- `/proc/cmdline`: `console=ttyS0,921600n1 earlycon maxcpus=1 nokaslr` — **no `clk_ignore_unused`**
+- `dmesg`: `clk: Disabling unused clocks` at `[0.501525]` followed
+  immediately by `Freeing unused kernel memory: 2624K` at `[0.514334]` — no
+  hang, no gap (contrast with the original bug, which went silent forever at
+  exactly this point)
+- Full boot to `graphical.target` in 19.029s total (4.020s kernel +
+  15.008s userspace); `usb-gadget.target` reached at `[19.616431]`
+- `g_ether` gadget up (`HOST MAC`/`MAC` assigned, `mtu3 ... gadget
+  (high-speed) pullup D+`), matching build #53's working RNDIS setup
+
+**Conclusion:** the clock fix and the USB gadget coexist with no
+regression. This build supersedes build #53 as the production baseline —
+same working SSH-over-USB path, plus the real (non-workaround)
+`clk_ignore_unused` fix, plus the display/DRM component-matching code from
+Phase 5 (headless; the `GEMINI-DEBUG: engine clk get failed` line from that
+work is expected/harmless and unrelated to B-13).
+`configs/gemini-cmdline.config` updated on the Mac repo to match. `maxcpus=1`
+remains the one open Phase 4 item — same tracer methodology should be
+applied next.
+
+---
+
+## PSCI CPU_ON diagnostic — SMP hang isolated to the A72 cluster boundary (2026-07-06)
+
+**Goal:** root-cause the `maxcpus=1` SMP secondary-CPU hang (open since Phase
+3, boot.md "SIXTH RESULT") using the same targeted-instrumentation approach
+that solved the clk hang, instead of leaving it as a permanent workaround.
+
+**Method:** instrumented `arch/arm64/kernel/psci.c`'s `cpu_psci_cpu_boot()`
+with `pr_info` immediately before and after the `psci_ops.cpu_on()` SMC call
+(VM-local, not committed — same disposable-tracer pattern as the earlier
+`clk/0001-GEMINI-DEBUG-...` patch, reverted once the finding was captured).
+Tested incrementally: `maxcpus=2` first (does CPU1 alone still hang?), then
+no limit at all (which CPU is the real boundary?).
+
+**maxcpus=2 result** (`logs/2026-07-06-73-psci-cpu1-diag/`,
+`logs/2026-07-06-74-psci-cpu1-diag-boot.log`): CPU1 came up cleanly —
+`CPU_ON cpu1 returned 0` in under 2ms, `smp: Brought up 1 node, 2 CPUs`, full
+boot to userspace, SSH-over-USB confirmed. This contradicts the original
+2026-07-04 hang, which stalled dead at exactly `smp: Bringing up secondary
+CPUs`. That original hang is now believed to have actually been the same
+underlying issue as the `clk_ignore_unused` bug (some other clock cut before
+CPU1 could come up), not a genuine CPU1-specific PSCI defect — it was never
+isolated from the clk hang at the time, since both bugs were live
+simultaneously in the same kernel.
+
+**No-limit result** (`logs/2026-07-06-75-smp-full-diag/`,
+`logs/2026-07-06-76-smp-full-diag-boot.log`): CPU0–7 (both Cortex-A53
+clusters, mt6797's tri-cluster layout) all bring up cleanly in ~35ms total.
+The hang is precisely at **CPU8**, the first core of the third cluster (2x
+Cortex-A72 "big" cores):
+
+```
+[0.052146] psci: GEMINI-DEBUG: about to CPU_ON cpu8 mpidr=0x200 entry=0x41cbd36c
+                                                        (no "returned" line ever prints)
+[14.273152] ATF: aee_wdt_dump: on cpu1
+[14.284316] Kernel WDT not ready. cpu1
+```
+
+The PSCI `CPU_ON` SMC for cpu8 never returns — the boot CPU blocks inside the
+SMC instruction itself, i.e. ATF (BL31) firmware hangs, not a Linux-side
+defect. (The aee dump reports "cpu1" because that's whichever core services
+the watchdog dump, not the core that's actually stuck.)
+
+**Root cause hypothesis:** this lines up with B-13 (Phase 5's blocker) —
+upstream `mtk-scpsys.c` has an MT6797 domain-table bug that breaks shared
+power domains (`mtk-scpsys: probe of 10006000.power-controller failed`,
+already observed in Phase 4 driver init). The A72 cluster's power domain
+almost certainly needs to be enabled via SCPSYS before ATF's `CPU_ON` can
+proceed; since that domain never gets enabled, the SMC blocks forever waiting
+on a power rail that never comes up. Both the SMP hang and the display
+blocker trace back to the same upstream driver bug.
+
+**Instrumentation disposition:** reverted from both trees after capturing
+the finding (`git checkout -- arch/arm64/kernel/psci.c` on Mac and VM) — not
+kept as a permanent patch, consistent with how the clk tracer was handled.
+
+---
+
+## BUILD — `maxcpus=8`: full A53 SMP without requiring the B-13 fix (2026-07-06)
+
+**Goal:** given the SMP hang is isolated to the A72 cluster (cpu8/9), boot
+with all 8 A53 cores instead of the previous single-core workaround —
+recovers 8x the CPU capacity without needing B-13 fixed first.
+
+**Build:** `configs/gemini-cmdline.config` changed from `maxcpus=1` to
+`maxcpus=8`. Packed as `logs/2026-07-06-77-maxcpus8/new_kali_boot.img` (sha256
+`4643f685358efdaca7db5ac12e5ab8721f35c081ece18821801b8de46dc28078`).
+
+**Outcome:** flashed to `boot` + `boot2`; FTDI capture
+(`logs/2026-07-06-78-maxcpus8-boot.log`) shows the expected mtu3 mux-switch
+point with no earlier hang. Cable swapped to direct USB; confirmed over SSH
+(`root@10.15.19.82`):
+
+- `/proc/cmdline`: `console=ttyS0,921600n1 earlycon maxcpus=8 nokaslr`
+- `cat /sys/devices/system/cpu/online`: `0-7`
+- `dmesg`: `smp: Brought up 1 node, 8 CPUs` / `SMP: Total of 8 processors
+  activated.`
+- `systemctl is-system-running`: `running`
+
+**Conclusion:** `maxcpus=8` is the new baseline, superseding `maxcpus=1`.
+Full 10-core SMP (bringing up the A72 cluster) is blocked on the same
+upstream `mtk-scpsys.c` MT6797 domain-table fix as Phase 5 display (B-13) —
+tracked there rather than as a separate Phase 4 item.

@@ -59,7 +59,7 @@ here.
 | 1 | Hardware inventory (hardware.md) | Complete |
 | 2 | Upstream analysis | Complete |
 | 3 | Minimal kernel bring-up (serial console over FTDI) | **Complete 2026-07-04.** First full Linux 6.6 boot to userspace achieved (`Run /init as init process`) with diagnostic serial output throughout. See blockers.md B-2 (resolved) and boot.md's "SEVENTH RESULT" entry. |
-| 4 | Storage and userspace | **In progress — current phase.** **Essentially complete 2026-07-05:** eMMC works (`mediatek,mt2701-mmc` compat, boot.md FIFTEENTH RESULT) and the 2019 Kali userspace boots fully under 6.6 — login prompt on ttyS0, B-7 resolved (boot.md SIXTEENTH RESULT). Follow-up: disable vendor droid-hal-init/charger units on p29 (they force the rootfs read-only ~28s in). Also carries the SMP-secondary-CPU-hang and clk-gating workarounds from Phase 3 (`maxcpus=1`, `clk_ignore_unused`) as follow-up items to properly fix rather than work around. |
+| 4 | Storage and userspace | **Complete 2026-07-06.** eMMC works (`mediatek,mt2701-mmc` compat, boot.md FIFTEENTH RESULT). The 2019 Kali userspace booted first (B-7 resolved, boot.md SIXTEENTH RESULT) but has since been **replaced** by a fresh Debian 13 (trixie) rootfs built by `scripts/mkrootfs.sh`, flashed to p29, and confirmed live and reachable over SSH (build #53, root@10.15.19.82) — the vendor droid-hal-init/kpoc_charger read-only-remount issue does not apply to this rootfs, so that follow-up is moot. The `clk_ignore_unused` workaround is **resolved 2026-07-06** — root-caused to a `drivers/tty/serial/8250/8250_mtk.c` bug (never enables the UART's own `"baud"` clock, so late-boot clk cleanup cuts the console) and fixed upstream-style with `devm_clk_get_enabled()` (`patches/v6.6/serial/0001-...`). Fix **folded back into the production build 2026-07-06** (build #71, USB gadget re-added alongside the fix, `configs/gemini-cmdline.config` updated to drop `clk_ignore_unused`) and validated over SSH-over-USB (boot.md "BUILD #71"): clean boot to `graphical.target` in 19s, `g_ether` gadget working, no regression. Remaining carried-forward item: the SMP-secondary-CPU-hang workaround from Phase 3 (`maxcpus=1`) — **narrowed 2026-07-06** via PSCI `CPU_ON` instrumentation (boot.md "PSCI CPU_ON diagnostic"): CPUs 0–7 (both Cortex-A53 clusters) bring up cleanly; the hang is specifically at CPU8 (first Cortex-A72 core), root-caused to the same B-13 `mtk-scpsys` MT6797 domain-table bug blocking Phase 5 display. Workaround upgraded from `maxcpus=1` to `maxcpus=8` (all A53 cores, validated `logs/2026-07-06-77-maxcpus8/`, boot.md "BUILD — maxcpus=8") — an 8x improvement that doesn't require B-13 fixed first. Full 10-core SMP is now tracked under B-13, not as a separate item. |
 | 5 | Display enablement | **In progress — current phase.** First hardware test 2026-07-05: DTS/build/config chain confirmed correct (full pipeline enabled, patches applied cleanly, no boot regression), but blocked on B-13 (upstream `mtk-scpsys.c` MT6797 domain-table bug breaks the shared `MM` power domain every display component needs). A splash seen on-screen during this test is the vendor LK bootloader's own splash, unrelated to our kernel/DRM work. See boot.md "NINTH RESULT". |
 | 6 | Keyboard enablement | Not started |
 | 7 | Power management | Not started |
@@ -281,10 +281,16 @@ The project is considered successful when the Gemini PDA can boot a modern Linux
 Build a new `boot.img` in the VM, then from macOS:
 
 ```bash
-/tmp/mtk-venv/bin/mtk w boot2 /path/to/new_kali_boot.img
+/tmp/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 /path/to/new_kali_boot.img
 ```
 
 Device must be in preloader mode (power on, connect USB — no button hold needed if preloader is intact).
+
+**Note (2026-07-06):** use the `python3 ~/mtkclient/mtk.py` form, not the
+`/tmp/mtk-venv/bin/mtk` console-script — that entrypoint is broken in this
+checkout (`ModuleNotFoundError: No module named 'mtkclient.mtk'`) because
+`~/mtkclient` ships `mtk.py` as a top-level standalone script, not as a
+`mtkclient/mtk.py` package submodule the installed entrypoint expects.
 
 ## Recovery (Full Reflash)
 
@@ -294,16 +300,20 @@ If the device needs a full reflash, use the SP Flash Tool on an x86 Linux machin
 
 # Root Filesystem
 
-**Resolved 2026-07-05 (was an Open Question).** The 2019 Kali `linux.img`
-userspace (systemd 239) boots fully under Linux 6.6 (blockers.md B-7, boot.md
-SIXTEENTH RESULT) — but it is a dead 7-year-old rolling snapshot with vendor
-sabotage units (droid-hal-init/kpoc_charger had to be masked). It is being
-superseded by a **fresh Debian 13 (trixie) arm64 rootfs** built by
+**Resolved 2026-07-06.** The 2019 Kali `linux.img` userspace (systemd 239)
+booted fully under Linux 6.6 first (blockers.md B-7, boot.md SIXTEENTH
+RESULT) — but it was a dead 7-year-old rolling snapshot with vendor sabotage
+units (droid-hal-init/kpoc_charger forced a read-only remount ~28s in). It has
+since been **replaced** by a fresh Debian 13 (trixie) arm64 rootfs built by
 `scripts/mkrootfs.sh` (run inside the build VM, native arm64): mmdebstrap
 minbase + serial/ssh/debug tools, kernel modules installed from the current
 build, packed as a sparse 4 GiB ext4 image and flashed to the `linux`
-partition (p29, 25.8 GiB) with `mtk w linux <img>`. After first boot,
-`resize2fs /dev/mmcblk0p29` grows it to the full partition.
+partition (p29, 25.8 GiB) with `mtk w linux <img>`. This is what's currently
+running on the device — confirmed live 2026-07-06 via `ssh root@10.15.19.82`
+(build #53): `/` is `/dev/mmcblk0p29` ext4 mounted `rw`, no droid-hal-init or
+charger units present (they were specific to the 2019 image, not this
+rootfs). After first boot, `resize2fs /dev/mmcblk0p29` grows it to the full
+partition.
 
 Key facts (verified from the vendor ramdisk, which our boot images keep
 unchanged): its "Mer Boat Loader" `/init` mounts p29 with a bare busybox

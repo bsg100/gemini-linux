@@ -212,12 +212,52 @@ a 6.6 build identically.
   handoff is now proven working.** Two further kernel-side (not LK-side)
   issues were found and fixed via `CONFIG_CMDLINE`
   (`configs/gemini-cmdline.config`):
-  4. SMP secondary-CPU (CPU1) PSCI bringup hangs — worked around with
-     `maxcpus=1` (root cause not yet diagnosed; SMP is a separate future
-     problem, not a Phase 3 blocker).
-  5. Kernel hangs at `clk: Disabling unused clocks` (mainline mt6797 clk
-     driver gates a clock the hardware needs, nothing in our DT claims it)
-     — worked around with `clk_ignore_unused`.
+  4. 🟡 **NARROWED 2026-07-06** — SMP secondary-CPU PSCI bringup hang, worked
+     around with `maxcpus=1`/now `maxcpus=8` (not fully resolved — full
+     10-core SMP is blocked on B-13, see below). PSCI `CPU_ON` instrumentation
+     (`arch/arm64/kernel/psci.c`, boot.md "PSCI CPU_ON diagnostic") showed
+     CPU0–7 (both Cortex-A53 clusters) bring up cleanly in ~35ms; the hang is
+     specifically at CPU8, the first core of the third cluster (2x
+     Cortex-A72). Its PSCI `CPU_ON` SMC never returns — ATF firmware itself
+     hangs, not a Linux-side defect. Root-cause hypothesis: same underlying
+     bug as B-13 (upstream `mtk-scpsys.c` MT6797 domain-table breaks shared
+     power domains) — the A72 cluster's power domain never gets enabled, so
+     `CPU_ON` blocks forever waiting on a power rail that never comes up. The
+     original 2026-07-04 hang (which stalled at CPU1, before any clk fix
+     existed) is now believed to have actually been the clk_ignore_unused bug
+     wearing a different hat, not a distinct CPU1 defect — `maxcpus=2` alone
+     boots CPU1 cleanly today (boot.md, `logs/2026-07-06-73-psci-cpu1-diag/`).
+     `configs/gemini-cmdline.config` now uses `maxcpus=8` (validated
+     `logs/2026-07-06-77-maxcpus8/`, boot.md "BUILD — maxcpus=8"): all 8 A53
+     cores online, clean boot to `systemctl is-system-running` = `running`.
+     Full SMP (cpu8/9) is tracked as part of B-13, not separately.
+  5. 🟢 **RESOLVED 2026-07-06** — real root cause found and fixed (was:
+     kernel hangs at `clk: Disabling unused clocks`, worked around with
+     `clk_ignore_unused`). Full diagnosis and validation: boot.md "BUILD
+     #62/#65/#67/#69". Summary: the clock that hangs is `infra_uart0` — the
+     debug console's own baud clock. `drivers/tty/serial/8250/8250_mtk.c`
+     fetches it with plain `devm_clk_get()` and only reads its rate, never
+     enabling it (unlike the `"bus"` clock in the same function, which
+     correctly uses `devm_clk_get_enabled()`). The hardware clock is left
+     running by the bootloader, but Linux's own `enable_count` stays 0, so
+     `late_initcall`'s `clk_disable_unused` cuts it — killing the only
+     console, indistinguishable from a hang. Genuine upstream driver gap,
+     not MT6797-specific. Fix:
+     `patches/v6.6/serial/0001-serial-8250_mtk-hold-baud-clock-enabled.patch`
+     (`devm_clk_get_enabled()` for both the `"baud"`-named and legacy-unnamed
+     fallback paths). Validated on hardware (build #69,
+     `logs/2026-07-06-69-uart-clk-fix-validation/`): `clk_disable_unused`
+     completes, `infra_uart0` is skipped (enable_count now > 0), boot
+     continues through eMMC mount and systemd with **no
+     `clk_ignore_unused` needed**. Confirmed *not* the same root cause as
+     B-13 (that one is a scpsys/power-domain issue with no domain even
+     registered in this config; this one is a plain clk-framework refcount
+     bug in a UART driver). **Folded back into the production build
+     2026-07-06** (build #71, boot.md "BUILD #71"): `gemini-usb.config`
+     (mtu3 gadget) re-added alongside the fix, `configs/gemini-cmdline.config`
+     updated to drop `clk_ignore_unused` for real, validated end-to-end over
+     SSH-over-USB with no regression (clean boot to `graphical.target` in
+     19s, `g_ether` gadget working).
   With both workarounds, Linux 6.6 reached `Run /init as init process` —
   **first full boot to userspace** — before panicking in `switch_root` for
   reasons now tracked under B-7 (no eMMC controller node in DT at all).
@@ -503,6 +543,13 @@ mm-domain clocks leads to an MM-domain register access with the domain
 unpowered/unmanaged, wedging the bus. Until B-13 is fixed, the display
 fragment is disabled: `configs/gemini-display.config` →
 `gemini-display.config.disabled-b13`. See boot.md TENTH RESULT.
+
+**Update 2026-07-06:** also the likely root cause of the Phase 4 SMP hang
+(B-2 item 4) — PSCI `CPU_ON` instrumentation showed the Cortex-A72 cluster
+(cpu8/9) hangs firmware-side on bringup, consistent with its power domain
+never being enabled by the broken scpsys domain table. See boot.md "PSCI
+CPU_ON diagnostic". Fixing B-13 is therefore expected to unblock **both**
+display and full 10-core SMP, not just display.
 
 Discovered 2026-07-05 during first Phase 5 display bring-up hardware test
 (`logs/2026-07-05-02-phase5-display-boot.log`). The full display pipeline
