@@ -212,25 +212,24 @@ a 6.6 build identically.
   handoff is now proven working.** Two further kernel-side (not LK-side)
   issues were found and fixed via `CONFIG_CMDLINE`
   (`configs/gemini-cmdline.config`):
-  4. 🟡 **NARROWED 2026-07-06** — SMP secondary-CPU PSCI bringup hang, worked
-     around with `maxcpus=1`/now `maxcpus=8` (not fully resolved — full
-     10-core SMP is blocked on B-13, see below). PSCI `CPU_ON` instrumentation
+  4. 🟡 **NARROWED 2026-07-06, root cause reclassified 2026-07-06** — SMP
+     secondary-CPU PSCI bringup hang, worked around with `maxcpus=1`/now
+     `maxcpus=8` (not fully resolved — full 10-core SMP is now tracked as
+     **B-16**, not B-13, see below). PSCI `CPU_ON` instrumentation
      (`arch/arm64/kernel/psci.c`, boot.md "PSCI CPU_ON diagnostic") showed
      CPU0–7 (both Cortex-A53 clusters) bring up cleanly in ~35ms; the hang is
      specifically at CPU8, the first core of the third cluster (2x
      Cortex-A72). Its PSCI `CPU_ON` SMC never returns — ATF firmware itself
-     hangs, not a Linux-side defect. Root-cause hypothesis: same underlying
-     bug as B-13 (upstream `mtk-scpsys.c` MT6797 domain-table breaks shared
-     power domains) — the A72 cluster's power domain never gets enabled, so
-     `CPU_ON` blocks forever waiting on a power rail that never comes up. The
-     original 2026-07-04 hang (which stalled at CPU1, before any clk fix
-     existed) is now believed to have actually been the clk_ignore_unused bug
-     wearing a different hat, not a distinct CPU1 defect — `maxcpus=2` alone
-     boots CPU1 cleanly today (boot.md, `logs/2026-07-06-73-psci-cpu1-diag/`).
+     hangs, not a Linux-side defect. The original 2026-07-04 hang (which
+     stalled at CPU1, before any clk fix existed) is now believed to have
+     actually been the clk_ignore_unused bug wearing a different hat, not a
+     distinct CPU1 defect — `maxcpus=2` alone boots CPU1 cleanly today
+     (boot.md, `logs/2026-07-06-73-psci-cpu1-diag/`).
      `configs/gemini-cmdline.config` now uses `maxcpus=8` (validated
      `logs/2026-07-06-77-maxcpus8/`, boot.md "BUILD — maxcpus=8"): all 8 A53
      cores online, clean boot to `systemctl is-system-running` = `running`.
-     Full SMP (cpu8/9) is tracked as part of B-13, not separately.
+     Full SMP (cpu8/9) was originally assumed to share B-13's root cause but
+     **this was disproven 2026-07-06** (boot.md "BUILD #11") — see B-16.
   5. 🟢 **RESOLVED 2026-07-06** — real root cause found and fixed (was:
      kernel hangs at `clk: Disabling unused clocks`, worked around with
      `clk_ignore_unused`). Full diagnosis and validation: boot.md "BUILD
@@ -734,6 +733,55 @@ boot.md TWENTY-SIXTH RESULT.
 "hangs" immediately after a T-PHY/mux-adjacent register write, first check
 whether it's actually a console-mux transition (test by reconnecting via the
 non-serial path) before spending cycles on power/clock/PMIC forensics.
+
+---
+
+## 🟡 B-16 — Cortex-A72 cluster (CPU8/CPU9) PSCI `CPU_ON` hang: separate from B-13, root cause unknown
+
+**Opened 2026-07-06** (split out from item 4 under B-2/Phase 3, which had
+speculatively lumped this in with B-13).
+
+**Symptom:** with no `maxcpus` cmdline limit, CPU0–7 (both Cortex-A53
+clusters) bring up cleanly in ~35ms, but the PSCI `CPU_ON` SMC issued for
+CPU8 (first Cortex-A72 "big" core) never returns. ~14s later ATF's own
+watchdog fires (`aee_wdt_dump`, `Kernel WDT not ready`) and the board
+reboots. This is an ATF (BL31) firmware hang, not a Linux-side defect — the
+boot CPU blocks inside the SMC instruction itself. See boot.md "PSCI CPU_ON
+diagnostic".
+
+**Workaround in place:** `configs/gemini-cmdline.config` uses `maxcpus=8`,
+which avoids the A72 cluster entirely and boots all 8 A53 cores cleanly
+(validated `logs/2026-07-06-77-maxcpus8/`). This is the current baseline;
+full 10-core SMP is not required for bootability.
+
+**Originally hypothesized** to share B-13's root cause (both symptoms being
+"a power domain never comes up"). **Disproven 2026-07-06** (boot.md "BUILD
+#11", `logs/2026-07-06-82-cpu8-scpsys-retest/`): before testing, checked the
+actual MT6797 scpsys domain table
+(`drivers/pmdomain/mediatek/mtk-scpsys.c`, `scp_domain_data_mt6797[]`) and
+found it defines no CPU-cluster/MP power-domain entry at all — only
+`VDEC`/`VENC`/`ISP`/`MM`/`AUDIO`/`MFG_ASYNC`/`MJC`. So the scpsys driver
+(and its NULL-name probe-abort fix, B-13) has no code path that could
+influence A72 cluster power-on. Confirmed empirically: built with the B-13
+fix applied, display fragment excluded (to isolate the variable), and no
+`maxcpus` limit — the resulting boot hung with the byte-for-byte identical
+signature as before the fix existed
+(`logs/2026-07-06-83-cpu8-scpsys-retest-boot.log`, 8 reboot cycles).
+
+**Status: root cause unknown.** Whatever gates the A72 cluster's power-on —
+MCUCFG, a dedicated SPM sequence for the big cluster, or something purely
+internal to ATF with no Linux-visible dependency at all — has not been
+identified. This needs its own investigation, independent of B-13's MM-domain
+work, likely starting from what the vendor 3.18 kernel/ATF do differently for
+big-cluster hotplug (if anything is Linux-side at all; it may be entirely
+inside the vendor ATF blob, in which case a fix may not be possible without
+vendor ATF source or a replacement BL31).
+
+**Recovery:** re-flash `logs/2026-07-06-77-maxcpus8/new_kali_boot.img` (sha256
+`4643f685358efdaca7db5ac12e5ab8721f35c081ece18821801b8de46dc28078`) to both
+`boot` and `boot2` if a full-SMP test build leaves the device in a reboot
+loop. Verify recovery with a fresh capture showing the `#8` kernel banner
+before relying on the device being back to a good state.
 
 ---
 

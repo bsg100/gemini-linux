@@ -2234,3 +2234,52 @@ patched in), but is not yet safe to rely on for a stable boot — the
 `build-pack.sh` verification step no longer blocks on the display driver's
 presence, so future iterations should manually confirm the outcome on
 hardware before treating a display build as safe to leave flashed.
+
+---
+
+## BUILD #11 — scpsys fix does not affect the CPU8 PSCI hang; A72 cluster bring-up is a separate blocker (2026-07-06)
+
+**Goal:** after BUILD #79 showed the scpsys NULL-name skip fix wasn't
+sufficient for display, re-test the same fix in isolation against the other
+half of the original B-13 hypothesis — the CPU8 (first Cortex-A72 core)
+PSCI `CPU_ON` hang documented in "PSCI CPU_ON diagnostic" above. That entry
+speculated the A72 cluster's power domain was gated by the same scpsys bug.
+Built with the scpsys fix applied (as always, it's a committed patch),
+display fragment excluded (to isolate the variable), and the `maxcpus=8`
+cmdline cap temporarily removed so all 10 cores attempt bring-up. Packed as
+`logs/2026-07-06-82-cpu8-scpsys-retest/new_kali_boot.img` (kernel #11, sha256
+`4fd0920af2c2da4301d1d147a1a25c8025e7e71e8f304155170e189fa969a29e`).
+
+**Before building, checked the actual MT6797 scpsys domain table**
+(`drivers/pmdomain/mediatek/mtk-scpsys.c`, `scp_domain_data_mt6797[]`): it
+only defines `VDEC`, `VENC`, `ISP`, `MM`, `AUDIO`, `MFG_ASYNC`, `MJC` — there
+is no CPU-cluster/MP power-domain entry at all. This means the A72 cluster's
+power-on was never gated by the scpsys probe-abort bug in the first place;
+the original hypothesis linking the CPU8 hang to B-13 rested only on both
+symptoms sharing a hand-wavy "power domain" explanation, not on any code path
+connecting them.
+
+**Result** (`logs/2026-07-06-83-cpu8-scpsys-retest-boot.log`, 8 reboot cycles
+captured): identical signature to the pre-fix "PSCI CPU_ON diagnostic"
+finding, byte-for-byte —
+```
+[    0.017141] smp: Bringing up secondary CPUs ...
+                                    (14s of silence)
+[ATF](1)[14.361720]aee_wdt_dump: on cpu1
+[ATF](1)[14.372887]Kernel WDT not ready. cpu1
+```
+followed by a watchdog reboot. The scpsys fix made no observable difference.
+
+**Conclusion:** the CPU8 PSCI `CPU_ON` hang is a **separate blocker from
+B-13**, not the same root cause. It's an ATF (BL31)-side hang specific to
+bringing up the Cortex-A72 cluster, and — per the domain-table check above —
+not something the Linux `mtk-scpsys` driver has any code path to influence.
+Whatever gates the A72 cluster's power/clock (MCUCFG, a separate SPM
+sequence, or something ATF-internal not exposed to Linux at all) is unknown
+and needs its own investigation; it should not be assumed fixed alongside
+B-13. Recovered to the known-good `maxcpus=8` build
+(`logs/2026-07-06-77-maxcpus8/`, sha256
+`4643f685358efdaca7db5ac12e5ab8721f35c081ece18821801b8de46dc28078`) — second
+flash attempt succeeded, verified via banner (`#8 SMP PREEMPT`,
+`logs/2026-07-06-84-recovery-boot.log`) and a live SSH session
+(`systemctl is-system-running` = `running`, `cpu/online` = `0-7`).
