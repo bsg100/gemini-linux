@@ -1778,3 +1778,89 @@ the three fields, 300µs settle, then phy_init. Banner
 (deliberate). If the SIF read survives, root cause = unpowered PHY rails and
 the proper fix is pwrap + MT6351 regulator support (new driver_ports.md
 entry). Capture to `logs/2026-07-05-49-ssusb-pmic-rails-boot.log`.
+
+## TWENTY-FIFTH RESULT — PMIC rails ruled out; bisection narrows the "hang" to the mux itself; recovery test proves it's not a hang at all (2026-07-05)
+
+**Logs:** `2026-07-05-49` (build #47, banner `#47 ... 07:18:09`),
+`-51` (#48, `07:23:57`), `-53` (#49, `07:36:44`), `-55` (#50, `07:45:58`),
+`-57` (#51, `07:49:50`), `-59` (#52, `07:55:36`).
+Images/sha256: `logs/2026-07-05-48-ssusb-pmic-rails` `c9fe88bb…67264d`,
+`-50-ssusb-iso-en` `1f7d5758…f340bc96e`, `-52-ssusb-bisect`
+`86f44aab…56da2dfa0fdb`, `-54-ssusb-dtm0-write` `5a6ba701…c537e8da`,
+`-56-ssusb-bit-split` `12724149…823fec05a86b982ed64`,
+`-58-ssusb-mux-recovery-test` `c205d56d…c7cee692038bee7d666a5b8`.
+
+Build #47 turns the MT6351 rails on directly (raw pwrap WACS2 writes:
+`VUSB33_CON0=da62 VA10_CON0=da62 VA10_ANA_CON0=0100`) before `phy_init` — and
+the SIF read still stalls at the same instruction. **PMIC rails hypothesis
+falsified.** From here the debugging narrows methodically:
+
+- **#48 (iso-en):** forcing `RG_USB20_ISO_EN=0` (isolation cell) before the
+  SIF read — no change, still stalls at the identical `U2PHYDTM0` read.
+- **#49 (bisect):** reads every T-PHY probe-time register offset (`+0x00`
+  through `+0x68`) one at a time before the real init path touches anything —
+  **all offsets survive** ("bisection complete, all offsets survived"). The
+  SIF bus itself is fine; the stall is specific to something the *real* init
+  sequence does that the read-only bisection doesn't.
+- **#50 (dtm0-write):** isolates further — reads `U2PHYDTM0` (survives, val
+  `56be00dc`), then does a **no-op writeback** of the same value (survives).
+  So even a write to the exact register that "hangs" in normal boot survives
+  when it doesn't change any bits.
+- **#51 (bit-split):** splits the real init's `clear_bits(FORCE_UART_EN |
+  FORCE_SUSPENDM)` into two separate single-bit clears to find which one
+  "hangs." Clearing `FORCE_UART_EN` alone is the one that reproduces the
+  symptom (console goes dark at that exact line).
+- **#52 (mux-recovery-test, the key result):** after clearing `FORCE_UART_EN`
+  and losing the console, the code waits, then **re-sets** `FORCE_UART_EN`
+  and writes a debug line. That line **appears** in the log 250ms later:
+  `FORCE_UART_EN re-set survived, val=56be00dc -- if you can read this, the
+  write never hung, only the console mux dropped`. It then clears
+  `FORCE_SUSPENDM` (a PLL kick) and that also completes and logs
+  successfully.
+
+**Conclusion: there was never a hang.** `FORCE_UART_EN` is a real hardware
+mux control bit in the T-PHY block — clearing it (as mainline `mtk-tphy`
+correctly does during normal U2 PHY init) switches the shared UART/USB-C pin
+mux away from the debug console, which is exactly the documented hardware
+behaviour (CLAUDE.md Phase 8 note: "the left USB-C port is shared with the
+UART console mux: serial and USB are mutually exclusive"). Twenty-four
+"results" of PHY/clock/PMIC forensics were chasing a false hang caused by our
+own instrumentation methodology (expecting continuous serial output through a
+mux transition that mainline code is supposed to cause). The driver was
+correct the whole time; test methodology needed to change, not the driver.
+See B-15 in blockers.md for the reusable diagnostic-methodology write-up.
+
+## TWENTY-SIXTH RESULT — clean build (no debug instrumentation) confirmed: gadget enumerates, IP works, SSH login succeeds (2026-07-05/2026-07-06)
+
+**Build #53** (dir `logs/2026-07-05-60-ssusb-clean-no-debug/`, sha256
+`6d399133…5bb0e33`) reverts all `GEMINI-DEBUG` instrumentation added across
+builds #40–#52 back to plain upstream-style `mtk-tphy`/`mtu3` init, per the
+TWENTY-FIFTH RESULT conclusion that no workaround was ever needed. Flashed to
+both `boot` and `boot2`.
+
+**Capture `logs/2026-07-05-61-ssusb-clean-no-debug-boot.log`:** boots
+normally; console goes dark at `mtu3 11271000.usb: u2p_dis_msk: 0,
+u3p_dis_msk: 0` (t≈0.4s) exactly as predicted — this is the mux switching
+away from UART, not a fault.
+
+**Verification on the Mac (2026-07-06), single-cable swap protocol** (FTDI
+and direct-to-Mac USB-C cannot be connected simultaneously — same physical
+mux):
+1. With FTDI connected: serial capture confirms kernel reaches the same
+   `mtu3 ... u2p_dis_msk` line then goes dark, consistent with #52's finding.
+2. Cable swapped to a direct Gemini→Mac USB-C connection (FTDI unplugged):
+   `ioreg -p IOUSB` shows a new **RNDIS/Ethernet Gadget** device; macOS
+   brings it up as `en12`.
+3. `sudo ifconfig en12 inet 10.15.19.1 netmask 255.255.255.0` (en12 had no
+   address — macOS had parked it under the Internet Sharing `bridge100`).
+4. `ping 10.15.19.82` succeeds (sub-1ms RTT, confirms it's a direct USB link,
+   not a bridge/NAT path).
+5. `ssh root@10.15.19.82` (password `toor`, set by `mkrootfs.sh`) succeeds:
+   ```
+   gemini
+   Linux gemini 6.6.0-dirty #53 SMP PREEMPT Sun Jul 5 07:59:03 UTC 2026 aarch64 GNU/Linux
+   ```
+
+**Phase 8 SSH-over-USB fast-track is fully verified working end-to-end**:
+kernel gadget driver, host-side RNDIS enumeration, static IP, ping, and SSH
+login all confirmed on real hardware. See CLAUDE.md Phase 8 status update.

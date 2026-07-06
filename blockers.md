@@ -619,6 +619,48 @@ single ATF-interface cause.
 
 ---
 
+## 🟢 B-15 — RESOLVED: apparent mtu3/T-PHY "hang" was the documented UART/USB mux switching, not a driver bug
+
+**Opened & resolved same day: 2026-07-05.** No hardware or driver fix
+required — this is a methodology note, kept as a blocker entry because it
+cost ~13 build iterations (#40–#52) before being correctly diagnosed.
+
+**Symptom:** every build from #40 onward appeared to hang (silent console,
+eventual watchdog reset) at the same point — the first SIF register touch in
+mainline `mtk-tphy`'s U2 PHY init, immediately after clearing
+`FORCE_UART_EN`/`FORCE_SUSPENDM` in the shared PHY control register.
+
+**Investigation path (see boot.md TWENTY-FIRST through TWENTY-FIFTH RESULT):**
+missing bus clock → traced to first SIF read → IPPC power state → port
+PDN/HOST_SEL → PMIC MT6351 rails (VUSB33/VA10) all ruled out in turn by
+builds #40–#47, each with targeted register dumps that showed the hardware
+state was correct at every step.
+
+**Root cause:** `FORCE_UART_EN` is a literal hardware mux-select bit — the
+Gemini's left USB-C port shares one physical differential pair between the
+UART console and USB2 D+/D− (documented in CLAUDE.md Phase 8 note since
+build #40, but not connected to this symptom until build #52). Mainline
+`mtk-tphy` correctly clears this bit as part of normal U2 PHY bring-up. Doing
+so switches the mux away from the console mid-boot, so all serial output
+after that line vanishes — indistinguishable from a hang if you assume the
+console keeps working. Build #52
+(`logs/2026-07-05-58-ssusb-mux-recovery-test`) proved this by re-setting
+`FORCE_UART_EN` after the "hang" point and observing the debug line reappear
+250ms later, unchanged.
+
+**Fix:** none needed — reverted all debug instrumentation for a clean build
+(#53, `logs/2026-07-05-60-ssusb-clean-no-debug`). Verified working via the
+single-cable-swap protocol (serial *or* direct-to-Mac USB-C, never both):
+gadget enumerates as RNDIS on the Mac, gets an IP, ping and SSH succeed. See
+boot.md TWENTY-SIXTH RESULT.
+
+**Lesson for future USB/mux debugging on this platform:** if a boot
+"hangs" immediately after a T-PHY/mux-adjacent register write, first check
+whether it's actually a console-mux transition (test by reconnecting via the
+non-serial path) before spending cycles on power/clock/PMIC forensics.
+
+---
+
 ## 🟢 Resolved (history)
 
 | Date | Was | Resolution |
