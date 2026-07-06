@@ -5,15 +5,23 @@
 #   e.g. ./scripts/build-pack.sh 32 msdc0-vmmc-supply --dtb-grep vmmc-supply
 #
 # Does everything up to (but not including) flashing:
-#   1. rsync patches/ + configs/ to the VM; drop the disabled display
-#      fragment (B-13 guard).
+#   1. rsync patches/ + configs/ to the VM.
 #   2. In the VM: reset kernel tree, apply patches, config, build.
 #   3. In the VM: pack new_kali_boot.img; copy .config/System.map to OUTPUT.
 #   4. On Mac: create logs/YYYY-MM-DD-NN-<desc>/ provenance dir, copy
 #      artifacts, print sha256.
-#   5. Verify the packed kernel: banner present, display driver absent;
+#   5. Verify the packed kernel: banner present, no debug instrumentation;
 #      optional DTB grep.
 #   6. Print flash + capture commands (absolute paths).
+#
+# NOTE 2026-07-06: the mtk-scpsys MT6797 domain-table probe-abort bug is
+# fixed (patches/v6.6/pmdomain/0001-...), so gemini-display.config is
+# enabled again and no longer force-removed here. BUT B-13 itself is NOT
+# resolved (see blockers.md/boot.md BUILD #79) — a build with display
+# enabled hard-hangs and reboot-loops on real hardware. The verification
+# step below no longer fails on the display driver being present, but that
+# means it will NOT catch this — confirm hardware outcome manually after
+# every build until B-13 is actually closed.
 #
 # Prereq: the build VM is running (~/gemini-build/vm/start-vm.sh).
 
@@ -37,10 +45,8 @@ NEXT=$((10#$NN + 1))
 echo "==> [1/6] Syncing patches/ and configs/ to VM"
 rsync -a --delete "$REPO/patches/" root@localhost:'~/gemini_linux/patches/' -e "ssh -p 5522"
 rsync -a "$REPO/configs/" root@localhost:'~/gemini_linux/configs/' -e "ssh -p 5522"
-$VM 'rm -f ~/gemini_linux/configs/gemini-display.config'   # B-13 guard
-
 echo "==> [2/6] Reset kernel tree, patch, config, build (VM)"
-$VM 'cd ~/linux-6.6 && git checkout -- . && git clean -fdq -- Documentation arch drivers'
+$VM 'cd ~/linux-6.6 && git reset -q && git checkout -- . && git clean -fdq -- Documentation arch drivers'
 $VM 'cd ~/gemini_linux && ./scripts/build.sh patch && ./scripts/build.sh config'
 $VM 'cd ~/gemini_linux && ./scripts/build.sh build' 2>&1 | tail -3
 
@@ -85,9 +91,7 @@ if b'GEMINI-DEBUG' in k:
         print("    WARNING: GEMINI-DEBUG instrumentation present (ALLOW_DEBUG=1 — deliberate debug build)")
     else:
         sys.exit("ERROR: GEMINI-DEBUG instrumentation present — debug patches were removed 2026-07-05 (build #39); set ALLOW_DEBUG=1 for a deliberate debug build")
-if b'r63419' in k:
-    sys.exit("ERROR: display driver present — headless build expected (B-13)")
-print("    debug instrumentation absent, display absent: OK")
+print("    debug instrumentation absent: OK")
 EOF
 
 echo "==> [6/6] Next steps (do not flash with mtk wl — targeted writes only)"

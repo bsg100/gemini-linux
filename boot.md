@@ -2155,3 +2155,82 @@ point with no earlier hang. Cable swapped to direct USB; confirmed over SSH
 Full 10-core SMP (bringing up the A72 cluster) is blocked on the same
 upstream `mtk-scpsys.c` MT6797 domain-table fix as Phase 5 display (B-13) —
 tracked there rather than as a separate Phase 4 item.
+
+## BUILD #79 — B-13 domain-table fix re-tested with display enabled: hang moved later, not resolved (2026-07-06)
+
+**Goal:** re-test `patches/v6.6/pmdomain/0001-pmdomain-mediatek-skip-unpopulated-mt6797-domain-slots.patch`
+(committed 2026-07-04 but never actually flash-tested with the display
+fragment enabled) now that it exists, since blockers.md B-13 hypothesized it
+as the "safe workaround" fix path. `configs/gemini-display.config` (the B-13
+guard on `gemini-display.config.disabled-b13`) was re-enabled and
+`scripts/build-pack.sh`'s hard-coded "drop the display fragment" guard and
+"display driver must be absent" verification check were removed, since B-13
+was believed fixed.
+
+**Build:** kernel #10, packed as
+`logs/2026-07-06-79-scpsys-b13-fix/new_kali_boot.img` (sha256
+`0e44900c02540b529e24d145314af319ce9d43c9775b6b35f02e68a097f7193a`). DTB
+confirmed to contain `disp-ovl0@1400b000` and the rest of the display chain
+(note: DT node names use hyphens, `disp-ovl0`, not the underscore form used in
+earlier grep attempts).
+
+**Outcome:** flashed to `boot` + `boot2`
+(`logs/2026-07-06-80-scpsys-b13-fix-boot.log`). Boot progressed one step
+further than the original 2026-07-05 B-13 discovery (TENTH RESULT) — now
+reaching:
+
+```
+[    0.366538] mediatek-drm mediatek-drm.1.auto: Adding component match for /disp-ovl0@1400b000
+...
+[    0.373350] platform 14017000.disp-od0: error -2 can't parse gce-client-reg property (0)
+[    0.374423] platform 14018000.disp-dither0: error -2 can't parse gce-client-reg property (0)
+[    0.376247] mipi-dsi 1401c000.dsi.0: Fixed dependency cycle(s) with /dsi@1401c000/port/endpoint
+[    0.379044] panel-renesas-r63419 1401c000.dsi.0: Renesas R63419 WQHD DSI panel registered
+```
+
+— but then hard-hangs with no further kernel output. The board then entered
+a genuine watchdog-driven reboot loop: FTDI capture caught the preloader
+banner repeating 5 times in a row, each cycle reaching the identical
+`panel-renesas-r63419 ... registered` line before dying. One cycle produced
+an ATF `aee_wdt_dump`, symbolicated against this build's `System.map`:
+
+```
+[ATF](1)[14.487066]aee_wdt_dump: on cpu1
+[ATF](1)[14.487523](1) pc:<ffff800081099d18> lr:<ffff800081099d2c> ...
+```
+
+`ffff800081099d18` falls inside `cpu_do_idle`/`arch_cpu_idle`
+(`System.map`: `ffff800081099d10 T cpu_do_idle`) — CPU1 was legitimately idle
+when the dump fired. The `inter-cpu-call interrupt is triggered` lines for
+every other CPU immediately before it are ATF's own IPI broadcast used to
+collect a whole-system crash dump once *some* CPU's watchdog trips, not
+evidence that CPU1 itself is the stuck core. The actual hang is presumed to
+still be on whichever CPU is running the boot thread (CPU0), inside the
+MM-domain power-on register access — consistent with B-13's original
+hard-hang description, just a little later in the sequence than the
+2026-07-05 test (which hung before any component-match printk at all).
+
+**Recovery:** device did not self-recover from the loop. Re-flashed both
+`boot` and `boot2` with the known-good `logs/2026-07-06-77-maxcpus8/new_kali_boot.img`
+(build #8, no display, `maxcpus=8`). First re-flash attempt appeared to not
+take (capture still showed build #10's banner and the same hang/loop
+signature) — a second attempt succeeded: capture showed build #8's banner,
+boot proceeded past the point build #10 hung at, mtu3 initialized, and the
+device was confirmed reachable over SSH-over-USB (`root@10.15.19.82`,
+`systemctl is-system-running` = `running`, `cpu/online` = `0-7`). Lesson: do
+not assume an `mtk w` flash succeeded from the command having been run —
+verify with a fresh capture showing the expected kernel banner before relying
+on the device being recovered.
+
+**Conclusion:** the `init_scp()`/`mtk_register_power_domains()` NULL-name
+skip fix is necessary but not sufficient — it stops the scpsys *driver probe*
+from aborting on the sparse MT6797 domain table, and does measurably move
+the boot further (component-match/panel registration now happens, which
+didn't happen at all before), but something in the actual MM domain power-on
+sequence (or a downstream consumer's first register access once the domain
+claims to be live) still wedges the bus. B-13 remains open. `gemini-display.config`
+is left enabled in the repo (the fix is real progress and worth keeping
+patched in), but is not yet safe to rely on for a stable boot — the
+`build-pack.sh` verification step no longer blocks on the display driver's
+presence, so future iterations should manually confirm the outcome on
+hardware before treating a display build as safe to leave flashed.

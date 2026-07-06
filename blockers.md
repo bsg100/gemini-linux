@@ -634,6 +634,35 @@ wrong `ctl_offs` values here risk toggling live SPM state incorrectly.
   own `logo`-partition splash code before Linux ever runs, not by our new
   DRM/panel patches).
 
+**Update 2026-07-06 (fix re-tested, still not sufficient):** the "safe
+workaround" patch above
+(`patches/v6.6/pmdomain/0001-pmdomain-mediatek-skip-unpopulated-mt6797-domain-slots.patch`)
+was committed 2026-07-04 but had never actually been flash-tested with
+`configs/gemini-display.config` enabled until now. Re-enabled the display
+fragment and retested (build #79/boot.md "BUILD #79"): boot progresses
+further than the original 2026-07-05 discovery — `mediatek-drm` now gets as
+far as adding component matches and the panel driver registers
+(`panel-renesas-r63419 ... registered`) — but the kernel then hard-hangs and
+the board enters a genuine watchdog reboot loop (5 cycles observed in one
+capture, each dying at the identical line). An ATF `aee_wdt_dump` this cycle
+symbolicated to `cpu_do_idle` on CPU1, which is a red herring: the
+`inter-cpu-call interrupt is triggered` lines that precede it are ATF's
+whole-system IPI broadcast for collecting a crash dump once some CPU's
+watchdog trips, not evidence CPU1 is the stuck core. The real hang is
+presumed to still be on the boot CPU inside the MM-domain power-on register
+access itself, once a consumer actually touches it — the NULL-name skip fix
+only prevents the scpsys *driver probe* from aborting early; it does not
+supply working power-on register offsets/timing for the MM domain. **B-13 is
+not resolved by this patch alone.** Device was recovered by re-flashing the
+known-good `maxcpus=8`, no-display build (`logs/2026-07-06-77-maxcpus8/`) —
+note the first re-flash attempt during this session silently failed to take
+(capture still showed the old hung build); a second attempt succeeded and was
+verified by checking the kernel banner in a fresh capture plus a live SSH
+session. `configs/gemini-display.config` is left enabled in the repo since
+the underlying scpsys probe fix is real forward progress, but it is not yet
+safe to leave flashed on the device without further work on the actual
+MM-domain power sequencing.
+
 ---
 
 ## 🟡 B-14 — Software reboot does not reset the SoC (hangs after `reboot: Restarting system`)
