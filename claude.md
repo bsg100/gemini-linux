@@ -60,7 +60,7 @@ here.
 | 2 | Upstream analysis | Complete |
 | 3 | Minimal kernel bring-up (serial console over FTDI) | **Complete 2026-07-04.** First full Linux 6.6 boot to userspace achieved (`Run /init as init process`) with diagnostic serial output throughout. See blockers.md B-2 (resolved) and boot.md's "SEVENTH RESULT" entry. |
 | 4 | Storage and userspace | **Complete 2026-07-06.** eMMC works (`mediatek,mt2701-mmc` compat, boot.md FIFTEENTH RESULT). The 2019 Kali userspace booted first (B-7 resolved, boot.md SIXTEENTH RESULT) but has since been **replaced** by a fresh Debian 13 (trixie) rootfs built by `scripts/mkrootfs.sh`, flashed to p29, and confirmed live and reachable over SSH (build #53, root@10.15.19.82) — the vendor droid-hal-init/kpoc_charger read-only-remount issue does not apply to this rootfs, so that follow-up is moot. The `clk_ignore_unused` workaround is **resolved 2026-07-06** — root-caused to a `drivers/tty/serial/8250/8250_mtk.c` bug (never enables the UART's own `"baud"` clock, so late-boot clk cleanup cuts the console) and fixed upstream-style with `devm_clk_get_enabled()` (`patches/v6.6/serial/0001-...`). Fix **folded back into the production build 2026-07-06** (build #71, USB gadget re-added alongside the fix, `configs/gemini-cmdline.config` updated to drop `clk_ignore_unused`) and validated over SSH-over-USB (boot.md "BUILD #71"): clean boot to `graphical.target` in 19s, `g_ether` gadget working, no regression. Remaining carried-forward item: the SMP-secondary-CPU-hang workaround from Phase 3 (`maxcpus=1`) — **narrowed 2026-07-06** via PSCI `CPU_ON` instrumentation (boot.md "PSCI CPU_ON diagnostic"): CPUs 0–7 (both Cortex-A53 clusters) bring up cleanly; the hang is specifically at CPU8 (first Cortex-A72 core), root-caused to the same B-13 `mtk-scpsys` MT6797 domain-table bug blocking Phase 5 display. Workaround upgraded from `maxcpus=1` to `maxcpus=8` (all A53 cores, validated `logs/2026-07-06-77-maxcpus8/`, boot.md "BUILD — maxcpus=8") — an 8x improvement that doesn't require B-13 fixed first. Full 10-core SMP is now tracked under B-13, not as a separate item. |
-| 5 | Display enablement | **In progress — current phase.** First hardware test 2026-07-05: DTS/build/config chain confirmed correct (full pipeline enabled, patches applied cleanly, no boot regression), but blocked on B-13 (upstream `mtk-scpsys.c` MT6797 domain-table bug breaks the shared `MM` power domain every display component needs). A splash seen on-screen during this test is the vendor LK bootloader's own splash, unrelated to our kernel/DRM work. See boot.md "NINTH RESULT". |
+| 5 | Display enablement | **Re-opened 2026-07-07 — B-13 root-caused and neutralized.** The cpu0 hard-lock was the mtk_dsi driver unmasking its level-low IRQ (GIC SPI 229) at probe while LK's leftover DSI engine state held the line asserted; `mtk_dsi_irq()` wedged without EOI, blocking all interrupt delivery to cpu0 while the core kept executing. Proof chain (boot.md builds #127–#139, all 2026-07-07): in-kernel irqs-off cpu0 spin survives the fatal window → cpuidle.off/nohlt doesn't help (interrupt-triggered, not idle) → GIC observer on cpu1/7 catches SPI 229 stuck ACTIVE at hang time → `disable_irq()` after `request_irq` is already too late → `IRQ_NOAUTOEN` before request defeats it → build #139 boots to `systemd is-system-running: running` with the display stack enabled, SSH-validated. Interim patch `patches/v6.6/drm/0008-…-dsi-keep-irq-disabled-b13-test.patch`. Remaining: proper fix (enable the IRQ only at DSI power-on with clocks guaranteed), then ordinary deferred-probe bringup to get the DRM master bound and pixels on the panel. See blockers.md B-13. |
 | 6 | Keyboard enablement | Not started |
 | 7 | Power management | Not started |
 | 8 | Networking | **SSH-over-USB fast-track VERIFIED WORKING 2026-07-06:** build #53 (clean, no debug instrumentation) confirmed end-to-end on hardware — RNDIS/Ethernet gadget enumerates on the host, static IP + ping + `ssh root@10.15.19.82` all succeed (boot.md TWENTY-SIXTH RESULT). An apparent hang across builds #40–#52 was chased through clock/IPPC/PMIC forensics before being root-caused to the documented UART/USB console mux switching mid-boot, not a driver defect (B-15, resolved). Note the left USB-C port is shared with the UART console mux: serial and direct-to-Mac USB are mutually exclusive — verification requires a single-cable-swap protocol. WiFi (no mainline driver) remains not started. |
@@ -122,6 +122,23 @@ Target: **Linux 6.6 LTS**
 - Origin: shallow clone of `git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git` at tag `v6.6`
 
 The kernel source is **not patched in place** for development work. All custom driver changes live as patch files in this project (see Patches below) and are applied on top of a clean kernel checkout before building.
+
+**Vendor reference source (2026-07-06):** `/Volumes/extdata/github/gemini-android-kernel-3.18`
+(`git remote`: `https://github.com/dguidipc/gemini-android-kernel-3.18.git`) is
+a real, buildable Linux 3.18.41 kernel source tree for this exact device —
+`dguidipc`'s Halium port (confirmed by the `Linux version 3.18.41+
+(dguidi@nowhere)` banner matching the kernel embedded in
+`/Volumes/extdata/scratch/debian`'s extracted boot image). This is the
+primary cross-reference for vendor driver *source code* (scpsys/MTCMOS
+sequencing, dispsys/DDP, SMI/M4U handling, CPU hotplug strategy, USB-C mux)
+— use it instead of guessing from decompiled strings. Its board DTS
+(`arch/arm64/boot/dts/aeon6797_6m_n.dts`) is a close but **not** bit-identical
+match to our actual hardware's extracted DTB
+(`docs/vendor-dtb/gemini_kali_boot.dts`) — e.g. it lacks the `fusb301a@25`
+I2C node our real device has — so treat the real vendor-dtb extraction as the
+DTS authority and this repo as the driver-source authority. See blockers.md
+B-13 for the first concrete finding sourced from it (SMI larb IOMMU-bypass
+gap).
 
 ## Patches
 
@@ -281,16 +298,23 @@ The project is considered successful when the Gemini PDA can boot a modern Linux
 Build a new `boot.img` in the VM, then from macOS:
 
 ```bash
-/tmp/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 /path/to/new_kali_boot.img
+~/gemini-build/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 /path/to/new_kali_boot.img
 ```
 
 Device must be in preloader mode (power on, connect USB — no button hold needed if preloader is intact).
 
 **Note (2026-07-06):** use the `python3 ~/mtkclient/mtk.py` form, not the
-`/tmp/mtk-venv/bin/mtk` console-script — that entrypoint is broken in this
+`mtk-venv/bin/mtk` console-script — that entrypoint is broken in this
 checkout (`ModuleNotFoundError: No module named 'mtkclient.mtk'`) because
 `~/mtkclient` ships `mtk.py` as a top-level standalone script, not as a
 `mtkclient/mtk.py` package submodule the installed entrypoint expects.
+
+**Note (2026-07-07):** the venv lives at `~/gemini-build/mtk-venv`, not
+`/tmp/mtk-venv` — macOS clears `/tmp` on every reboot, so a `/tmp`-based venv
+silently disappears and every command referencing it fails with "no such
+file or directory" until recreated. `~/gemini-build` already persists across
+reboots (it holds the build VM), so the venv lives there instead. If it's
+ever missing: `python3 -m venv ~/gemini-build/mtk-venv && ~/gemini-build/mtk-venv/bin/pip install -r ~/mtkclient/requirements.txt`.
 
 ## Recovery (Full Reflash)
 

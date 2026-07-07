@@ -1,0 +1,158 @@
+diff --git a/drivers/gpu/drm/mediatek/mtk_drm_drv.c b/drivers/gpu/drm/mediatek/mtk_drm_drv.c
+index d39c41814..8aa9bed08 100644
+--- a/drivers/gpu/drm/mediatek/mtk_drm_drv.c
++++ b/drivers/gpu/drm/mediatek/mtk_drm_drv.c
+@@ -5,7 +5,9 @@
+  */
+ 
+ #include <linux/component.h>
++#include <linux/io.h>
+ #include <linux/iommu.h>
++#include <linux/smp.h>
+ #include <linux/module.h>
+ #include <linux/of.h>
+ #include <linux/of_platform.h>
+@@ -30,6 +32,129 @@
+ #include "mtk_drm_drv.h"
+ #include "mtk_drm_gem.h"
+ 
++/*
++ * GEMINI-DEBUG (B-13): OBSERVER-mode GIC poll loop (v3 of this patch).
++ *
++ * History: v2 (build #129) hijacked cpu0 itself into an irqs-off raw-MMIO
++ * poll loop and PROVED cpu0 survives the entire B-13 fatal window that way
++ * (boot.md "BUILD #129") — not a hardware lock. Build #131 then showed
++ * cpuidle.off=1 + nohlt does NOT save a normally-booting cpu0 — so the
++ * wedge is triggered by taking an interrupt, not by WFI/idle entry.
++ *
++ * v3 therefore observes instead of pre-empting: cpu0 boots normally; a
++ * sacrificial secondary CPU spins with IRQs masked, raw MMIO only, and
++ * every ~20 ms dumps:
++ *  - every nonzero GICD_ISPENDR/ISACTIVER word (GICD @ 0x19000000) — a SPI
++ *    stuck ACTIVE at the moment cpu0's scheduled heartbeat stops names the
++ *    handler cpu0 wedged in;
++ *  - cpu0's GICR SGI-frame ISENABLER0/ISPENDR0/ISACTIVER0 and GICR_WAKER
++ *    (RD @ 0x19200000, SGI frame +0x10000) — catches the local-timer PPI
++ *    (30) state and any redistributor change at hang time.
++ * Output goes byte-by-byte to UART0 (0x11002000, UPIO_MEM32/regshift=2 per
++ * 8250_mtk.c); lines may interleave with printk, tolerable.
++ *
++ * DEBUG ONLY, never merged: sacrifices one secondary CPU (expect RCU stall
++ * noise about it) and eventually trips the unfed watchdog if boot stalls.
++ */
++static void __iomem *gemini_hb_uart;	/* UART0, 32-bit regs, stride 4 */
++static void __iomem *gemini_hb_gicd;
++static void __iomem *gemini_hb_gicr;
++
++static void gemini_hb_putc(char c)
++{
++	while (!(readl(gemini_hb_uart + (5 << 2)) & 0x20))	/* LSR.THRE */
++		cpu_relax();
++	writel(c, gemini_hb_uart + (0 << 2));			/* THR */
++}
++
++static void gemini_hb_puts(const char *s)
++{
++	for (; *s; s++) {
++		if (*s == '\n')
++			gemini_hb_putc('\r');
++		gemini_hb_putc(*s);
++	}
++}
++
++static void gemini_hb_puthex(u64 v)
++{
++	int i;
++
++	for (i = 60; i >= 0; i -= 4)
++		gemini_hb_putc("0123456789abcdef"[(v >> i) & 0xf]);
++}
++
++static void gemini_hb_poll(void *info)
++{
++	u64 freq, last, now, beat = 0;
++	u32 i, v;
++
++	/* IPI path arrives with IRQs off already; keep them off forever. */
++	local_irq_disable();
++	asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
++	asm volatile("mrs %0, cntpct_el0" : "=r"(last));
++	gemini_hb_puts("[GEMINI-OBS] observer loop start (watching cpu0), cntfrq=");
++	gemini_hb_puthex(freq);
++	gemini_hb_puts("\n");
++	for (;;) {
++		asm volatile("mrs %0, cntpct_el0" : "=r"(now));
++		if (now - last < freq / 50) {
++			cpu_relax();
++			continue;
++		}
++		last = now;
++		beat++;
++		gemini_hb_puts("[GEMINI-OBS] ");
++		gemini_hb_puthex(beat);
++		gemini_hb_puts(" cntpct=");
++		gemini_hb_puthex(now);
++		for (i = 0; i < 32; i++) {
++			v = readl(gemini_hb_gicd + 0x200 + i * 4); /* ISPENDR */
++			if (v) {
++				gemini_hb_puts(" P");
++				gemini_hb_puthex(i);
++				gemini_hb_puts(":");
++				gemini_hb_puthex(v);
++			}
++		}
++		for (i = 0; i < 32; i++) {
++			v = readl(gemini_hb_gicd + 0x300 + i * 4); /* ISACTIVER */
++			if (v) {
++				gemini_hb_puts(" A");
++				gemini_hb_puthex(i);
++				gemini_hb_puts(":");
++				gemini_hb_puthex(v);
++			}
++		}
++		gemini_hb_puts(" r0e=");
++		gemini_hb_puthex(readl(gemini_hb_gicr + 0x10000 + 0x100)); /* cpu0 ISENABLER0 */
++		gemini_hb_puts(" r0p=");
++		gemini_hb_puthex(readl(gemini_hb_gicr + 0x10000 + 0x200)); /* cpu0 ISPENDR0 */
++		gemini_hb_puts(" r0a=");
++		gemini_hb_puthex(readl(gemini_hb_gicr + 0x10000 + 0x300)); /* cpu0 ISACTIVER0 */
++		gemini_hb_puts(" waker=");
++		gemini_hb_puthex(readl(gemini_hb_gicr + 0x14));
++		gemini_hb_puts("\n");
++	}
++}
++
++static void gemini_hb_hijack_cpu0(struct device *dev)
++{
++	int victim = (smp_processor_id() == 7) ? 6 : 7;
++
++	gemini_hb_uart = ioremap(0x11002000, 0x100);
++	gemini_hb_gicd = ioremap(0x19000000, 0x1000);
++	gemini_hb_gicr = ioremap(0x19200000, 0x20000); /* cpu0 RD + SGI frame */
++	if (!gemini_hb_uart || !gemini_hb_gicd || !gemini_hb_gicr) {
++		dev_err(dev, "GEMINI-DEBUG: hb ioremap failed (%p %p %p), observer NOT started\n",
++			gemini_hb_uart, gemini_hb_gicd, gemini_hb_gicr);
++		return;
++	}
++	dev_info(dev, "GEMINI-DEBUG: starting GIC observer loop on cpu%d (caller cpu%d, cpu0 boots normally)\n",
++		 victim, smp_processor_id());
++	smp_call_function_single(victim, gemini_hb_poll, NULL, 0);
++}
++
+ #define DRIVER_NAME "mediatek"
+ #define DRIVER_DESC "Mediatek SoC DRM"
+ #define DRIVER_DATE "20150513"
+@@ -960,6 +1085,13 @@ static int mtk_drm_probe(struct platform_device *pdev)
+ 	if (ret)
+ 		goto err_pm;
+ 
++	/*
++	 * Hijack here, not at kms_init: build #127 (log -128) showed the B-13
++	 * hang fires ~30 ms after this probe returns (2.540s), before the
++	 * component bind/kms_init ever runs — so a kms_init hook never arms.
++	 */
++	gemini_hb_hijack_cpu0(dev);
++
+ 	return 0;
+ 
+ err_pm:

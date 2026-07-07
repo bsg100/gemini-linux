@@ -1,0 +1,105 @@
+diff --git a/drivers/gpu/drm/mediatek/mtk_disp_aal.c b/drivers/gpu/drm/mediatek/mtk_disp_aal.c
+index 4da9ac93b..2c7cf701a 100644
+--- a/drivers/gpu/drm/mediatek/mtk_disp_aal.c
++++ b/drivers/gpu/drm/mediatek/mtk_disp_aal.c
+@@ -144,6 +144,8 @@ static const struct mtk_disp_aal_data mt8173_aal_driver_data = {
+ };
+ 
+ static const struct of_device_id mtk_disp_aal_driver_dt_match[] = {
++	/* MT6797 has a separate GAMMA block, so its AAL has no gamma LUT */
++	{ .compatible = "mediatek,mt6797-disp-aal"},
+ 	{ .compatible = "mediatek,mt8173-disp-aal",
+ 	  .data = &mt8173_aal_driver_data},
+ 	{ .compatible = "mediatek,mt8183-disp-aal"},
+diff --git a/drivers/gpu/drm/mediatek/mtk_disp_ccorr.c b/drivers/gpu/drm/mediatek/mtk_disp_ccorr.c
+index 4234ff748..9f3f5caa9 100644
+--- a/drivers/gpu/drm/mediatek/mtk_disp_ccorr.c
++++ b/drivers/gpu/drm/mediatek/mtk_disp_ccorr.c
+@@ -203,6 +203,9 @@ static const struct mtk_disp_ccorr_data mt8192_ccorr_driver_data = {
+ };
+ 
+ static const struct of_device_id mtk_disp_ccorr_driver_dt_match[] = {
++	/* MT6797 CCORR is v1.0 (vendor video/common/corr10), like MT8183 */
++	{ .compatible = "mediatek,mt6797-disp-ccorr",
++	  .data = &mt8183_ccorr_driver_data},
+ 	{ .compatible = "mediatek,mt8183-disp-ccorr",
+ 	  .data = &mt8183_ccorr_driver_data},
+ 	{ .compatible = "mediatek,mt8192-disp-ccorr",
+diff --git a/drivers/gpu/drm/mediatek/mtk_disp_color.c b/drivers/gpu/drm/mediatek/mtk_disp_color.c
+index 78ea99f14..682986b6b 100644
+--- a/drivers/gpu/drm/mediatek/mtk_disp_color.c
++++ b/drivers/gpu/drm/mediatek/mtk_disp_color.c
+@@ -153,6 +153,9 @@ static const struct of_device_id mtk_disp_color_driver_dt_match[] = {
+ 	  .data = &mt2701_color_driver_data},
+ 	{ .compatible = "mediatek,mt8167-disp-color",
+ 	  .data = &mt8167_color_driver_data},
++	/* MT6797 DISP_COLOR_START is at +0xc00, like MT8173 (vendor ddp_reg.h) */
++	{ .compatible = "mediatek,mt6797-disp-color",
++	  .data = &mt8173_color_driver_data},
+ 	{ .compatible = "mediatek,mt8173-disp-color",
+ 	  .data = &mt8173_color_driver_data},
+ 	{},
+diff --git a/drivers/gpu/drm/mediatek/mtk_disp_gamma.c b/drivers/gpu/drm/mediatek/mtk_disp_gamma.c
+index 673f9a573..fa5c42c3a 100644
+--- a/drivers/gpu/drm/mediatek/mtk_disp_gamma.c
++++ b/drivers/gpu/drm/mediatek/mtk_disp_gamma.c
+@@ -196,6 +196,8 @@ static const struct mtk_disp_gamma_data mt8183_gamma_driver_data = {
+ };
+ 
+ static const struct of_device_id mtk_disp_gamma_driver_dt_match[] = {
++	/* MT6797 has a separate DITHER block, so its GAMMA has no dither */
++	{ .compatible = "mediatek,mt6797-disp-gamma"},
+ 	{ .compatible = "mediatek,mt8173-disp-gamma",
+ 	  .data = &mt8173_gamma_driver_data},
+ 	{ .compatible = "mediatek,mt8183-disp-gamma",
+diff --git a/drivers/gpu/drm/mediatek/mtk_disp_ovl.c b/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
+index 2bffe4245..39752df8b 100644
+--- a/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
++++ b/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
+@@ -594,6 +594,16 @@ static const struct mtk_disp_ovl_data mt8183_ovl_driver_data = {
+ 	.num_formats = ARRAY_SIZE(mt8173_formats),
+ };
+ 
++/* Like MT8173 OVL but the 2L variant has only 2 layers (vendor ddp_ovl.c) */
++static const struct mtk_disp_ovl_data mt6797_ovl_2l_driver_data = {
++	.addr = DISP_REG_OVL_ADDR_MT8173,
++	.gmc_bits = 8,
++	.layer_nr = 2,
++	.fmt_rgb565_is_0 = true,
++	.formats = mt8173_formats,
++	.num_formats = ARRAY_SIZE(mt8173_formats),
++};
++
+ static const struct mtk_disp_ovl_data mt8183_ovl_2l_driver_data = {
+ 	.addr = DISP_REG_OVL_ADDR_MT8173,
+ 	.gmc_bits = 10,
+@@ -638,6 +648,15 @@ static const struct mtk_disp_ovl_data mt8195_ovl_driver_data = {
+ static const struct of_device_id mtk_disp_ovl_driver_dt_match[] = {
+ 	{ .compatible = "mediatek,mt2701-disp-ovl",
+ 	  .data = &mt2701_ovl_driver_data},
++	/*
++	 * MT6797 OVL matches the MT8173 generation: layer address base 0xf40
++	 * and 8-bit GMC threshold fields (vendor 3.18 ddp_reg.h), RGB565 is
++	 * hardware format 0 (vendor ddp_info.h UFMT_RGB565).
++	 */
++	{ .compatible = "mediatek,mt6797-disp-ovl",
++	  .data = &mt8173_ovl_driver_data},
++	{ .compatible = "mediatek,mt6797-disp-ovl-2l",
++	  .data = &mt6797_ovl_2l_driver_data},
+ 	{ .compatible = "mediatek,mt8173-disp-ovl",
+ 	  .data = &mt8173_ovl_driver_data},
+ 	{ .compatible = "mediatek,mt8183-disp-ovl",
+diff --git a/drivers/gpu/drm/mediatek/mtk_disp_rdma.c b/drivers/gpu/drm/mediatek/mtk_disp_rdma.c
+index faa907f2f..7a981c428 100644
+--- a/drivers/gpu/drm/mediatek/mtk_disp_rdma.c
++++ b/drivers/gpu/drm/mediatek/mtk_disp_rdma.c
+@@ -413,6 +413,9 @@ static const struct mtk_disp_rdma_data mt8195_rdma_driver_data = {
+ static const struct of_device_id mtk_disp_rdma_driver_dt_match[] = {
+ 	{ .compatible = "mediatek,mt2701-disp-rdma",
+ 	  .data = &mt2701_rdma_driver_data},
++	/* MT6797 RDMA FIFO is 512 x 16-byte units = 8 KiB (vendor ddp_rdma_ex.c) */
++	{ .compatible = "mediatek,mt6797-disp-rdma",
++	  .data = &mt8173_rdma_driver_data},
+ 	{ .compatible = "mediatek,mt8173-disp-rdma",
+ 	  .data = &mt8173_rdma_driver_data},
+ 	{ .compatible = "mediatek,mt8183-disp-rdma",

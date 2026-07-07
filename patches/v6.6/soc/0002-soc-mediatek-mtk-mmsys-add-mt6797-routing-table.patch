@@ -1,0 +1,64 @@
+diff --git a/drivers/soc/mediatek/mtk-mmsys.c b/drivers/soc/mediatek/mtk-mmsys.c
+index ffb75711a..7c1956a97 100644
+--- a/drivers/soc/mediatek/mtk-mmsys.c
++++ b/drivers/soc/mediatek/mtk-mmsys.c
+@@ -49,8 +49,59 @@ static const struct mtk_mmsys_driver_data mt6795_mmsys_driver_data = {
+ 	.num_resets = 64,
+ };
+ 
++/*
++ * MT6797 display routing muxes, from the vendor 3.18 kernel's
++ * drivers/misc/mediatek/video/mt6797/dispsys/ddp_path.c (mout_map,
++ * sel_out_map, sel_in_map) and ddp_reg.h (register offsets). Covers the
++ * primary path OVL0 -> OVL0_2L -> COLOR0 -> ... -> DITHER -> RDMA0 -> DSI0
++ * (OVL0 -> OVL0_2L is a hardwired cascade; the OVL0_2L output reaches
++ * COLOR0 through the OVL0_SOUT and "OVL0 virtual" muxes).
++ */
++#define MT6797_DISP_OVL0_MOUT_EN		0x034
++#define MT6797_DISP_DITHER_MOUT_EN		0x03c
++#define MT6797_DISP_COLOR0_SEL_IN		0x068
++#define MT6797_DSI0_SEL_IN			0x07c
++#define MT6797_DISP_RDMA0_SOUT_SEL_IN		0x090
++#define MT6797_DISP_OVL0_SOUT_SEL_IN		0x098
++#define MT6797_DISP_OVL0_SEL_IN			0x09c
++
++#define MT6797_OVL0_MOUT_EN_COLOR0		BIT(0)
++#define MT6797_DITHER_MOUT_EN_RDMA0		BIT(0)
++#define MT6797_COLOR0_SEL_IN_OVL0		0x1
++#define MT6797_DSI0_SEL_IN_RDMA0		0x2
++#define MT6797_RDMA0_SOUT_DSI0			0x2
++#define MT6797_OVL0_SOUT_OVL0_VIRTUAL		0x0
++#define MT6797_OVL0_SEL_IN_OVL0_2L		0x0
++
++static const struct mtk_mmsys_routes mmsys_mt6797_routing_table[] = {
++	{
++		DDP_COMPONENT_OVL_2L0, DDP_COMPONENT_COLOR0,
++		MT6797_DISP_OVL0_SOUT_SEL_IN, 0x3, MT6797_OVL0_SOUT_OVL0_VIRTUAL
++	}, {
++		DDP_COMPONENT_OVL_2L0, DDP_COMPONENT_COLOR0,
++		MT6797_DISP_OVL0_SEL_IN, 0x3, MT6797_OVL0_SEL_IN_OVL0_2L
++	}, {
++		DDP_COMPONENT_OVL_2L0, DDP_COMPONENT_COLOR0,
++		MT6797_DISP_OVL0_MOUT_EN, 0x3, MT6797_OVL0_MOUT_EN_COLOR0
++	}, {
++		DDP_COMPONENT_OVL_2L0, DDP_COMPONENT_COLOR0,
++		MT6797_DISP_COLOR0_SEL_IN, 0x3, MT6797_COLOR0_SEL_IN_OVL0
++	}, {
++		DDP_COMPONENT_DITHER0, DDP_COMPONENT_RDMA0,
++		MT6797_DISP_DITHER_MOUT_EN, 0x7, MT6797_DITHER_MOUT_EN_RDMA0
++	}, {
++		DDP_COMPONENT_RDMA0, DDP_COMPONENT_DSI0,
++		MT6797_DISP_RDMA0_SOUT_SEL_IN, 0x7, MT6797_RDMA0_SOUT_DSI0
++	}, {
++		DDP_COMPONENT_RDMA0, DDP_COMPONENT_DSI0,
++		MT6797_DSI0_SEL_IN, 0x7, MT6797_DSI0_SEL_IN_RDMA0
++	},
++};
++
+ static const struct mtk_mmsys_driver_data mt6797_mmsys_driver_data = {
+ 	.clk_driver = "clk-mt6797-mm",
++	.routes = mmsys_mt6797_routing_table,
++	.num_routes = ARRAY_SIZE(mmsys_mt6797_routing_table),
+ };
+ 
+ static const struct mtk_mmsys_driver_data mt8167_mmsys_driver_data = {

@@ -2,7 +2,7 @@ diff --git a/drivers/gpu/drm/mediatek/mtk_dsi.c b/drivers/gpu/drm/mediatek/mtk_d
 index bb91844..b50a5f8 100644
 --- a/drivers/gpu/drm/mediatek/mtk_dsi.c
 +++ b/drivers/gpu/drm/mediatek/mtk_dsi.c
-@@ -205,6 +205,14 @@ struct mtk_dsi {
+@@ -205,6 +205,14 @@
  	int refcount;
  	bool enabled;
  	bool lanes_ready;
@@ -17,7 +17,7 @@ index bb91844..b50a5f8 100644
  	u32 irq_data;
  	wait_queue_head_t irq_wait_queue;
  	const struct mtk_dsi_driver_data *driver_data;
-@@ -906,11 +914,13 @@ static int mtk_dsi_host_attach(struct mipi_dsi_host *host,
+@@ -906,11 +914,13 @@
  		return PTR_ERR(dsi->next_bridge);
  
  	drm_bridge_add(&dsi->bridge);
@@ -31,7 +31,7 @@ index bb91844..b50a5f8 100644
  		return ret;
  	}
  
-@@ -922,8 +932,12 @@ static int mtk_dsi_host_detach(struct mipi_dsi_host *host,
+@@ -922,8 +932,12 @@
  {
  	struct mtk_dsi *dsi = host_to_dsi(host);
  
@@ -44,7 +44,7 @@ index bb91844..b50a5f8 100644
  	return 0;
  }
  
-@@ -1102,6 +1116,22 @@ static int mtk_dsi_probe(struct platform_device *pdev)
+@@ -1102,6 +1116,22 @@
  
  	dsi->host.ops = &mtk_dsi_ops;
  	dsi->host.dev = dev;
@@ -67,29 +67,7 @@ index bb91844..b50a5f8 100644
  	ret = mipi_dsi_host_register(&dsi->host);
  	if (ret < 0) {
  		dev_err(dev, "failed to register DSI host: %d\n", ret);
-@@ -1114,6 +1144,10 @@ static int mtk_dsi_probe(struct platform_device *pdev)
- 	if (IS_ERR(dsi->engine_clk)) {
- 		ret = PTR_ERR(dsi->engine_clk);
- 
-+		/* TEMPORARY Gemini bring-up diagnostic, see fixed.c. Remove
-+		 * once B-15 is resolved. */
-+		dev_info(dev, "GEMINI-DEBUG: engine clk get failed: %d\n", ret);
-+
- 		if (ret != -EPROBE_DEFER)
- 			dev_err(dev, "Failed to get engine clock: %d\n", ret);
- 		goto err_unregister_host;
-@@ -1123,6 +1157,10 @@ static int mtk_dsi_probe(struct platform_device *pdev)
- 	if (IS_ERR(dsi->digital_clk)) {
- 		ret = PTR_ERR(dsi->digital_clk);
- 
-+		/* TEMPORARY Gemini bring-up diagnostic, see fixed.c. Remove
-+		 * once B-15 is resolved. */
-+		dev_info(dev, "GEMINI-DEBUG: digital clk get failed: %d\n", ret);
-+
- 		if (ret != -EPROBE_DEFER)
- 			dev_err(dev, "Failed to get digital clock: %d\n", ret);
- 		goto err_unregister_host;
-@@ -1167,10 +1205,6 @@ static int mtk_dsi_probe(struct platform_device *pdev)
+@@ -1167,10 +1197,6 @@
  
  	platform_set_drvdata(pdev, dsi);
  

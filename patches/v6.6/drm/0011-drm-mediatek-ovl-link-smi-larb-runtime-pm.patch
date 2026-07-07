@@ -1,0 +1,56 @@
+diff --git a/drivers/gpu/drm/mediatek/mtk_disp_ovl.c b/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
+index 2bffe4245..b590360a8 100644
+--- a/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
++++ b/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
+@@ -11,6 +11,7 @@
+ #include <linux/component.h>
+ #include <linux/module.h>
+ #include <linux/of.h>
++#include <linux/of_platform.h>
+ #include <linux/platform_device.h>
+ #include <linux/pm_runtime.h>
+ #include <linux/soc/mediatek/mtk-cmdq.h>
+@@ -511,6 +512,8 @@ static int mtk_disp_ovl_probe(struct platform_device *pdev)
+ 	struct device *dev = &pdev->dev;
+ 	struct mtk_disp_ovl *priv;
+ 	struct resource *res;
++	struct device_node *larb_node;
++	struct platform_device *larb_pdev;
+ 	int irq;
+ 	int ret;
+ 
+@@ -552,6 +555,34 @@ static int mtk_disp_ovl_probe(struct platform_device *pdev)
+ 
+ 	pm_runtime_enable(dev);
+ 
++	/*
++	 * On SoCs with no mainline M4U driver (e.g. MT6797), nothing ever
++	 * takes a runtime-PM reference on this OVL's SMI larb via IOMMU
++	 * attach, so it stays permanently runtime-suspended and OVL's first
++	 * frame fetch stalls forever (flip_done timeout). Link the larb's
++	 * runtime PM to this device's instead of forcing it active
++	 * unconditionally at the larb's own probe time: pinning it active
++	 * that early reproduces a known MM-power-domain hard-hang (the SMI
++	 * larb's power domain is the same MT6797_POWER_DOMAIN_MM that must
++	 * already be sequenced correctly for OVL's own runtime resume to
++	 * work, which by this point in bring-up it is). DL_FLAG_PM_RUNTIME
++	 * without DL_FLAG_RPM_ACTIVE means the larb only resumes when OVL
++	 * itself is runtime-resumed by the DRM atomic-commit path, not at
++	 * link-creation/probe time.
++	 */
++	larb_node = of_parse_phandle(dev->of_node, "mediatek,larb", 0);
++	if (larb_node) {
++		larb_pdev = of_find_device_by_node(larb_node);
++		of_node_put(larb_node);
++		if (larb_pdev) {
++			if (!device_link_add(dev, &larb_pdev->dev,
++					      DL_FLAG_STATELESS |
++					      DL_FLAG_PM_RUNTIME))
++				dev_warn(dev, "failed to link larb runtime PM\n");
++			put_device(&larb_pdev->dev);
++		}
++	}
++
+ 	ret = component_add(dev, &mtk_disp_ovl_component_ops);
+ 	if (ret) {
+ 		pm_runtime_disable(dev);

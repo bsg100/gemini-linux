@@ -1,0 +1,44 @@
+diff --git a/arch/arm64/boot/dts/mediatek/mt6797.dtsi b/arch/arm64/boot/dts/mediatek/mt6797.dtsi
+index c3677d77e..672a89d2c 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6797.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6797.dtsi
+@@ -123,6 +123,30 @@ infrasys: infracfg_ao@10001000 {
+ 		#clock-cells = <1>;
+ 	};
+
++	/*
++	 * B-13: the vendor DTB (docs/vendor-dtb/gemini_kali_boot.dts, this
++	 * device's own extracted flash) shows MT6797 has a SECOND, distinct
++	 * infracfg block at 0x10201000 -- separate from the AO block above
++	 * at 0x10001000 that upstream's single infracfg node models. The
++	 * vendor's own scpsys node spans all three physical regions (AO
++	 * infracfg 0x10001000, SPM 0x10006000, this block 0x10201000),
++	 * confirming scpsys's bus-protection registers (INFRA_TOPAXI_*)
++	 * live here, not in the AO block. Upstream's generic infracfg driver
++	 * (mtk-infracfg.c) writes INFRA_TOPAXI_PROTECTEN at a fixed offset
++	 * relative to whatever regmap it's given -- pointed at &infrasys
++	 * (the AO block) it silently hits the wrong hardware, so the MM
++	 * domain's bus protection bits never actually clear and the next
++	 * real MM-domain register access wedges the bus (see blockers.md
++	 * B-13, "second infracfg block" update). Plain "syscon" compatible
++	 * only -- must NOT reuse "mediatek,mt6797-infracfg", which is also
++	 * matched by the infra clock-controller driver and would attempt a
++	 * second, conflicting clock-provider registration on this node.
++	 */
++	infracfg2: infracfg@10201000 {
++		compatible = "syscon";
++		reg = <0 0x10201000 0 0x1000>;
++	};
++
+ 	pio: pinctrl@10005000 {
+ 		compatible = "mediatek,mt6797-pinctrl";
+ 		reg = <0 0x10005000 0 0x1000>,
+@@ -214,7 +238,7 @@ scpsys: power-controller@10006000 {
+ 			 <&topckgen CLK_TOP_MUX_MM>,
+ 			 <&topckgen CLK_TOP_MUX_VDEC>;
+ 		clock-names = "mfg", "mm", "vdec";
+-		infracfg = <&infrasys>;
++		infracfg = <&infracfg2>;
+ 	};
+
+ 	watchdog: watchdog@10007000 {

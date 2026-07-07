@@ -1,0 +1,75 @@
+diff --git a/drivers/pmdomain/mediatek/mtk-scpsys.c b/drivers/pmdomain/mediatek/mtk-scpsys.c
+--- a/drivers/pmdomain/mediatek/mtk-scpsys.c
++++ b/drivers/pmdomain/mediatek/mtk-scpsys.c
+@@ -307,14 +307,28 @@
+ 	void __iomem *ctl_addr = scp->base + scpd->data->ctl_offs;
+ 	u32 val;
+ 	int ret, tmp;
++
++	/*
++	 * GEMINI-DEBUG (B-13): per-step serial trace of the power-on
++	 * sequence. The MM-domain power-on hard-hangs the SoC (ATF
++	 * watchdog) with no error path ever taken, so the last line
++	 * printed before the watchdog dump identifies the exact register
++	 * access that stalls the bus. Remove once B-13 is root-caused.
++	 */
++	dev_info(scp->dev, "GEMINI-DEBUG pwr_on %s: regulator\n", genpd->name);
+ 
+ 	ret = scpsys_regulator_enable(scpd);
+ 	if (ret < 0)
+ 		return ret;
+ 
++	dev_info(scp->dev, "GEMINI-DEBUG pwr_on %s: clk_enable\n", genpd->name);
++
+ 	ret = scpsys_clk_enable(scpd->clk, MAX_CLKS);
+ 	if (ret)
+ 		goto err_clk;
++
++	dev_info(scp->dev, "GEMINI-DEBUG pwr_on %s: PWR_ON write (ctl=0x%x)\n",
++		 genpd->name, readl(ctl_addr));
+ 
+ 	/* subsys power on */
+ 	val = readl(ctl_addr);
+@@ -323,12 +337,17 @@
+ 	val |= PWR_ON_2ND_BIT;
+ 	writel(val, ctl_addr);
+ 
++	dev_info(scp->dev, "GEMINI-DEBUG pwr_on %s: poll PWR_ACK\n", genpd->name);
++
+ 	/* wait until PWR_ACK = 1 */
+ 	ret = readx_poll_timeout(scpsys_domain_is_on, scpd, tmp, tmp > 0,
+ 				 MTK_POLL_DELAY_US, MTK_POLL_TIMEOUT);
+ 	if (ret < 0)
+ 		goto err_pwr_ack;
+ 
++	dev_info(scp->dev, "GEMINI-DEBUG pwr_on %s: CLK_DIS/ISO/RST_B (ctl=0x%x)\n",
++		 genpd->name, readl(ctl_addr));
++
+ 	val &= ~PWR_CLK_DIS_BIT;
+ 	writel(val, ctl_addr);
+ 
+@@ -337,15 +356,24 @@
+ 
+ 	val |= PWR_RST_B_BIT;
+ 	writel(val, ctl_addr);
++
++	dev_info(scp->dev, "GEMINI-DEBUG pwr_on %s: sram_enable (ctl=0x%x)\n",
++		 genpd->name, readl(ctl_addr));
+ 
+ 	ret = scpsys_sram_enable(scpd, ctl_addr);
+ 	if (ret < 0)
+ 		goto err_pwr_ack;
++
++	dev_info(scp->dev, "GEMINI-DEBUG pwr_on %s: bus_protect_disable (ctl=0x%x)\n",
++		 genpd->name, readl(ctl_addr));
+ 
+ 	ret = scpsys_bus_protect_disable(scpd);
+ 	if (ret < 0)
+ 		goto err_pwr_ack;
+ 
++	dev_info(scp->dev, "GEMINI-DEBUG pwr_on %s: done (ctl=0x%x)\n",
++		 genpd->name, readl(ctl_addr));
++
+ 	return 0;
+ 
+ err_pwr_ack:

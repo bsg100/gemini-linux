@@ -1,0 +1,79 @@
+diff --git a/drivers/gpu/drm/mediatek/mtk_drm_drv.c b/drivers/gpu/drm/mediatek/mtk_drm_drv.c
+--- a/drivers/gpu/drm/mediatek/mtk_drm_drv.c
++++ b/drivers/gpu/drm/mediatek/mtk_drm_drv.c
+@@ -466,7 +466,10 @@
+ 
+ 	for (i = 0; i < private->data->mmsys_dev_num; i++) {
+ 		drm->dev_private = private->all_drm_private[i];
++		/* GEMINI-DEBUG (B-13): bracket each hardware-touching bind step */
++		dev_info(drm->dev, "GEMINI-DEBUG kms_init: component_bind_all mmsys %d\n", i);
+ 		ret = component_bind_all(private->all_drm_private[i]->dev, drm);
++		dev_info(drm->dev, "GEMINI-DEBUG kms_init: component_bind_all mmsys %d done ret=%d\n", i, ret);
+ 		if (ret)
+ 			goto put_mutex_dev;
+ 	}
+@@ -491,15 +494,19 @@
+ 			priv_n = private->all_drm_private[j];
+ 
+ 			if (i == 0 && priv_n->data->main_len) {
++				dev_info(drm->dev, "GEMINI-DEBUG kms_init: crtc_create main (mmsys %d)\n", j);
+ 				ret = mtk_drm_crtc_create(drm, priv_n->data->main_path,
+ 							  priv_n->data->main_len, j);
++				dev_info(drm->dev, "GEMINI-DEBUG kms_init: crtc_create main done ret=%d\n", ret);
+ 				if (ret)
+ 					goto err_component_unbind;
+ 
+ 				continue;
+ 			} else if (i == 1 && priv_n->data->ext_len) {
++				dev_info(drm->dev, "GEMINI-DEBUG kms_init: crtc_create ext (mmsys %d)\n", j);
+ 				ret = mtk_drm_crtc_create(drm, priv_n->data->ext_path,
+ 							  priv_n->data->ext_len, j);
++				dev_info(drm->dev, "GEMINI-DEBUG kms_init: crtc_create ext done ret=%d\n", ret);
+ 				if (ret)
+ 					goto err_component_unbind;
+ 
+@@ -515,6 +522,8 @@
+ 		}
+ 	}
+ 
++	dev_info(drm->dev, "GEMINI-DEBUG kms_init: crtc loop done, dma_dev_get\n");
++
+ 	/* Use OVL device for all DMA memory allocations */
+ 	dma_dev = mtk_drm_crtc_dma_dev_get(drm_crtc_from_index(drm, 0));
+ 	if (!dma_dev) {
+@@ -543,6 +552,8 @@
+ 	drm_kms_helper_poll_init(drm);
+ 	drm_mode_config_reset(drm);
+ 
++	dev_info(drm->dev, "GEMINI-DEBUG kms_init: complete\n");
++
+ 	return 0;
+ 
+ err_component_unbind:
+@@ -623,6 +634,8 @@
+ 	if (!mtk_drm_get_all_drm_priv(dev))
+ 		return 0;
+ 
++	dev_info(dev, "GEMINI-DEBUG bind: all components matched, drm_dev_alloc\n");
++
+ 	drm = drm_dev_alloc(&mtk_drm_driver, dev);
+ 	if (IS_ERR(drm))
+ 		return PTR_ERR(drm);
+@@ -636,11 +649,17 @@
+ 	if (ret < 0)
+ 		goto err_free;
+ 
++	dev_info(dev, "GEMINI-DEBUG bind: kms_init ok, drm_dev_register\n");
++
+ 	ret = drm_dev_register(drm, 0);
+ 	if (ret < 0)
+ 		goto err_deinit;
+ 
++	dev_info(dev, "GEMINI-DEBUG bind: registered, fbdev setup\n");
++
+ 	drm_fbdev_generic_setup(drm, 32);
++
++	dev_info(dev, "GEMINI-DEBUG bind: complete\n");
+ 
+ 	return 0;
+ 

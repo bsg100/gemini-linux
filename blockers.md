@@ -531,7 +531,102 @@ Impact by phase:
 
 ---
 
-## 🟡 B-13 — mtk-scpsys `mt6797` domain table has unpopulated GPU slots, breaks ALL power domains
+## 🟢 B-13 — cpu0 display-boot hard-lock ROOT-CAUSED (2026-07-07): DSI IRQ unmasked at probe wedges cpu0; scpsys domain-table bug was a separate, already-fixed issue
+
+**RESOLVED at the diagnostic level 2026-07-07** (boot.md builds #127–#139):
+the cpu0 "hard lock" was never a hardware/bus lock and never scpsys — the
+mtk_dsi driver requests its level-low IRQ (GIC SPI 229) at probe time,
+unmasking it while LK's leftover DSI engine state holds the line asserted;
+cpu0 acks it and `mtk_dsi_irq()` wedges without EOI (status read stalls on
+the unclocked/LK-state DSI block), which blocks ALL further interrupt
+delivery to cpu0 at the GIC while the core keeps executing. Proof chain:
+irqs-off cpu0 spin survives (#129) → irqs-on dies even with
+cpuidle.off/nohlt (#131) → GIC observer catches SPI 229 stuck ACTIVE at
+hang time (#133) → disable_irq after request is already too late (#135) →
+IRQ_NOAUTOEN before request defeats the hang (#137) → clean build boots
+to `systemd is-system-running: running` with the display stack enabled
+(#139, SSH-validated). **Proper fix landed 2026-07-07 (build #141,
+boot.md "BUILD #141"):**
+`patches/v6.6/drm/0008-drm-mediatek-dsi-enable-irq-only-while-powered.patch`
+— IRQ_NOAUTOEN at probe, `enable_irq()` at end of `mtk_dsi_poweron()`
+(clocks on, engine reset), `disable_irq()` in `mtk_dsi_poweroff()` before
+clocks off; replaces the interim DEBUG patch. Validated on hardware: no
+regression (systemd `running`, `/proc/interrupts` shows IRQ 15 / SPI 229
+registered with 0 counts, masked until power-on).
+Remaining follow-ups: DRM master deferred-probe chain (ordinary bringup
+work), debug-instrumentation cleanup, A72-cluster (B-16) retest.
+
+**Update 2026-07-07 (SMI larb pin-active regression, boot.md BUILD #155/#157):**
+new, distinct MM-domain-adjacent hang found and reverted during OVL
+frame-fetch debugging. The DSI IRQ fix above cleared the DRM bind hang, but
+`flip_done timed out` persisted (boot.md BUILD #151) — root-caused to SMI
+larb0 sitting permanently runtime-suspended (mainline only resumes SMI larbs
+via mtk_iommu device links, and MT6797 has no mainline M4U driver, so nothing
+ever claims it). A fix pinning the larb active at probe
+(`memory/0003-…pin-larbs-active-when-no-iommu-driver.patch`) was landed in
+build #154, but its guard tested the wrong condition
+(`IS_ENABLED(CONFIG_MTK_IOMMU)`, a Kconfig symbol compiled in generally,
+rather than whether *this* larb's DT node has an `iommus` phandle) and
+silently never fired. **Build #155 corrected the guard** to
+`!of_property_present(dev->of_node, "iommus")`, making the pin-active
+`pm_runtime_resume_and_get()` call actually execute for the first time — and
+this reproduced the same class of MM-domain hard-hang as BUILD #79
+(`configs/gemini-display.config`'s `COMMON_CLK_MT6797_MMSYS` finding):
+serial log looked completely normal up to the expected USB-mux cutoff, but
+the USB gadget never enumerated (vs. 15-35s normally) and the user directly
+observed a crash/reboot. **Build #157 reverted `memory/0003` entirely**
+(regenerating the patch against a clean tree produced a zero-line diff,
+confirming full revert to stock `mtk-smi.c`) and confirmed stable: normal
+boot, USB gadget enumerated normally, SSH-live `uptime` with no crash,
+`flip_done timed out` persists as expected (larb correctly left unpinned,
+`runtime_status`=`suspended`), backlight still correct. **Conclusion:**
+SMI larb0's power domain is `MT6797_POWER_DOMAIN_MM` — the same domain
+implicated in BUILD #79 — and eagerly resuming it at probe time (rather than
+leaving it to whatever power-on sequencing the MM domain needs) reliably
+triggers a hard-hang/crash. The open sub-problem is therefore not "pin the
+larb active" but "safely power on the MM domain path (scpsys → SMI larb)
+without hitting this hang class" — likely needs the same kind of guarded,
+precondition-gated approach that fixed the DSI IRQ (enable/resume only after
+some other state is confirmed ready, not unconditionally at probe). Current
+state: stable baseline restored (backlight working, larb correctly
+unpinned, pipeline stalled), tracked as the next concrete B-13 sub-task.
+
+**Update 2026-07-07 (OVL→SMI-larb device link — safe fix for the pin-active
+regression, boot.md BUILD #159/#161):** the "safely power on the MM domain
+path" sub-problem flagged just above is resolved. Instead of pinning the SMI
+larb active unconditionally at its own probe time (the #155 approach that
+hard-hung the MM domain), `drm/0011-drm-mediatek-ovl-link-smi-larb-runtime-pm.patch`
+has `mtk_disp_ovl_probe()` resolve its existing `"mediatek,larb"` DT phandle
+and add a `device_link_add(dev, &larb_pdev->dev, DL_FLAG_STATELESS |
+DL_FLAG_PM_RUNTIME)` (no `DL_FLAG_RPM_ACTIVE`) — this ties the larb's
+runtime-PM state to OVL's own, so the larb only resumes when OVL is
+runtime-resumed by the normal DRM atomic-commit path, not eagerly at
+link-creation/probe time. Confirmed live over SSH on build #159: SMI larb and
+smi-common both `active` (were permanently `suspended`), OVL0/OVL2L0 IRQ
+counters incrementing (71/70, previously frozen at 0), no MM-domain hang, no
+crash. **Lesson generalized:** for an SMI larb with no mainline M4U/IOMMU
+driver bound, *when* its runtime-PM resume happens (tied to a consumer whose
+own resume timing is already proven safe) matters more than *whether* it
+happens at all.
+
+Build #161 then stripped the now-obsolete GEMINI-DEBUG instrumentation (its
+purpose — diagnosing this blocker — is done) and surfaced the next data
+point with a clean serial trace:
+```
+[drm:mtk_dsi_host_attach] *ERROR* failed to add dsi_host component: -517
+panel-solomon-ssd2092 1401c000.dsi.0: failed to attach DSI: -517
+```
+alongside `mediatek-drm mediatek-drm.1.auto: Waiting for disp-mutex driver
+/mutex@1401f000`. `-517` is `-EPROBE_DEFER` — normally a benign, self-resolving
+retry — but this has **not yet been confirmed** benign vs. a real block here,
+since the serial capture always cuts off shortly after (B-15 mtu3/USB mux
+switch) before any retry could be observed. **This is the first task for the
+next session:** get a full post-boot `dmesg` over SSH on build #161 (not yet
+done — a USB host-side enumeration issue on the Mac intervened and consumed
+the rest of this session; root-caused as unrelated to the kernel, see boot.md
+"USB gadget enumeration investigation, 2026-07-07" — every serial capture
+throughout showed a completely normal, unhung boot) to determine whether the
+DSI host eventually attaches or the `disp-mutex` wait blocks it permanently.
 
 **Update 2026-07-05 (evening):** severity upgraded — this is no longer just
 "DRM never binds". With `CONFIG_COMMON_CLK_MT6797_MMSYS=y` (added to fix the
@@ -549,6 +644,30 @@ fragment is disabled: `configs/gemini-display.config` →
 never being enabled by the broken scpsys domain table. See boot.md "PSCI
 CPU_ON diagnostic". Fixing B-13 is therefore expected to unblock **both**
 display and full 10-core SMP, not just display.
+
+**Update 2026-07-07:** the bare-metal diagnostic payload
+(`baremetal/display-hang-test/`) built to distinguish hardware-lock vs
+Linux-software causes is **parked without ever executing** — six packaging
+variants all hang inside ATF/BL31 before `el3_exit` while a control reflash
+of the known-good build boots clean (boot.md "B-13 bare-metal payload",
+logs -114..-126; README "Known issue" has the variant table). Replaced by
+an in-kernel equivalent:
+`patches/v6.6/drm/0007-GEMINI-DEBUG-cpu0-irqsoff-poll-loop.patch` — cpu0
+irqs-off raw-MMIO heartbeat + GICD pending/active dump (hooked at the end
+of `mtk_drm_probe()`, which returns ~27ms before the hang).
+
+**RESULT (build #129, boot.md "BUILD #129"): NOT a hardware lock.** With
+the display config enabled, the hijacked cpu0 heartbeat ran continuously
+for ~7.1s straight through the fatal ~2.6s window — cntpct advancing, GICD
+pending pattern constant (no storm), and cpu0 still took the ATF watchdog
+FIQ at the end. B-13 is therefore a software/GIC-state problem: interrupt
+*delivery to* cpu0 dies (or cpu0 dies in something it only does when
+allowed to proceed — prime suspect cpuidle/WFI entry), not the core or
+bus. Status upgraded from "deferred, hypotheses exhausted" to **actively
+tractable**. Next: (1) observer-mode variant — poll loop on cpu1, cpu0
+boots normally, dump cpu0's GICR/GICD state each beat to catch what
+changes at hang time; (2) `cpuidle.off=1` / `nohlt` test with display
+enabled.
 
 Discovered 2026-07-05 during first Phase 5 display bring-up hardware test
 (`logs/2026-07-05-02-phase5-display-boot.log`). The full display pipeline
@@ -662,6 +781,399 @@ the underlying scpsys probe fix is real forward progress, but it is not yet
 safe to leave flashed on the device without further work on the actual
 MM-domain power sequencing.
 
+**Update 2026-07-06 (second infracfg block hypothesis, tested and falsified):**
+cross-checking the vendor DTB (`docs/vendor-dtb/gemini_kali_boot.dts`, this
+device's own flash) found MT6797 has **two distinct infracfg hardware
+blocks**: `infracfg_ao@10001000` (what mainline's `mt6797.dtsi` models as the
+`infrasys` node, used for infra clock gating) and a **second, separate**
+`infracfg@10201000` node. The vendor's own `scpsys@10001000` node spans all
+three physical regions (`0x10001000` AO infracfg, `0x10006000` SPM,
+`0x10201000` this second block), strongly suggesting the real
+`INFRA_TOPAXI_PROTECTEN`/`PROTECTSTA1` bus-protection registers
+`scpsys_bus_protect_enable/disable()` needs live in the second block, not the
+AO block mainline's `scpsys` phandle currently points at.
+
+Added a new `syscon`-only DT node for the second block and repointed
+`scpsys`'s `infracfg` phandle at it
+(`patches/v6.6/dts/0010-arm64-dts-mediatek-add-mt6797-real-infracfg-node.patch`,
+build #81). Flash-tested (`logs/2026-07-06-81-scpsys-b13-real-infracfg/`,
+capture `logs/2026-07-06-82-scpsys-b13-real-infracfg-boot.log`): **no change
+in observed behaviour** — boot reaches the identical point as the untested
+build #79 (`panel-renesas-r63419 ... registered`), then hard-hangs with the
+same ATF watchdog signature (`aee_wdt_dump: on cpu1` at 14.2s, `on cpu3` at
+18.1s, then silence). The hypothesis is not confirmed by this result: either
+(a) the second infracfg block isn't actually where bus protection lives
+either (the vendor DTB's grouping of three regions under one `scpsys` node
+doesn't necessarily mean all three are used by the *bus-protection* sub-
+function specifically — SPM and AO infracfg alone could already satisfy
+mainline's `scpsys` needs, and the 0x10201000 block could be for something
+else the vendor driver also touches), or (b) the phandle target was right
+but bus protection was never the actual hang cause -- the hang could equally
+be inside `scpsys_power_on()`'s SRAM/power-on register sequencing itself
+(`ctl_offs`/`sta_mask`/`sram_pdn_bits`) once the MM domain is genuinely
+powered on and a consumer (the panel/DSI path, consistent with hanging right
+after panel registration) touches its registers for the first time. The
+DTS-only fix is not sufficient on its own; register-level confirmation via
+the vendor's actual driver behaviour (e.g. instrumenting `scpsys_power_on`/
+`scpsys_bus_protect_enable` with `dev_info` per-step, since the code path is
+now provably reached but stalls somewhere inside it) is the next concrete
+step, not further DTS-only guessing. Patch 0010 is retained (harmless, and
+directionally justified by the vendor DTB evidence even if not sufficient by
+itself) but does not close B-13.
+
+**Update 2026-07-06 (per-step power-on trace — scpsys power-on EXONERATED,
+hang relocated to DRM bind):** build #84
+(`logs/2026-07-06-84-scpsys-b13-step-trace/`, banner `#14 ... 08:45:36`,
+temporary patch
+`patches/v6.6/pmdomain/0002-GEMINI-DEBUG-scpsys-power-on-step-trace.patch`)
+added a `dev_info` before every step of `scpsys_power_on()`. Capture
+(`logs/2026-07-06-85-scpsys-b13-step-trace-boot.log`, second boot in file):
+**every domain — vdec, venc, isp, mm, audio, mfg_async, mjc — completes all
+steps cleanly**, including MM's `sram_enable`, `bus_protect_disable` and
+`done` at 0.3548s. Two key facts:
+
+1. MM's ctl register already read `0xe0d` *before* the kernel touched it —
+   PWR_ACK set, SRAM up: the vendor LK bootloader leaves the MM domain
+   powered on for its splash screen. The kernel's power-on is a no-op ride
+   on an already-live domain.
+2. The hang therefore is **not in scpsys at all**. The last kernel line is
+   still `panel-renesas-r63419 ... registered` (0.4569s) — the moment the
+   final DRM component match completes and the component master binds. The
+   stall is inside the mediatek-drm bind path, i.e. the first actual
+   register access to the 0x14xxxxxx mmsys range (mmsys routing writes,
+   ddp comp init) or a DMA/clock dependency of it.
+
+Concrete confirmed gap found while investigating: DTS patch 0006 declares
+`mediatek,mt6797-smi-larb`/`mediatek,mt6797-smi-common` nodes, but **no
+driver implements those compatibles** — upstream `drivers/memory/mtk-smi.c`
+has no MT6797 entries and no project patch adds them, so SMI never probes
+and its clocks are never enabled. Whether the bind-time hang is (a) the
+mmsys config register write path needing a clock nothing enables, or (b)
+something touching the un-clocked SMI/larb, needs one more instrumented
+build — next step: per-step trace of `mtk_drm_bind()` /
+`mtk_drm_kms_init()` / `mtk_mmsys_ddp_connect()` to find the exact first
+stalling register write. B-13's title (scpsys domain table) is now known to
+be a mischaracterisation of the display hang; the scpsys probe fix was real
+but the remaining blocker lives in the DRM/mmsys/SMI layer.
+
+**Update 2026-07-06 (build #86/#87 — DRM bind also exonerated; hang pinned
+to `mtk_dsi_probe()` tail):** the bind-path trace never printed a single
+line — the component master bind never starts. Since the panel prints
+"registered" only after `mipi_dsi_attach()` returns, the hang window is the
+remainder of `mtk_dsi_probe()` after `mipi_dsi_host_register()`: clock
+lookups → ioremap → `devm_phy_get` → `devm_request_irq`. The ATF dump PC
+resolves to `cpu_do_idle` on cpu1 (idle victim); cpu0 (probe CPU) never
+dumps — it is the wedged core. Leading hypothesis: `devm_request_irq`
+unmasks the DSI IRQ while LK's splash has left the DSI engine live; a
+stale/screaming interrupt wedges cpu0 in `mtk_dsi_irq()` (unclocked
+`readl(DSI_INTSTA)`, unbounded `while (DSI_BUSY)` spin). Testing with build
+#88 (`patches/v6.6/drm/0006-GEMINI-DEBUG-dsi-probe-tail-and-irq-trace.patch`).
+See boot.md "BUILD #86/#87".
+
+**Update 2026-07-06 (build #88/#89 — probe tail clean, IRQ-storm hypothesis
+REFUTED; entire display stack exonerated):** every dsi probe-tail step
+completed; the DSI IRQ fired exactly once (INTSTA=0x2 = CMD_DONE, handled
+cleanly, no storm); the panel registered. Since `mipi_dsi_attach()` runs
+before the panel's "registered" print and calls `mtk_dsi_host_attach()` →
+`component_add`, the DRM master bind attempt had already happened and
+deferred (no IOMMU) before that print — so scpsys (#84), DRM bind (#86) and
+dsi probe/IRQ (#88) are all exonerated. cpu0 wedges with IRQs masked ~50ms
+after the panel print in unmarked code (cpu1's ATF dump PC again resolves to
+`cpu_do_idle` — idle bystander). Next: build #90 boots with `initcall_debug`
+on the cmdline so the last `calling <fn>` line names the wedging function
+directly. See boot.md "BUILD #88/#89".
+
+**Update 2026-07-06 (build #92/#93 — wedging initcall identified:
+`cacheinfo_sysfs_init`; culprit is an unresponsive secondary CPU):**
+`initcall_debug ignore_loglevel` shows the display path completing and
+returning (`probe of 1401c000.dsi.0 returned 0`, `r63419_driver_init
+returned 0`), then the last line is `calling cacheinfo_sysfs_init` before
+the 14s watchdog. That initcall's `cpuhp_setup_state()` waits on every
+online CPU's hotplug thread in turn — cpu0 is blocked waiting, not wedged
+itself. So the display build's real defect is that it silently wedges a
+*secondary* CPU (cpu1–7) somewhere before 2.4s — scpsys domain writes or
+display clock enables are prime suspects. Build #94
+(`patches/v6.6/base/0001-GEMINI-DEBUG-cacheinfo-cpuhp-per-cpu-trace.patch`
++ `rcupdate.rcu_cpu_stall_timeout=6`) identifies which CPU. See boot.md
+"BUILD #90–#93".
+
+**Update 2026-07-06 (build #94/#95 — secondary-CPU hypothesis REFUTED; the
+wedged CPU is cpu0 itself, unresponsive to IRQs):** the RCU stall report
+fired at 8.4s and names **cpu0** as the stalled CPU, *detected by cpu4*
+(cpus 1–7 are alive and healthy). Not one `cacheinfo_cpu_online` trace
+print ran (strings confirmed in the packed kernel), so init blocks in
+`cpuhp_setup_state()` waiting for the `cpuhp/0` thread — pinned to cpu0 —
+which never runs because cpu0 stops taking interrupts at ~2.42s (RCU's 750
+fqs attempts all failed). The remote task dump is useless (`__switch_to` /
+`0x0` — no NMI on arm64 by default). So the display build kills interrupt
+delivery/wakeup specifically for cpu0: GIC redistributor, cpu0's arch
+timer, or a lost wakeup — plausibly a side effect of scpsys bus-protect
+writes (the known wrong MT6797 bits) or a display clock change. Build #96
+adds pseudo-NMI (`CONFIG_ARM64_PSEUDO_NMI=y` in
+`configs/gemini-debug-b13.config` + `irqchip.gicv3_pseudo_nmi=1`, GIC is
+v3) so the stall handler can NMI-backtrace cpu0 and show its real PC. See
+boot.md "BUILD #94/#95".
+
+**Update 2026-07-06 (build #96/#97 — pseudo-NMI REVERTED, regressed boot):**
+`CONFIG_ARM64_PSEUDO_NMI=y` + `irqchip.gicv3_pseudo_nmi=1` broke boot
+*earlier* than the bug it was meant to diagnose: total silence from
+`el3_exit` (4.37s) to the ATF watchdog (14.38s), not even the earlycon
+banner — this device's ATF/GIC evidently doesn't tolerate pseudo-NMI's
+early priority-mask setup. Reverted (`configs/gemini-debug-b13.config`
+removed, cmdline flag dropped). cpu1's ATF dump is the same
+`cpu_do_idle`/`arch_cpu_idle` bystander as every prior build — no new data.
+**Next:** an IPI heartbeat probe (kthread on cpu1 pinging cpu0 via
+`smp_call_function_single` every ~50ms from early boot) to pinpoint exactly
+when cpu0 stops acking IPIs, without touching NMI/GIC priority masking. See
+boot.md "BUILD #96/#97".
+
+**Update 2026-07-06 (build #98/#99 — cpu0's death window pinpointed to
+2.48–2.54s; cpu0 loses ALL interrupt responsiveness, not one code path):**
+the IPI heartbeat ran clean every 60ms from 0.72s to 2.4799s (seq 30), then
+missed by 2.5399s (seq 31) — death lands inside `cacheinfo_sysfs_init`
+(called 2.4237s) but well after it starts, so cpu0 is alive when that
+initcall begins. Crucially, this heartbeat uses a *different* IPI mechanism
+(`smp_call_function_single`) than the `cpuhp/0` thread wakeup cacheinfo
+needs, and both fail in the same window — so cpu0 is losing the ability to
+take **any** interrupt, not failing a specific code path. This also shifts
+timing suspicion from the scpsys domain-power writes (done by 2.12s, now
+~360ms earlier) toward the DSI/panel probe (2.412–2.419s, only 60–120ms
+before death) as the more temporally-proximate trigger, though scpsys
+remains the leading root-cause candidate for *why*. **Next:** tighten the
+heartbeat to 10ms and add a periodic cpu0 GICR_WAKER read (GICv3
+redistributor sleep-state register) to test whether the display build is
+corrupting the GIC redistributor for cpu0 directly. See boot.md "BUILD
+#98/#99".
+
+**Update 2026-07-06 (build #100/#101 — GICR_WAKER refuted; death window now
+20ms, 2.513s-2.533s):** `gicr0_waker=0x0` on every reading right up to the
+final MISS — cpu0's redistributor never sleeps, so the "display build
+corrupts/sleeps the GIC redistributor" hypothesis is refuted. With the GIC
+confirmed healthy, cpu0 losing both a raw IRQ-context IPI callback and the
+`cpuhp/0` kernel-thread dispatch (`kernel/cpu.c`
+`cpuhp_invoke_ap_callback`/`__cpuhp_kick_ap`) at the same moment now points
+to cpu0 either stuck in genuine WFI/idle without waking (cpuidle/PSCI
+CPU_SUSPEND bug) or actually running/spinning with interrupts effectively
+undeliverable (masked-IRQ-forever bug), rather than a GIC hardware fault.
+**Next:** add `idle_cpu(0)` to the heartbeat (cheap scheduler-state read,
+no IPI) to distinguish the two. See boot.md "BUILD #100/#101".
+
+**Update 2026-07-06 (build #102/#103 — WFI-never-wakes REFUTED; cpu0 wakes
+normally then hard-locks within 20ms, before reaching cacheinfo):** cpu0
+goes idle at 2.4235s (matching `cacheinfo_sysfs_init`'s dispatch almost
+exactly), sits idle ~100ms (unusually long for a routine wakeup), then
+**wakes normally** at 2.523s (`idle_cpu(0)` flips back to busy) — the wake
+mechanism itself works. Within 20ms of waking it's already unresponsive to
+IPIs, and still shows `idle_cpu0=0` (busy, not asleep) at the miss — so this
+is not a stuck-in-WFI bug; cpu0 hard-locks while actively running, before
+its `cacheinfo_cpu_online()` entry trace ever fires (confirmed still
+absent). The ~100ms idle-to-wake delay is itself abnormal and suggests
+cpu0's wake path (broadcast/local arch timer) was already disturbed before
+the hard lock. **Next:** arm an hrtimer pinned directly to cpu0 (independent
+of the cross-CPU IPI heartbeat) to test whether cpu0's own local-timer
+interrupt survives past the point where cross-CPU IPIs stop — this
+distinguishes a fully halted CPU from an SGI/IPI-delivery-specific fault.
+See boot.md "BUILD #102/#103".
+
+**Update 2026-07-06 (build #104/#105 — cpu0's own local timer also dies;
+build #106/#107 — SMI larb0/smi_common gating fix has NO effect; B-13
+formally DEFERRED):** the pinned-hrtimer test confirmed cpu0's *own* local
+timer interrupt dies at the same point as the cross-CPU IPI misses — this is
+a genuine full hard lock of cpu0 (all interrupt sources, not an
+SGI/IPI-delivery-specific fault). Last real evidence of forward progress is
+still `calling cacheinfo_sysfs_init+0x0/0x40 @ 1`; nothing printk-reachable
+runs after it.
+
+Vendor-kernel forensics (extracted from `kali_boot.img`'s embedded 3.18
+kernel image) suggested the display pipeline gates
+`CG_MM_SMI_COMMON`/`DISP0_SMI_LARB0` clocks separately from scpsys's own
+`CLK_MM`, and mainline had no MT6797 SMI compatibles at all
+(`drivers/memory/mtk-smi.c`) so those clocks were never claimed by any
+driver. Added `mediatek,mt6797-smi-larb`/`-common` (reusing MT6795/Helio X10
+ops verbatim — no new logic) and enabled the corresponding `larb0`/
+`smi_common` DTS nodes. Build #106, capture
+`logs/2026-07-06-107-smi-mt6797-fix-boot.log`: DTB and vmlinux confirm the
+fix compiled in correctly, but **the hang is bit-for-bit identical** — same
+last initcall, same local-timer tick count at death, same heartbeat-miss
+timing, same ATF watchdog dump timing — and neither SMI device ever shows a
+`probe of ... returned` trace line (every other platform device does),
+i.e. no observable bind attempt at all. The SMI hypothesis is falsified.
+
+An ARM64 hardware lockup detector (`CONFIG_ARM64_PSEUDO_NMI`, needed to
+NMI-backtrace the wedged cpu0) was already tried and reverted earlier
+(build #96/#97): it regresses boot *earlier* than this bug (silence
+immediately after `el3_exit`, before earlycon even prints), so this
+hardware's ATF/GIC combination does not tolerate pseudo-NMI's priority-mask
+setup. Retrying it requires independently validating ATF support first —
+not a quick diagnostic.
+
+**Conclusion: every register/driver-level hypothesis sourced from either the
+vendor kernel or mainline's own display stack has now been tested — scpsys
+power-on sequence, DRM component bind, DSI probe tail, and SMI bus-master
+gating — and none moved the hang. The only remaining diagnostic (NMI-based
+backtrace) is independently blocked by an ATF incompatibility. B-13 is
+formally deferred** per CLAUDE.md principle 5 (bootability first, display
+explicitly optional). Reusing the vendor `dispsys`/DDP framework wholesale
+was considered and rejected: it's a large 3.18-era subsystem (mtkfb/ion/CMDQ
+APIs with no 6.6 equivalent) whose *sequence* we already proved doesn't
+matter here (scpsys and SMI sequence-parity tests both changed nothing), so
+a port would most likely hit the identical hard lock while adding
+significant vendor-code maintenance burden — against CLAUDE.md principle 3.
+Revisit only if new evidence emerges (e.g. upstream MT6797 display support
+lands, or a future non-NMI diagnostic surfaces cpu0's actual PC at the
+lock). See boot.md "BUILD #106/#107".
+
+**Update 2026-07-06 (new evidence, PINNED for later — vendor Halium kernel
+source located, SMI/M4U IOMMU-bypass gap identified as untested hypothesis):**
+the actual community kernel source for this device was located at
+`/Volumes/extdata/github/gemini-android-kernel-3.18` (`dguidipc`'s Halium
+kernel, confirmed by the `Linux version 3.18.41+ (dguidi@nowhere)` banner
+matching `/Volumes/extdata/scratch/debian`'s extracted kernel). Cross-checked
+its `drivers/clk/mediatek/clk-mt6797-pg.c` (the real MTCMOS/scpsys-equivalent
+driver, DIS domain at `SPM_REG(0x030c)`) against mainline's `mtk-scpsys.c`
+sequence — **bit-identical**, third independent confirmation that scpsys
+register sequencing is not the bug.
+
+New lead not yet tested: `drivers/misc/mediatek/video/mt6797/dispsys/ddp_drv.c`
+(`disp_probe_1()`, ~line 784) unconditionally writes `0x0` to
+`DISP_REG_SMI_LARB0_MMU_EN`/`..._LARB5_MMU_EN` (`larb_base + 0xfc0`) to force
+SMI-larb IOMMU bypass whenever M4U support isn't compiled in. Mainline has
+**no MT6797 IOMMU driver at all** (checked `drivers/iommu/mtk_iommu.c` and
+`mtk_iommu_v1.c` — no compatible string; our `mt6797.dtsi` has no `iommu`/
+`m4u` node either), and the `mtk-smi` larb ops we reused from MT6795
+(`mtk_smi_larb_config_port_mt8173`, since `mediatek,mt6795-smi-larb` maps to
+`&mtk_smi_larb_mt8173` in `drivers/memory/mtk-smi.c`) only writes the
+`MMU_EN` register from `mtk_smi_larb_bind()` — called by the component
+framework **only when an IOMMU master binds to the larb**, which never
+happens here. So on this hardware the larb's MMU_EN register is left at
+whatever the power-on-reset default is (untranslated DMA through an
+unconfigured/enabled M4U path is plausible), and the larb's own `.probe()`
+likely parks in `-EPROBE_DEFER` forever waiting on a companion IOMMU that
+will never arrive — independently consistent with build #106/#107's
+observation that neither SMI device ever printed a `probe of ... returned`
+line. This would explain the *delayed* hang signature: DSI/DDP register
+writes (non-DMA MMIO) succeed and print cleanly, but a hang surfaces shortly
+after, timing-wise consistent with the point the display hardware would
+first issue a real DMA fetch through the larb.
+
+**Deliberately not pursued yet — pinned for a future session.** Proposed
+fix, when resumed: a small patch forcing `larb0_base+0xfc0 = 0` and
+`larb5_base+0xfc0 = 0` (IOMMU bypass) before the DRM/DDP pipeline can issue
+any DMA, mirroring the vendor's unconditional bypass write — either as a
+fallback path in `mtk-smi`'s larb probe when no IOMMU master ever binds, or
+as a board-specific quirk. This is a genuinely new, unfalsified hypothesis,
+distinct from the already-exhausted scpsys/DSI-probe-tail/SMI-clock-gating
+tests. Untested — no build/capture evidence for or against it yet.
+
+**Update 2026-07-06 (implemented and built — build #108):** rather than a
+board-specific quirk, fixed this generically in `mtk-smi.c` itself: added a
+`mmu_bypass` field to `struct mtk_smi_larb`, defaulting `larb->mmu` to point
+at it (zeroed) in `mtk_smi_larb_probe()`. Previously `larb->mmu` stayed
+**NULL** whenever no `mtk_iommu` master ever binds (always true for MT6797,
+which has no mainline IOMMU driver at all) — and `mtk_smi_larb_resume()`
+unconditionally calls `config_port()`, which dereferences `*larb->mmu`,
+i.e. this was a latent NULL-pointer-deref bug on any IOMMU-less SoC using
+this larb ops table, not just a missing bypass write. The fix makes the
+zero-value default double as the vendor's forced bypass behavior; a real
+IOMMU binding still overwrites the pointer with the live per-port mask, so
+no other SoC's behavior changes. Patch:
+`patches/v6.6/memory/0002-memory-mtk-smi-default-mmu-bypass-when-no-iommu-bound.patch`.
+Build #108 (`logs/2026-07-06-108-smi-mmu-bypass/`, banner `#27 SMP PREEMPT
+Mon Jul 6 11:28:49 UTC 2026`, `ALLOW_DEBUG=1`) built clean and packed —
+**not yet flashed/captured**.
+
+Corroborating evidence found while re-checking the vendor Halium source
+(`/Volumes/extdata/github/gemini-android-kernel-3.18`): its M4U driver
+(`drivers/misc/mediatek/m4u/mt6797/m4u_hw.c`) has named functions
+`m4u_enable_error_hang()`/`m4u_disable_error_hang()` toggling a
+`F_MMU_CTRL_INT_HANG_en` bit in the M4U core's own `REG_MMU_CTRL_REG`, plus
+a `m4u_dump_reg_for_smi_hang_issue()` debug helper — i.e. MediaTek's own
+engineers have a named "SMI hang" failure mode where an unconfigured/
+misconfigured M4U turns a translation fault into a literal bus hang instead
+of a recoverable interrupt. This is independent corroboration of the
+general failure class (M4U/SMI misconfiguration → bus hang, not just a
+crash), though it's a separate register in the M4U *core* block, not the
+per-larb `MMU_EN` bit build #108 targets. **Fallback note for later:** if
+build #108's larb-level bypass doesn't resolve the hang, check whether the
+M4U core's own `REG_MMU_CTRL_REG`/`INT_HANG_en` needs equivalent handling —
+mainline never touches it either, since there's no MT6797 `mtk_iommu`
+driver to own it.
+
+**Next action:** flash build #108 to both `boot` and `boot2`, capture, and
+compare against the bit-identical #106/#107 baseline (same last initcall,
+same local-timer tick count, same heartbeat-miss timing) to see if the hang
+signature changes at all.
+
+**Update 2026-07-06 (build #108 flashed and captured twice — NO CHANGE,
+B-13 remains deferred):** two boots captured from the same flashed image
+(`logs/2026-07-06-109-smi-mmu-bypass-boot.log`, both banner `#27`). First
+boot hung earlier/differently (before panel registration); a repeat capture
+of the *same* image reproduced the #106/#107 baseline exactly (panel
+registers, `cacheinfo_sysfs_init` runs, heartbeat MISS within a few jiffies
+of baseline) — so the first boot's variance is run-to-run jitter, not a
+fix effect. In both captures the SMI larb/common devices still never show
+a `probe of ... returned` line, meaning the code path the fix touches
+(`config_port()`) very likely never executed either time. **The fix is
+kept** (`patches/v6.6/memory/0002-...patch` — it's a genuine latent
+NULL-pointer-deref fix for any IOMMU-less SoC reusing this larb ops table,
+harmless elsewhere) **but it does not resolve B-13.** See boot.md
+"BUILD #108/#109" for full detail.
+
+This closes out the last concrete, evidence-based hypothesis from the
+vendor-source cross-check. The open question is now more fundamental than
+IOMMU bypass: **why do the SMI larb/common devices never complete probe at
+all**, for or against, across every build tested so far. No new hypothesis
+is queued. B-13 remains formally deferred per CLAUDE.md principle 5
+(bootability first, display optional) and the earlier
+build #96/#97 pseudo-NMI ATF incompatibility. Device should be recovered to
+`logs/2026-07-06-77-maxcpus8/new_kali_boot.img` (no display, known-good)
+after this test.
+
+**Update 2026-07-06 (vendor-console test — confirmed LK hardcodes
+`printk.disable_uart=1`, no usable vendor dmesg obtainable this way):**
+separately from the fix work above, tried to get a comparable *working*
+display bring-up trace by capturing the vendor 3.18 kernel's own dmesg
+over the same UART, to diff against our mainline failure logs. The one
+full vendor boot capture on file
+(`logs/2026-07-04-08-vendor-full-boot.log`, a visually-confirmed successful
+boot to the Android desktop with working display) shows zero output past
+`el3_exit` — already established as a "Pivotal Result" 2026-07-04 (silence
+after `el3_exit` is not a failure signal for either kernel on this UART).
+Root cause traced this session: the vendor 3.18 kernel's cmdline carries
+`printk.disable_uart=1`, appended by the LK bootloader itself — not present
+in the boot.img header's own cmdline field (`bootopt=64S3,32N2,64N2
+log_buf_len=4M`) nor in the DTB's `bootargs` (checked
+`docs/vendor-dtb/gemini_kali_boot.dts` line 11 — no `atag,printk-disable-uart`
+property either).
+
+Tested empirically with a new tool, `scripts/patch-vendor-cmdline.py`
+(patches only the Android boot.img header cmdline field, byte-identical
+kernel+ramdisk otherwise — confirmed via sha256): flashed
+`OUTPUT/vendor-uart-test.img` (header cmdline appended with
+`printk.disable_uart=0 ignore_loglevel`) to both `boot`/`boot2`, captured
+twice (`logs/2026-07-06-111-vendor-uart-test-boot.log`, two power cycles,
+`boot_reason=1` then `boot_reason=4`). LK's own boot log confirms it *did*
+pick up the header override (`[LK_BOOT] Android Boot IMG Hdr - Command
+Line: ...printk.disable_uart=0 ignore_loglevel`), but the final merged
+cmdline handed to the kernel has LK's own `printk.disable_uart=1` appended
+**after** it (`...printk.disable_uart=0 ignore_loglevel
+androidboot.veritymode=enforcing printk.disable_uart=1 bootprof...`) — the
+later occurrence wins, so the override is clobbered every time. Both boots
+end at `el3_exit` with nothing further, identical to the untouched
+baseline.
+
+**Conclusion:** LK unconditionally enforces `printk.disable_uart=1` for
+`buildvariant=user` regardless of boot.img header content. Getting a real
+vendor-kernel dmesg trace would require patching LK's own binary (a
+proprietary, unsourced blob — out of scope per CLAUDE.md's upstream-first
+principle, and high-risk to the boot chain for a deferred/optional Phase 5
+item) or finding a different debug channel entirely (e.g. `pstore`/
+`last_kmsg` on a data partition, or `adb logcat` if the ramdisk's USB
+gadget supports it). No further action queued; B-13 remains deferred with
+no vendor-side comparison log available. **Device left flashed with
+`vendor-uart-test.img` on both `boot`/`boot2` per explicit instruction —
+not yet recovered to the known-good mainline `maxcpus=8` build.**
+
 ---
 
 ## 🟡 B-14 — Software reboot does not reset the SoC (hangs after `reboot: Restarting system`)
@@ -768,14 +1280,58 @@ fix applied, display fragment excluded (to isolate the variable), and no
 signature as before the fix existed
 (`logs/2026-07-06-83-cpu8-scpsys-retest-boot.log`, 8 reboot cycles).
 
-**Status: root cause unknown.** Whatever gates the A72 cluster's power-on —
-MCUCFG, a dedicated SPM sequence for the big cluster, or something purely
-internal to ATF with no Linux-visible dependency at all — has not been
-identified. This needs its own investigation, independent of B-13's MM-domain
-work, likely starting from what the vendor 3.18 kernel/ATF do differently for
-big-cluster hotplug (if anything is Linux-side at all; it may be entirely
-inside the vendor ATF blob, in which case a fix may not be possible without
-vendor ATF source or a replacement BL31).
+**Status: root cause narrowed 2026-07-06** (previously "unknown") via read-only
+analysis of a third-party vendor kernel image — the Planet Computers Gemini
+Debian/Halium build (`debian_boot.img`, 3.18.41, downloaded by the user to
+`/Volumes/extdata/scratch/debian/`, not part of this repo). That kernel's
+`strings` output retains full debug source paths (built by
+`dguidi@nowhere`, `/home/dguidi/Desktop/Kernel/kernel-3.18/...`), which is how
+this was extracted — no source tree itself was recovered, only build-time
+path/log strings baked into the binary.
+
+**Finding:** the vendor 3.18 kernel does not bring up the A72 cluster via a
+plain unconditional PSCI `CPU_ON` at boot the way our mainline `psci.c` does
+for every `possible` CPU. It has an entire vendor-only subsystem for this,
+absent from mainline in every respect (confirmed: no `mcucfg`/`idvfs` nodes in
+mainline's `mt6797.dtsi`, none in our `mt6797-gemini-pda.dts` — see "PSCI
+CPU_ON diagnostic" in boot.md):
+
+- `drivers/misc/mediatek/base/power/mt6797/mt_hotplug_strategy_{main,algo,cpu,ops_mt6797}.c`
+  — a load-based governor that decides *when* to online/offline the A72
+  cores; the big cluster is not simply "on" from boot.
+- `drivers/misc/mediatek/base/power/mt6797/mt_idvfs.c` — "IDVFS" (Intelligent
+  DVFS): sets up an **SRAM LDO + PLL for the big cluster over I2C6** before
+  the cluster can run. Log strings recovered from the binary confirm this is
+  a hard precondition, not best-effort: `"[mt_idvfs] FAILED TO PREPARE I2C
+  CLOCK (%u). iDVFS only 750MHz."`, `"[mt_idvfs] SRAM LDO setting = %u(x100mv)
+  success."`, `"[mt_idvfs] Error: SRAM LDO volte = %umv, out of range
+  500mv~1200mv."`
+- `mt_cpufreq.c` / `mt_cpufreq_hybrid.c` — cluster-specific DVFS built on top
+  of the above.
+- A **CPU-HVFS hardware sequencer**, kicked by a `swctrl` register write, that
+  actually powers a cluster on — separate from and prior to any PSCI
+  `CPU_ON`: `"[CPUHVFS] (%u) [%08x] cluster%u on, pause = 0x%x, swctrl =
+  0x%x (0x%x)"`, plus a `cspm_cluster_notify_on` symbol.
+
+**Refined hypothesis:** mainline's generic `psci_cpu_boot()` just issues the
+SMC and assumes ATF handles everything. On this SoC, ATF's `CPU_ON` for an A72
+core plausibly expects the "big cluster ready" precondition (voltage/PLL
+settled) — normally driven from Linux by `mt_idvfs`/CPU-HVFS `swctrl` — to
+already be true. Our kernel never drives any of that, so the SMC blocks
+forever waiting on a state nothing ever sets. This would mean the hang is not
+an ATF firmware bug but firmware correctly waiting on a real precondition —
+narrowing the fix path from "maybe impossible without vendor ATF source" to
+"port (or minimally reimplement) the `mt_idvfs`/CPU-HVFS pre-hotplug voltage
+sequencing," though this is not yet confirmed against real register-level
+behavior on this hardware and no code has been written yet.
+
+**Not yet done:** no register addresses, I2C6/PMIC-wrap sequence details, or
+CPU-HVFS `swctrl` offsets have been extracted — only log-string evidence that
+these subsystems exist and gate cluster power-on. Next step if this is
+pursued: locate the actual register writes (vendor kernel binary
+disassembly, or the vendor DTB's `mcucfg`/`ptp3_idvfs` `reg`/`clock` values
+already on file in `docs/vendor-dtb/gemini_kali_boot.dts`) before attempting
+any kernel-side sequencing code.
 
 **Recovery:** re-flash `logs/2026-07-06-77-maxcpus8/new_kali_boot.img` (sha256
 `4643f685358efdaca7db5ac12e5ab8721f35c081ece18821801b8de46dc28078`) to both

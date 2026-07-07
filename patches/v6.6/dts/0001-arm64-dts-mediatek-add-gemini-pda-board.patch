@@ -12,10 +12,10 @@ index c99c3372a..ffe1ab530 100644
  dtb-$(CONFIG_ARCH_MEDIATEK) += mt7622-bananapi-bpi-r64.dtb
 diff --git a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
 new file mode 100644
-index 000000000..2caeca572
+index 000000000..f745a662e
 --- /dev/null
 +++ b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
-@@ -0,0 +1,835 @@
+@@ -0,0 +1,893 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Device tree for Planet Computers Gemini PDA
@@ -588,15 +588,16 @@ index 000000000..2caeca572
 +/*
 + * Display pipeline — Phase 5 bring-up.
 + *
-+ * Panel:  Renesas R63419 "Truly Phantom" 1440x2560 WQHD MIPI DSI CMD mode.
-+ * Bias:   TPS65132 at I2C1 / addr 0x3E  — ±5 V AVDD/AVEE.
++ * Panel:  Solomon SSD2092, 1080x2160 FHD, MIPI DSI video mode (sync pulse),
++ *         4 lanes. This is what LK detects at every boot
++ *         ("aeon_ssd2092_fhd_dsi_solomon", ID 0x01572098) — the R63419
++ *         WQHD name in the vendor DTB's videolfb atag is only a build-time
++ *         template default.
++ * Bias:   TPS65132-class charge pump at I2C1 / addr 0x3E — ±5 V AVDD/AVEE.
 + * Reset:  GPIO180 active-low.
 + * ENP/ENN bias enable: GPIO60 / GPIO251 via fixed-regulators above.
 + *
-+ * NOTE: R63419 requires dual-DSI (port0 + port1). Mainline MT6797 DRM does
-+ * not yet support dual-DSI. Single-port is wired here for initial testing
-+ * per driver_ports.md's documented plan (single-DSI first, reduced
-+ * bandwidth expected, dual-DSI deferred). This is the first hardware test
++ * This is the first hardware test
 + * of the whole pipeline -- MMSYS/DDP, MIPITX PHY and panel driver are all
 + * code-complete/compile-clean (2026-06-10) but previously untested on the
 + * device. Enabling the full OVL0->RDMA0->COLOR->CCORR->AAL->GAMMA->OD->
@@ -608,6 +609,10 @@ index 000000000..2caeca572
 +};
 +
 +&disp_ovl0 {
++	status = "okay";
++};
++
++&disp_ovl_2l0 {
 +	status = "okay";
 +};
 +
@@ -649,15 +654,16 @@ index 000000000..2caeca572
 +	#size-cells = <0>;
 +
 +	/*
-+	 * R63419 panel connected to DSI0 port.
-+	 * Panel node provides DCS init sequence and timing.
++	 * Solomon SSD2092 FHD panel on DSI0 (LK: aeon_ssd2092_fhd_dsi_solomon,
++	 * panel ID 0x01572098 — probed by the stock bootloader at every boot).
 +	 */
 +	panel@0 {
-+		compatible = "renesas,r63419-truly-wqhd";
++		compatible = "solomon,ssd2092";
 +		reg = <0>;
 +		avdd-supply = <&lcd_avdd>;
 +		avee-supply = <&lcd_avee>;
 +		reset-gpios = <&pio 180 GPIO_ACTIVE_LOW>;
++		backlight = <&backlight_lcd>;
 +		pinctrl-names = "default";
 +		pinctrl-0 = <&panel_pins>;
 +
@@ -676,6 +682,58 @@ index 000000000..2caeca572
 +
 +&mipi_tx0 {
 +	status = "okay";
++};
++
++/*
++ * LCD backlight — DISP_PWM0 @ 0x1100f000 driving the LED boost on the
++ * display flex through GPIO178 (func1 = DISP_PWM; the board's DWS pin
++ * table and LK's persisted pinmux both use it, and the vendor DTB's
++ * lcd-backlight led_mode=<5> selects the CUST_BLS_PWM/disp_bls path).
++ * Register layout verified mt8173-compatible against vendor ddp_reg.h
++ * and by live devmem on the running device (boot.md build #151 debug).
++ *
++ * The kernel's late clk_disable_unused sweep was proven (live, build
++ * #151) to gate CLK_INFRA_DISP_PWM + the pwm_sel MUX_GATE and kill the
++ * bootloader's backlight output; this driver holding the clocks while
++ * the backlight is lit is the proper fix.
++ *
++ * "main" must be the PWM counter's tick source (pwm_sel — the driver
++ * derives period/duty from its rate; parent 0 = clk26m, matching the
++ * vendor pwm_config), "mm" the register/bus gate (CLK_INFRA_DISP_PWM).
++ */
++/ {
++	disp_pwm0: pwm@1100f000 {
++		compatible = "mediatek,mt6797-disp-pwm";
++		reg = <0 0x1100f000 0 0x1000>;
++		#pwm-cells = <2>;
++		clocks = <&topckgen CLK_TOP_MUX_PWM>,
++			 <&infrasys CLK_INFRA_DISP_PWM>;
++		clock-names = "main", "mm";
++		pinctrl-names = "default";
++		pinctrl-0 = <&disp_pwm_pins>;
++	};
++
++	backlight_lcd: backlight {
++		compatible = "pwm-backlight";
++		/*
++		 * 39385 ns ≈ 25.4 kHz: the 26 MHz source divided by the
++		 * hardware's 1024-step period register, i.e. the same PWM
++		 * frequency LK/the vendor kernel run this output at
++		 * (clkdiv=0, period=0x3ff).
++		 */
++		pwms = <&disp_pwm0 0 39385>;
++		default-brightness-level = <200>;
++		brightness-levels = <0 255>;
++		num-interpolated-steps = <255>;
++	};
++};
++
++&pio {
++	disp_pwm_pins: disp-pwm-pins {
++		pins-pwm {
++			pinmux = <MT6797_GPIO178__FUNC_DISP_PWM>;
++		};
++	};
 +};
 +
 +/*

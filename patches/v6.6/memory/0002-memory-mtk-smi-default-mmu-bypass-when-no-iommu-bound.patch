@@ -1,0 +1,32 @@
+diff --git a/drivers/memory/mtk-smi.c b/drivers/memory/mtk-smi.c
+index 6523cb510..6ee153066 100644
+--- a/drivers/memory/mtk-smi.c
++++ b/drivers/memory/mtk-smi.c
+@@ -156,6 +156,7 @@ struct mtk_smi_larb { /* larb: local arbiter */
+ 	const struct mtk_smi_larb_gen	*larb_gen;
+ 	int				larbid;
+ 	u32				*mmu;
++	u32				mmu_bypass;
+ 	unsigned char			*bank;
+ };
+ 
+@@ -549,6 +550,19 @@ static int mtk_smi_larb_probe(struct platform_device *pdev)
+ 
+ 	larb->smi.dev = dev;
+ 
++	/*
++	 * larb->mmu is only pointed at a live value by mtk_smi_larb_bind(),
++	 * which the component framework calls when an IOMMU master binds to
++	 * this larb. On SoCs with no mtk_iommu instance at all (e.g. MT6797),
++	 * that bind never happens, so without this default larb->mmu stays
++	 * NULL and the first pm_runtime resume (config_port() dereferencing
++	 * *larb->mmu) is a NULL pointer deref. Default to 0 (IOMMU bypass for
++	 * every port), matching what the vendor driver forces unconditionally
++	 * when M4U support isn't present; a real IOMMU binding still
++	 * overwrites this pointer with the live per-port mask as before.
++	 */
++	larb->mmu = &larb->mmu_bypass;
++
+ 	ret = mtk_smi_device_link_common(dev, &larb->smi_common_dev);
+ 	if (ret < 0)
+ 		return ret;

@@ -2,20 +2,25 @@ diff --git a/drivers/gpu/drm/mediatek/mtk_drm_drv.c b/drivers/gpu/drm/mediatek/m
 index 93552d76b..f59dca12b 100644
 --- a/drivers/gpu/drm/mediatek/mtk_drm_drv.c
 +++ b/drivers/gpu/drm/mediatek/mtk_drm_drv.c
-@@ -141,6 +141,19 @@ static const unsigned int mt8173_mtk_ddp_ext[] = {
+@@ -141,6 +141,24 @@ static const unsigned int mt8173_mtk_ddp_ext[] = {
  	DDP_COMPONENT_DPI0,
  };
  
++/*
++ * Primary path order per the vendor 3.18 kernel's ddp_path.c PRIMARY_DISP
++ * scenario: RDMA0 sits at the *end* of the pipe (DITHER -> RDMA0 -> DSI0),
++ * unlike MT8173 where RDMA0 follows OVL. OVL0 cascades into OVL0_2L.
++ */
 +static const unsigned int mt6797_mtk_ddp_main[] = {
 +	DDP_COMPONENT_OVL0,
 +	DDP_COMPONENT_OVL_2L0,
-+	DDP_COMPONENT_RDMA0,
 +	DDP_COMPONENT_COLOR0,
 +	DDP_COMPONENT_CCORR,
 +	DDP_COMPONENT_AAL0,
 +	DDP_COMPONENT_GAMMA,
 +	DDP_COMPONENT_OD0,
 +	DDP_COMPONENT_DITHER0,
++	DDP_COMPONENT_RDMA0,
 +	DDP_COMPONENT_DSI0,
 +};
 +

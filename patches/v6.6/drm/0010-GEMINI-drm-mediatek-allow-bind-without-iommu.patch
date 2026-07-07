@@ -1,0 +1,51 @@
+diff --git a/drivers/gpu/drm/mediatek/mtk_drm_drv.c b/drivers/gpu/drm/mediatek/mtk_drm_drv.c
+index f2b4ed9fd..ba4929e24 100644
+--- a/drivers/gpu/drm/mediatek/mtk_drm_drv.c
++++ b/drivers/gpu/drm/mediatek/mtk_drm_drv.c
+@@ -621,8 +621,16 @@ static int mtk_drm_bind(struct device *dev)
+ 	struct drm_device *drm;
+ 	int ret, i;
+ 
++	/*
++	 * GEMINI (B-13 follow-on): mainline mtk-iommu has no MT6797 support,
++	 * so no IOMMU ever registers on the platform bus and the stock
++	 * iommu_present() gate would defer this bind forever. The MT6797
++	 * bring-up runs the SMI larbs in MMU-bypass mode and uses physically
++	 * contiguous CMA buffers instead, which the mtk_drm GEM code handles
++	 * fine via dma_alloc_attrs(). Warn rather than defer.
++	 */
+ 	if (!iommu_present(&platform_bus_type))
+-		return -EPROBE_DEFER;
++		dev_warn(dev, "no IOMMU, using contiguous CMA buffers\n");
+ 
+ 	pdev = of_find_device_by_node(private->mutex_node);
+ 	if (!pdev) {
+@@ -632,6 +640,19 @@ static int mtk_drm_bind(struct device *dev)
+ 		return -EPROBE_DEFER;
+ 	}
+ 
++	/*
++	 * GEMINI (B-13 follow-on): the device existing is not enough --
++	 * mtk_drm_crtc_create() calls mtk_mutex_get(), which dereferences
++	 * the mutex driver's drvdata. If the mutex probe is itself still
++	 * deferred (e.g. on its power domain), that drvdata is NULL and the
++	 * bind oopses (observed build #147). Defer until it has bound.
++	 */
++	if (!platform_get_drvdata(pdev)) {
++		dev_info(dev, "Waiting for disp-mutex driver %pOF\n",
++			 private->mutex_node);
++		return -EPROBE_DEFER;
++	}
++
+ 	private->mutex_dev = &pdev->dev;
+ 	private->mtk_drm_bound = true;
+ 	private->dev = dev;
+@@ -825,6 +846,8 @@ static const struct of_device_id mtk_ddp_comp_dt_ids[] = {
+ 	  .data = (void *)MTK_DP_INTF },
+ 	{ .compatible = "mediatek,mt2701-dsi",
+ 	  .data = (void *)MTK_DSI },
++	{ .compatible = "mediatek,mt6797-dsi",
++	  .data = (void *)MTK_DSI },
+ 	{ .compatible = "mediatek,mt8173-dsi",
+ 	  .data = (void *)MTK_DSI },
+ 	{ .compatible = "mediatek,mt8183-dsi",

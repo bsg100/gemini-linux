@@ -1,0 +1,53 @@
+--- a/drivers/gpu/drm/mediatek/mtk_dsi.c
++++ b/drivers/gpu/drm/mediatek/mtk_dsi.c
+@@ -215,6 +215,7 @@
+ 	bool bridge_added;
+ 	u32 irq_data;
+ 	wait_queue_head_t irq_wait_queue;
++	int irq_num;
+ 	const struct mtk_dsi_driver_data *driver_data;
+ };
+ 
+@@ -676,6 +677,16 @@
+ 	mtk_dsi_config_vdo_timing(dsi);
+ 	mtk_dsi_set_interrupt_enable(dsi);
+ 
++	/*
++	 * The IRQ is requested masked (IRQ_NOAUTOEN) because the DSI engine
++	 * may hold its level-low line asserted from bootloader-initialized
++	 * display state before the engine clocks are on and it has been
++	 * reset above; unmasking it earlier lets a stale interrupt wedge
++	 * mtk_dsi_irq()'s status-register read on an unclocked block. Enable
++	 * it now that clocks are on and the engine has just been reset.
++	 */
++	enable_irq(dsi->irq_num);
++
+ 	return 0;
+ err_disable_engine_clk:
+ 	clk_disable_unprepare(dsi->engine_clk);
+@@ -694,6 +705,8 @@
+ 	if (--dsi->refcount != 0)
+ 		return;
+ 
++	disable_irq(dsi->irq_num);
++
+ 	/*
+ 	 * mtk_dsi_stop() and mtk_dsi_start() is asymmetric, since
+ 	 * mtk_dsi_stop() should be called after mtk_drm_crtc_atomic_disable(),
+@@ -1186,6 +1199,16 @@
+ 		goto err_unregister_host;
+ 	}
+ 
++	/*
++	 * The DSI engine may hold its (level-low) interrupt line asserted
++	 * from bootloader-initialized display state, and with the engine
++	 * clocks off the ISR's status-register read cannot make progress.
++	 * Keep the IRQ masked across request; it is enabled in
++	 * mtk_dsi_poweron() once clocks are on and the engine has been
++	 * reset, and disabled again in mtk_dsi_poweroff().
++	 */
++	dsi->irq_num = irq_num;
++	irq_set_status_flags(irq_num, IRQ_NOAUTOEN);
+ 	ret = devm_request_irq(&pdev->dev, irq_num, mtk_dsi_irq,
+ 			       IRQF_TRIGGER_NONE, dev_name(&pdev->dev), dsi);
+ 	if (ret) {

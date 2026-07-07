@@ -1,0 +1,70 @@
+diff --git a/drivers/gpu/drm/mediatek/mtk_dsi.c b/drivers/gpu/drm/mediatek/mtk_dsi.c
+--- a/drivers/gpu/drm/mediatek/mtk_dsi.c
++++ b/drivers/gpu/drm/mediatek/mtk_dsi.c
+@@ -587,8 +587,18 @@
+ 	u32 status, tmp;
+ 	u32 flag = LPRX_RD_RDY_INT_FLAG | CMD_DONE_INT_FLAG | VM_DONE_INT_FLAG;
+ 
++	/*
++	 * GEMINI-DEBUG (B-13): entry marker BEFORE the first register read.
++	 * The LK bootloader leaves the DSI engine running for its splash; if
++	 * a stale interrupt fires with the DSI apb clock gated, the readl
++	 * below stalls the bus. Ratelimited in case of an interrupt storm.
++	 */
++	printk_ratelimited(KERN_INFO "GEMINI-DEBUG mtk_dsi_irq: entry (pre-readl)\n");
++
+ 	status = readl(dsi->regs + DSI_INTSTA) & flag;
+ 
++	printk_ratelimited(KERN_INFO "GEMINI-DEBUG mtk_dsi_irq: INTSTA=0x%x\n", status);
++
+ 	if (status) {
+ 		do {
+ 			mtk_dsi_mask(dsi, DSI_RACK, RACK, RACK);
+@@ -1138,6 +1148,11 @@
+ 		return ret;
+ 	}
+ 
++	/* GEMINI-DEBUG (B-13): the hang follows the panel-registered print
++	 * (i.e. mipi_dsi_host_register returning) within ~50ms with no
++	 * further output; bracket every remaining probe step to find it. */
++	dev_info(dev, "GEMINI-DEBUG dsi_probe: host registered, clk_get engine\n");
++
+ 	dsi->driver_data = of_device_get_match_data(dev);
+ 
+ 	dsi->engine_clk = devm_clk_get(dev, "engine");
+@@ -1165,6 +1180,8 @@
+ 		goto err_unregister_host;
+ 	}
+ 
++	dev_info(dev, "GEMINI-DEBUG dsi_probe: clks ok, ioremap\n");
++
+ 	regs = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+ 	dsi->regs = devm_ioremap_resource(dev, regs);
+ 	if (IS_ERR(dsi->regs)) {
+@@ -1173,6 +1190,8 @@
+ 		goto err_unregister_host;
+ 	}
+ 
++	dev_info(dev, "GEMINI-DEBUG dsi_probe: ioremap ok, phy_get\n");
++
+ 	dsi->phy = devm_phy_get(dev, "dphy");
+ 	if (IS_ERR(dsi->phy)) {
+ 		ret = PTR_ERR(dsi->phy);
+@@ -1186,6 +1205,8 @@
+ 		goto err_unregister_host;
+ 	}
+ 
++	dev_info(dev, "GEMINI-DEBUG dsi_probe: phy ok, request_irq %d\n", irq_num);
++
+ 	ret = devm_request_irq(&pdev->dev, irq_num, mtk_dsi_irq,
+ 			       IRQF_TRIGGER_NONE, dev_name(&pdev->dev), dsi);
+ 	if (ret) {
+@@ -1193,6 +1214,8 @@
+ 		goto err_unregister_host;
+ 	}
+ 
++	dev_info(dev, "GEMINI-DEBUG dsi_probe: irq ok, probe complete\n");
++
+ 	init_waitqueue_head(&dsi->irq_wait_queue);
+ 
+ 	platform_set_drvdata(pdev, dsi);

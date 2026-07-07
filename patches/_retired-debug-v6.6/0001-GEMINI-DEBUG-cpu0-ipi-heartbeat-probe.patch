@@ -1,0 +1,140 @@
+diff --git a/kernel/smp.c b/kernel/smp.c
+--- a/kernel/smp.c
++++ b/kernel/smp.c
+@@ -1112,3 +1112,136 @@
+ 	return sscs.ret;
+ }
+ EXPORT_SYMBOL_GPL(smp_call_on_cpu);
++
++/* GEMINI-DEBUG (B-13): build #98 showed cpu0 answering this exact IPI
++ * mechanism cleanly every 60ms up to t=2.4799s (seq 30) then failing by
++ * t=2.5399s (seq 31) -- death lands inside the cacheinfo_sysfs_init
++ * initcall (called 2.4237s), and a *different* IPI mechanism (this one)
++ * fails in the same window as the cpuhp thread wakeup cacheinfo needs, so
++ * cpu0 is losing the ability to take any interrupt at all, not failing one
++ * specific code path. See boot.md "BUILD #98/#99".
++ *
++ * Build #100 tightened the ping interval to 10ms and added a GICR_WAKER
++ * poll for cpu0's redistributor: it stayed 0x0 (never asleep) right up to
++ * the death window (now 2.513s-2.533s, seq 90->91), refuting the "display
++ * build corrupts the GIC redistributor" hypothesis. See boot.md "BUILD
++ * #100/#101".
++ *
++ * This iteration (build #102) adds idle_cpu(0) to each round: cpuhp's
++ * dispatch to cpu0 (cpuhp_invoke_ap_callback -> __cpuhp_kick_ap ->
++ * wait_for_ap_thread, kernel/cpu.c) wakes cpu0's dedicated cpuhp/0 kernel
++ * thread and waits for it -- a fundamentally different mechanism from this
++ * raw IRQ-context IPI callback, yet both die together. If idle_cpu(0)==1
++ * after the miss starts, cpu0 is stuck in WFI/idle without properly waking
++ * (a cpuidle/PSCI CPU_SUSPEND-class bug); if 0, cpu0 is actually running/
++ * spinning with interrupts effectively undeliverable (a masked-IRQ-forever
++ * bug, e.g. an unbalanced irqsave). Remove once B-13 is root-caused.
++ */
++#include <linux/kthread.h>
++#include <linux/delay.h>
++#include <linux/io.h>
++
++#define GEMINI_GICR_BASE	0x19200000UL
++#define GEMINI_GICR_WAKER	0x14
++
++static atomic_t gemini_hb_sent = ATOMIC_INIT(0);
++static atomic_t gemini_hb_seen = ATOMIC_INIT(0);
++static void __iomem *gemini_gicr0;
++
++static void gemini_hb_ping(void *info)
++{
++	atomic_set(&gemini_hb_seen, atomic_read(&gemini_hb_sent));
++}
++
++static int gemini_hb_thread(void *arg)
++{
++	int misses = 0;
++	u32 waker = 0xffffffff;
++
++	gemini_gicr0 = ioremap(GEMINI_GICR_BASE, 0x10000);
++	if (!gemini_gicr0)
++		printk("GEMINI-DEBUG gicr ioremap failed\n");
++
++	while (!kthread_should_stop()) {
++		int sent = atomic_inc_return(&gemini_hb_sent);
++
++		smp_call_function_single(0, gemini_hb_ping, NULL, 0);
++		msleep(10);
++
++		if (gemini_gicr0)
++			waker = readl(gemini_gicr0 + GEMINI_GICR_WAKER);
++
++		if (atomic_read(&gemini_hb_seen) != sent) {
++			misses++;
++			printk("GEMINI-DEBUG cpu0 heartbeat MISS #%d at jiffies=%lu (sent=%d seen=%d) gicr0_waker=0x%x idle_cpu0=%d\n",
++			       misses, jiffies, sent, atomic_read(&gemini_hb_seen), waker,
++			       idle_cpu(0));
++		} else {
++			printk("GEMINI-DEBUG cpu0 heartbeat ok at jiffies=%lu (seq=%d) gicr0_waker=0x%x idle_cpu0=%d\n",
++			       jiffies, sent, waker, idle_cpu(0));
++		}
++	}
++	return 0;
++}
++
++static int __init gemini_hb_init(void)
++{
++	struct task_struct *t;
++
++	t = kthread_create(gemini_hb_thread, NULL, "gemini-hb");
++	if (IS_ERR(t))
++		return PTR_ERR(t);
++	kthread_bind(t, 1);
++	wake_up_process(t);
++	return 0;
++}
++subsys_initcall(gemini_hb_init);
++
++/* GEMINI-DEBUG (B-13): build #102 showed cpu0 waking normally from idle at
++ * 2.523s then hard-locking within 20ms, before cacheinfo_cpu_online()'s own
++ * trace print ever fires -- and idle_cpu(0)==0 (busy, not asleep) at the
++ * point of failure. So this is not a stuck-in-WFI bug. This probe tells
++ * apart "cpu0's core is fully halted" from "only cross-CPU IPI/SGI delivery
++ * to cpu0 is broken": an hrtimer pinned directly to cpu0 (armed from a
++ * kthread bound to cpu0, HRTIMER_MODE_REL_PINNED) fires via cpu0's own
++ * local timer interrupt, independent of the cross-CPU heartbeat above. If
++ * its ticks also stop at the same instant the heartbeat dies, cpu0 is truly
++ * halted (spinning with local IRQs masked). If ticks continue afterward,
++ * only SGI/IPI reception into cpu0 is broken while its local timer IRQ
++ * still works. Remove once B-13 is root-caused.
++ */
++#include <linux/hrtimer.h>
++
++static struct hrtimer gemini_cpu0_timer;
++static atomic_t gemini_cpu0_ticks = ATOMIC_INIT(0);
++
++static enum hrtimer_restart gemini_cpu0_timer_fn(struct hrtimer *t)
++{
++	int n = atomic_inc_return(&gemini_cpu0_ticks);
++
++	printk("GEMINI-DEBUG cpu0 local-timer tick #%d at jiffies=%lu (on cpu%u)\n",
++	       n, jiffies, raw_smp_processor_id());
++	hrtimer_forward_now(t, ms_to_ktime(20));
++	return HRTIMER_RESTART;
++}
++
++static int gemini_cpu0_timer_arm_thread(void *arg)
++{
++	hrtimer_init(&gemini_cpu0_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL_PINNED);
++	gemini_cpu0_timer.function = gemini_cpu0_timer_fn;
++	hrtimer_start(&gemini_cpu0_timer, ms_to_ktime(20), HRTIMER_MODE_REL_PINNED);
++	return 0;
++}
++
++static int __init gemini_cpu0_timer_init(void)
++{
++	struct task_struct *t;
++
++	t = kthread_create(gemini_cpu0_timer_arm_thread, NULL, "gemini-cpu0-tmr");
++	if (IS_ERR(t))
++		return PTR_ERR(t);
++	kthread_bind(t, 0);
++	wake_up_process(t);
++	return 0;
++}
++subsys_initcall(gemini_cpu0_timer_init);

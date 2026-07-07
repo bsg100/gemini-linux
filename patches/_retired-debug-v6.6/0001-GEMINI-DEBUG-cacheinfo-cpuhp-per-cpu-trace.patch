@@ -1,0 +1,32 @@
+diff --git a/drivers/base/cacheinfo.c b/drivers/base/cacheinfo.c
+--- a/drivers/base/cacheinfo.c
++++ b/drivers/base/cacheinfo.c
+@@ -900,13 +900,27 @@
+ 
+ static int cacheinfo_cpu_online(unsigned int cpu)
+ {
+-	int rc = detect_cache_attributes(cpu);
++	int rc;
++
++	/*
++	 * GEMINI-DEBUG (B-13): cacheinfo_sysfs_init is the last initcall to
++	 * print before the display-build hang (boot.md BUILD #92/#93). The
++	 * cpuhp_setup_state() call below it runs this callback on every
++	 * online CPU via that CPU's hotplug thread and waits for each in
++	 * turn, so a single unresponsive secondary CPU wedges cpu0 here.
++	 * These prints show which CPU's callback hangs or never starts.
++	 * Remove once B-13 is root-caused.
++	 */
++	printk("GEMINI-DEBUG cacheinfo_cpu_online: enter cpu%u (on cpu%u)\n",
++	       cpu, raw_smp_processor_id());
++	rc = detect_cache_attributes(cpu);
+ 
+ 	if (rc)
+ 		return rc;
+ 	rc = cache_add_dev(cpu);
+ 	if (rc)
+ 		free_cache_attributes(cpu);
++	printk("GEMINI-DEBUG cacheinfo_cpu_online: exit cpu%u rc=%d\n", cpu, rc);
+ 	return rc;
+ }
+ 

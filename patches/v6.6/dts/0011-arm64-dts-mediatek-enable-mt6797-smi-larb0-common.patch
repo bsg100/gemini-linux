@@ -1,0 +1,36 @@
+diff --git a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+index 0000000..0000000 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+@@ -590,6 +590,31 @@
+ 	 * here only as the anchor comment for the pipeline it clocks. */
+ };
+ 
++/*
++ * SMI larb0/common (Streaming Memory Interface). Every DDP component in
++ * this pipeline reaches memory through larb0 -> smi_common; both were
++ * left status="disabled" in mt6797.dtsi and mainline's mtk-smi.c had no
++ * mt6797 compatible at all, so their clocks (CLK_MM_SMI_LARB0/COMMON,
++ * distinct from scpsys MM domain's own CLK_MM gate) were never enabled by
++ * any driver even though the MM power domain itself powers on cleanly and
++ * every disp_* register write succeeds (see boot.md BUILD #84/85, #88/89
++ * -- scpsys and the DSI probe path are both exonerated). Suspected B-13
++ * root cause: a DDP/DSI access that actually routes through the ungated
++ * SMI path stalls the AXI bus indefinitely. See
++ * patches/v6.6/memory/0001-memory-mtk-smi-add-mt6797-support.patch
++ * (adds mt6797-smi-larb/-common compatibles, modelled on mt6795 --
++ * confirmed via the vendor kernel image: MT6797 is the next-generation
++ * sibling of MT6795/Helio X10 and its vendor smi_common.c uses the same
++ * bus_sel-style larb0-only MM smi topology).
++ */
++&larb0 {
++	status = "okay";
++};
++
++&smi_common {
++	status = "okay";
++};
++
+ &disp_ovl0 {
+ 	status = "okay";
+ };

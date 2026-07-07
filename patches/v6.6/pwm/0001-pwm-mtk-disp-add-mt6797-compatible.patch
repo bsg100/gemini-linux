@@ -1,0 +1,18 @@
+diff --git a/drivers/pwm/pwm-mtk-disp.c b/drivers/pwm/pwm-mtk-disp.c
+index a83bd6e18..eb8fb729c 100644
+--- a/drivers/pwm/pwm-mtk-disp.c
++++ b/drivers/pwm/pwm-mtk-disp.c
+@@ -308,6 +308,13 @@ static const struct mtk_pwm_data mt8183_pwm_data = {
+ static const struct of_device_id mtk_disp_pwm_of_match[] = {
+ 	{ .compatible = "mediatek,mt2701-disp-pwm", .data = &mt2701_pwm_data},
+ 	{ .compatible = "mediatek,mt6595-disp-pwm", .data = &mt8173_pwm_data},
++	/*
++	 * MT6797 DISP_PWM0 @ 0x1100f000 uses the mt8173 register layout:
++	 * EN 0x00 / COMMIT 0x08 / CON0 0x10 / CON1 0x14, verified against the
++	 * vendor 3.18 ddp_reg.h (DISP_PWM_*_OFF) and by live register access
++	 * on the Gemini PDA (LK's leftover full-duty config at these offsets).
++	 */
++	{ .compatible = "mediatek,mt6797-disp-pwm", .data = &mt8173_pwm_data},
+ 	{ .compatible = "mediatek,mt8173-disp-pwm", .data = &mt8173_pwm_data},
+ 	{ .compatible = "mediatek,mt8183-disp-pwm", .data = &mt8183_pwm_data},
+ 	{ }
