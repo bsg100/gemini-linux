@@ -1573,6 +1573,229 @@ this path can't retroactively explain the #159 reset — only a future boot
 with build #178's pstore config, followed by a crash, followed by *our own*
 kernel's `/sys/fs/pstore/` would be informative.
 
+**Update 2026-07-09 — retested post full scatter-file reflash; gadget/SSH
+failure reproduces even on a known-clean baseline, battery hypothesis now in
+doubt:** the Gemini was fully restored to stock (SP Flash Tool + scatter
+file, all partitions incl. `boot`/GPT back to factory Android/Kali) and
+confirmed RNDIS worked fine on the Linux workstation with the *stock* image.
+Build #178 (banner #63, same sha256 as above) was then reflashed to `boot2`
+fresh against this known-clean baseline (`logs/2026-07-09-181-post-scatter-
+reflash-boot2.log`). Kernel boot itself is clean — same banner, same benign
+`-517` DSI defer, reaches the same `mtu3` mux-cutoff point with no
+anomalies — but the `g_ether` gadget again enumerates on the Mac with the
+correct fixed MAC (`en12`, `42:00:15:19:82:00`) and then sits at `status:
+inactive` indefinitely; no ping/SSH to `10.15.19.82`. This is the **same
+symptom** as the pre-reflash failures this blocker attributed to a low
+battery — but now reproduced immediately after a full factory restore and a
+presumably-charged battery (device was freshly reflashed, not sitting idle
+draining). This weakens the battery-only explanation: either the battery
+issue is still present independently of state, or there is a genuine
+software-side regression in how `g_ether`/CDC networking comes up under
+Linux 6.6 on this device that coincidentally overlapped with the low-battery
+period. **Not yet root-caused** — next step is to get a shell some other way
+(serial console login, if enabled, or checking `dmesg`/journal for the
+`g_ether`/`dwc3`/`mtu3` gadget-side attach sequence) rather than relying on
+inferring gadget health purely from the Mac-side link state.
+
+**Aside — LK splash successfully reaches the panel (2026-07-09):** during
+this same boot, the user observed the screen flash briefly with color (no
+text) a few seconds after power-on. Log analysis shows this came from LK's
+own bootloader-side display driver (`DDP/mgr`/`videolfb` lines, ms-based
+timestamps, *not* the Linux kernel's `[   0.xxx]` log) actively binding
+`ovl0`→`dsi0` and loading `lcmname = aeon_ssd2092_fhd_dsi_solomon` around the
+4.1s mark — well before `Linux version 6.6...` even prints. The Linux
+kernel's own DRM/DSI probe in the same log still fails with the same benign
+`-517` EPROBE_DEFER it always has. This is useful confirming evidence for
+B-17: the DSI physical link, panel, and LK's own driver can successfully
+push real pixels to this exact panel, so "colorful, no text" is most likely
+LK loading a corrupted/uninitialized logo buffer, not an electrical/panel
+fault — the still-open problem is purely getting the *Linux* DSI driver past
+its own probe-defer, not proving the hardware path works (it already does).
+
+**Update 2026-07-09 — build #159 (previously verified live-SSH) now
+reproduces the identical gadget failure, ruling out #178's changes as the
+cause:** reflashed `boot2` with build #159 (banner `#48`,
+`logs/2026-07-07-159-ovl-larb-devicelink/new_kali_boot.img`, sha256
+`09b2ea91a80e850c099fcf5dfe958a89033129e18983871f3b96f384ffe06b98`) — the
+same image that was live-SSH validated in an earlier session (this blocker's
+"Critical pivot" note above) — as a control against build #178. Two boot
+attempts landed on the stock **Android** `boot` partition instead of `boot2`
+(confirmed by the dumped LK cmdline: `androidboot.hardware=mt6797
+buildvariant=user printk.disable_uart=1`, not our Linux cmdline) before a
+third attempt correctly reached `boot2` (`logs/2026-07-09-182-build159-post-
+scatter-recheck.log`, confirmed by `Linux version 6.6.0-dirty ... #48 SMP
+PREEMPT Tue Jul  7 10:13:15 UTC 2026` at kernel time 0). Boot itself is
+clean, same `mtu3` mux-cutoff point as always.
+
+Result: **identical failure to #178.** `ioreg` confirms the USB gadget
+device itself enumerates on the Mac (`RNDIS/Ethernet Gadget`, `active`,
+matched), `en12` is created, but `unified log` shows the actual link-layer
+state: `configd: (IPConfiguration) MANUAL en12: status = 'media inactive'`
+— i.e. this is not an IP/DHCP/routing problem, it is the USB
+CDC/RNDIS **carrier/link** signal itself never asserting from the Gemini
+side, even though USB enumeration (descriptors, driver match) succeeds.
+Same result on both #159 and #178 rules out every software delta introduced
+between them (fixed-MAC cmdline, pstore config, all the DSI-IRQ debug
+patches) as the cause. Remaining candidate explanations, in order of
+likelihood:
+1. **Battery/power** (original hypothesis) — still not conclusively ruled
+   in or out; the device read ~42% at the time of this test, healthier than
+   the earlier near-dead state, but marginal current-delivery under USB
+   enumeration load can't be excluded without a controlled bench-supply test.
+2. **Physical layer** (cable, port, or connector wear) — untested this
+   session; worth swapping cable/port as a cheap isolation step.
+3. A genuine kernel-side regression in `mtu3`/`g_ether` link-state signaling
+   that predates #159 (i.e., was already broken when #159 was thought
+   "known-good" via SSH, and something about the *test conditions* that day,
+   not the kernel, made it work) — cannot be ruled out without a shell on
+   the device via a path that doesn't depend on this USB link (e.g. serial
+   getty login, if enabled on `ttyS0`).
+
+**Next step:** try a different USB cable/port for the next attempt (rules
+out #2 cheaply); if it still fails, get a shell over serial instead of USB
+to inspect `dmesg`/`journalctl` for the gadget-side attach sequence directly,
+rather than continuing to infer gadget health only from the Mac-side state.
+
+**Update 2026-07-09 (continued) — exhaustive isolation across cable, Mac
+state, and kernel age; USB link itself proven healthy; root cause still
+unresolved.** A full round of isolation steps, each ruling out one
+candidate:
+
+- **Different USB cable** (user-tested): no change, same symptom. Rules out
+  a worn/marginal cable.
+- **Full Mac power-off + restart**, then removing and letting macOS
+  recreate the "RNDIS/Ethernet Gadget" network service from scratch: no
+  change. Rules out any stale `configd`/`IOUSBHostFamily`/cached-service
+  state on the Mac as the cause.
+- **Static IP re-verified intact** on the freshly recreated service
+  (`10.15.19.1/24`, matches the device's `10.15.19.82` config) — not an IP/
+  DHCP misconfiguration.
+- **`ioreg` USB link diagnostics, captured live while build #159 was
+  running:** `UsbLinkSpeed = 480000000` (full USB2 High-Speed — the
+  electrically demanding chirp handshake succeeded), `bNumConfigurations = 2`
+  (both descriptor configs advertised, as expected for `g_ether`'s
+  RNDIS+ECM composite), `kUSBCurrentConfiguration = 1` (macOS selected and
+  fully enumerated a configuration). This is strong proof the physical
+  link, connector, and low-level enumeration are entirely healthy — the
+  failure is narrowly scoped to *after* configuration selection, at the
+  interface-level data alt-setting/carrier handshake (where Linux's
+  `u_ether`/`usb_f_ecm` is supposed to call `netif_carrier_on()`).
+- **Manually cycling the interface** (`ifconfig en12 down` / `up`) while the
+  device stayed connected: no change — rules out the well-known "macOS ECM
+  driver needs a nudge" community workaround.
+- **Control test with build #71** (`logs/2026-07-06-71-usb-gadget-plus-uart-
+  clk-fix/new_kali_boot.img`, banner `#5`, Mon Jul 6 06:22:43 UTC 2026) — the
+  very first build CLAUDE.md documents as fully validated end-to-end over
+  SSH-over-USB, predating every later display/DSI/SMI/IRQ change. Reflashed
+  fresh to `boot2`; boots clean to the same `mtu3` cutoff point
+  (`logs/2026-07-09-184-build71-earliest-good-recheck.log`); **identical
+  failure** — `en12` exists, `UsbLinkSpeed`/config selection identical to
+  #159, `status: inactive`, no ping/SSH.
+
+**This is the most significant result of the session: the literal kernel
+bytes that gave working SSH on 2026-07-06 now fail identically, on a
+Mac that has been fully power-cycled, with a swapped cable, and a freshly
+recreated network service.** This conclusively rules out every software
+delta accumulated across builds #71→#178 (DSI-IRQ debug patches, fixed-MAC
+cmdline, pstore config, SMI-larb work) as the cause — the kernel image
+itself is not the variable. It also weakens the pure-Mac-state theory,
+since the Mac is now about as clean as it can be without an OS reinstall.
+
+**What's left, in order of likelihood given the evidence above:**
+1. **Something changed on the Gemini's own analog/hardware side that
+   persists across kernel reflashes but isn't kernel-controlled** — most
+   plausibly PMIC/charging-IC state or NVRAM-backed calibration data reset
+   by the full SP Flash Tool scatter-file restore (which, unlike a
+   `boot2`-only reflash, rewrites `nvram`/`nvcfg`/`proinfo`). A full HS link
+   negotiation succeeding doesn't rule out a marginal analog condition that
+   only manifests at the specific point Linux's gadget stack tries to
+   signal carrier.
+2. **Battery/charging state** — still not conclusively excluded; a
+   controlled bench power supply (bypassing the battery/PMIC entirely)
+   would be the definitive test, not yet performed.
+3. A genuine bug in Linux's `mtu3`/`u_ether`/`usb_f_ecm` interaction that
+   was *never* actually reliable on this hardware, and appeared to work in
+   earlier sessions only due to a — currently unidentified — favorable
+   condition that no longer holds. Cannot be fully ruled out without a
+   kernel-side shell (blocked by the UART/USB mux sharing the same port,
+   see B-15) or persistent logging (blocked by `journald`'s default
+   volatile storage on this rootfs, see the mkrootfs.sh discussion this
+   session).
+
+**Not yet tried:** connecting the Gemini to a genuinely different host
+machine (e.g. the Linux workstation, which already saw RNDIS work
+successfully once this session on the stock Android image) to determine
+whether the failure is Mac-specific or universal — this is the next
+highest-value isolation step, since it's the one major variable (the host)
+not yet swapped.
+
+### PENDING TEST (as of 2026-07-09) — cross-host isolation, run this next
+
+**Read this whole block before doing anything — it's written so a fresh
+Claude Code session with no memory of prior conversation can pick this up
+cold on the Linux workstation.**
+
+**Background:** `g_ether`'s USB gadget networking (the fast-track SSH-over-
+USB path from Phase 8) has stopped working partway through this session,
+identically across three kernel builds spanning the whole project history
+(#71 — the very first ever validated build, #159, #178) and after
+exhaustive Mac-side isolation (different cable, full Mac power-cycle, fresh
+network service, static IP re-verified, `ioreg` confirms a fully healthy
+480 Mbps USB link with configuration selection succeeding). See the "Update
+2026-07-09" entries above this block for the full trail. The remaining
+open question: **is this failure specific to the Mac, or does it reproduce
+on any host** (pointing instead at the Gemini's own hardware/firmware
+state)?
+
+**What to actually do:**
+
+1. This machine (Linux workstation) has **no build VM, no FTDI rig, no
+   mtkclient, and no direct hardware access** — see the Machine Profiles
+   section in `claude.md`. The Gemini itself, already flashed with a known
+   kernel build on `boot2`, needs to be physically brought to this machine
+   and plugged in via USB-C by the user — you cannot flash or drive the
+   device yourself from here.
+2. Once the user has the Gemini connected via USB-C to this Linux machine
+   (booted into whichever kernel is currently on `boot2` — ask the user
+   which build, or check the last blockers.md/boot.md entries for the most
+   recently flashed one), check for the gadget interface the same way the
+   Mac side was checked, translated to Linux equivalents:
+   - `ip link show` / `ip addr show` — look for a `usb0` or similar
+     interface (Linux typically auto-names CDC-ECM/RNDIS gadgets `usb0`,
+     `enxAAAAAA...`, or similar, unlike macOS's `enNN`).
+   - `dmesg | grep -i "cdc_ether\|rndis\|usb0"` — Linux hosts have a
+     built-in `cdc_ether`/`cdc_ncm` driver; check whether it binds and
+     reports a link-up/link-down (carrier) message, which is the direct
+     equivalent of macOS's `ifconfig ... status: inactive`.
+   - `ethtool usb0` (or whatever the interface is named) — reports `Link
+     detected: yes/no`, the Linux equivalent of the carrier check.
+3. If a static IP is needed on the Linux side to talk to the Gemini's
+   `10.15.19.82` (see `configs/gemini-cmdline.config`'s `usb0.network`
+   config, which sets that address on the device side), configure e.g.
+   `sudo ip addr add 10.15.19.1/24 dev usb0` (adjust interface name) and
+   then `ping 10.15.19.82` / `ssh root@10.15.19.82`.
+4. **Interpreting the result:**
+   - If the Linux workstation *also* sees no carrier / no link, that's
+     strong evidence the problem is on the Gemini's side (hardware,
+     firmware, or NVRAM state from the SP Flash Tool restore), not
+     something Mac-specific — refocus investigation there (see the
+     numbered candidate list above this block).
+   - If the Linux workstation *does* get a working link/SSH, that's
+     surprising given the Mac-side isolation done so far, and would point
+     back at something specific to the Mac (perhaps a lower-level
+     Thunderbolt/USB-C controller or driver state that a full OS restart
+     didn't clear) — in that case, re-open the Mac-side investigation with
+     that new fact in hand, and note it doesn't fully square with the
+     `ioreg` evidence already gathered (healthy 480 Mbps link, successful
+     config selection) which argued against a Mac hardware/driver problem.
+5. **Document the result** in this same B-17 section of `blockers.md`
+   (append, don't overwrite) and in `boot.md`, then commit and push so the
+   Mac-side session (or the next session on either machine) has it. Follow
+   the existing per-attempt provenance convention (see CLAUDE.md's Logging
+   Requirements) even though no build/flash happened on this machine —
+   note which build was on `boot2` at the time, and the exact Linux-side
+   commands/output.
+
 | Date | Was | Resolution |
 |------|-----|-----------|
 | 2026-06-10 | Console identity contradiction (ttyMT0 vs ttyMT3 vs ttyS0) — risk of silent dead boot | **ttyMT0 = UART0 @ 0x11002000 @ 921600**, triple-sourced (vendor DTB bootargs + spec Table 2-7 pinmux + mainline dtsi). ttyMT3 was a never-used `CONFIG_CMDLINE` fallback. See kernel.md. |
