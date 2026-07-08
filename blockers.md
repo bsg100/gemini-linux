@@ -1885,3 +1885,69 @@ rootfs, not a kernel/driver defect — no code change was needed, only a rootfs 
 | 2026-06-08 | WiFi/BT port feasibility unknown | Researched: ~75–103 KLOC vendor stack, broken upstream since 5.7/6.0. Deferred to Phase 9; USB-Ethernet is the Phase 8 plan. See research.md. |
 | 2026-06-07 | GCC ≤4.9 believed required | Empirically debunked; GCC 15.2.0 works for both 3.18 and 6.6. See CLAUDE.md. |
 | 2026-06-07 | `mtk wl` GPT corruption | Banned; targeted `mtk w` writes only. See CLAUDE.md Flashing. |
+
+---
+
+## 📌 Baseline snapshot — 2026-07-08 (known-good, post B-17 rootfs fix)
+
+Recorded for future reference after B-17's gadget/SSH sub-issue was closed (root
+cause: SP Flash Tool scatter restore had wiped the rootfs, not a kernel bug —
+see B-17 above). This is the full state of the device at the point SSH-over-USB
+was reconfirmed working end-to-end.
+
+**Flashed images and hashes:**
+
+| Partition | Image | sha256 |
+|-----------|-------|--------|
+| `boot2` | `logs/2026-07-06-71-usb-gadget-plus-uart-clk-fix/new_kali_boot.img` (build #71, banner #5) | `c38e176bf18870a17636d66d22081c2e463384f9587c322bd4de2d8fe484d98e` |
+| `linux` (p29) | `debian13-rootfs.img` (fresh, via `scripts/mkrootfs.sh`, 2026-07-08) | `a87d4780e7ccbbdba0a281b7e174c60f0eff181c1e470c5bdc8c5b3e8cd8c79e` |
+
+**GPT partition table** (read via `mtk.py printgpt`, read-only — matches the
+documented layout exactly, no corruption from any prior `mtk wl` incident):
+
+```
+recovery:    Offset 0x0000000000008000, Length 0x0000000001000000
+para:        Offset 0x0000000001008000, Length 0x0000000000080000
+expdb:       Offset 0x0000000001088000, Length 0x0000000000a00000
+frp:         Offset 0x0000000001a88000, Length 0x0000000000100000
+nvcfg:       Offset 0x0000000001b88000, Length 0x0000000000800000
+nvdata:      Offset 0x0000000002388000, Length 0x0000000002000000
+metadata:    Offset 0x0000000004388000, Length 0x0000000002000000
+protect1:    Offset 0x0000000006388000, Length 0x0000000000800000
+protect2:    Offset 0x0000000006b88000, Length 0x0000000000c78000
+seccfg:      Offset 0x0000000007800000, Length 0x0000000000800000
+oemkeystore: Offset 0x0000000008000000, Length 0x0000000000200000
+proinfo:     Offset 0x0000000008200000, Length 0x0000000000300000
+md1img:      Offset 0x0000000008500000, Length 0x0000000001800000
+md1dsp:      Offset 0x0000000009d00000, Length 0x0000000000400000
+md1arm7:     Offset 0x000000000a100000, Length 0x0000000000300000
+md3img:      Offset 0x000000000a400000, Length 0x0000000000500000
+scp1:        Offset 0x000000000a900000, Length 0x0000000000100000
+scp2:        Offset 0x000000000aa00000, Length 0x0000000000100000
+nvram:       Offset 0x000000000ab00000, Length 0x0000000000500000
+lk:          Offset 0x000000000b000000, Length 0x0000000000080000
+lk2:         Offset 0x000000000b080000, Length 0x0000000000080000
+boot:        Offset 0x000000000b100000, Length 0x0000000001000000
+logo:        Offset 0x000000000c100000, Length 0x0000000000800000
+tee1:        Offset 0x000000000c900000, Length 0x0000000000500000
+tee2:        Offset 0x000000000ce00000, Length 0x0000000000500000
+keystore:    Offset 0x000000000d300000, Length 0x0000000000d00000
+system:      Offset 0x000000000e000000, Length 0x00000000a0000000
+cache:       Offset 0x00000000ae000000, Length 0x000000001b000000
+linux:       Offset 0x00000000c9000000, Length 0x0000000671700000
+boot2:       Offset 0x000000073a700000, Length 0x0000000001000000
+boot3:       Offset 0x000000073b700000, Length 0x0000000001000000
+userdata:    Offset 0x000000073c700000, Length 0x00000007520fbe00
+flashinfo:   Offset 0x0000000e8e7fbe00, Length 0x0000000001000000
+
+Total disk size: 0x0000000e8f800000, sectors: 0x000000000747c000
+```
+
+**Verified working at this snapshot:** `ssh root@10.15.19.82` (password
+`toor`) over the `g_ether` USB gadget; kernel banner
+`Linux gemini 6.6.0-dirty #5 SMP PREEMPT Mon Jul  6 06:22:43 UTC 2026 aarch64`;
+`Debian GNU/Linux 13 (trixie)` userspace.
+
+**To restore this exact baseline later:** flash `boot2` and `linux` with the
+two images above (`mtk w boot2 ...` / `mtk w linux ...`), leave all other
+partitions untouched.
