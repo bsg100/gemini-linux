@@ -4008,3 +4008,13 @@ reserved-memory region, the two don't cross-read each other's data — so
 this can't retroactively explain the #159 reset. Only a future crash
 followed by *our own* kernel's `/sys/fs/pstore/` mount would be
 informative.
+
+### BUILD #159 (presumed) — B-17 cross-host isolation test, 2026-07-08, Linux workstation
+
+No new build or flash in this entry — Gemini already on `boot2` from prior session. Plugged into the Linux workstation (the machine identified as the next isolation step in B-17's pending test block) via USB-C.
+
+Result: USB gadget (`ID 0525:a4a2 Linux-USB Ethernet/RNDIS Gadget`) enumerated on the Linux host, `cdc_ether` bound, interface `enx3ad74925ce01` created. Host-side MAC `3a:d7:49:25:ce:01` (random — does not match #178's fixed MAC, suggesting this is build #159 or older on boot2). Static IP `10.15.19.1/24` configured. **No carrier: `NO-CARRIER`/`Link detected: no` throughout; `ping 10.15.19.82` — Destination Host Unreachable.** Identical failure to what was seen on the Mac.
+
+Conclusion: Mac-specific cause conclusively ruled out. Problem is on the Gemini's own side. See B-17 "Update 2026-07-08 — cross-host isolation complete" for full command output and interpretation.
+
+**Root cause subsequently identified:** the SP Flash Tool scatter-file restore wiped p29 (`linux` partition), replacing the Debian 13 rootfs (which had `usb0.network` + systemd-networkd) with the factory Kali image, which has no USB networking config. All kernel builds since the scatter restore appear broken because the device-side networking stack was never there — the kernel was always fine. Fix: rebuild and reflash Debian 13 rootfs via `scripts/mkrootfs.sh`, then `mtk w linux debian13-rootfs.img`. See B-17 for the full procedure.

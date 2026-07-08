@@ -1796,6 +1796,63 @@ state)?
    note which build was on `boot2` at the time, and the exact Linux-side
    commands/output.
 
+**Update 2026-07-08 — cross-host isolation complete; failure reproduces on Linux workstation; Mac-specific cause ruled out.**
+
+Run on the Linux workstation (machine with no build VM/FTDI, per CLAUDE.md Machine Profiles). Gemini plugged in via USB-C while already running whatever build was on `boot2` at the time.
+
+Build identity from this machine: the host-side MAC presented was `3a:d7:49:25:ce:01` (a random locally-administered MAC), which does **not** match build #178/#179's configured fixed host MAC (`42:00:15:19:82:00`). This indicates the build on `boot2` was older than #178 — most likely build #159 (banner #48), based on the last confirmed reflash in the prior session's "Update 2026-07-09" entries above. (User should confirm if unsure.)
+
+Commands and output:
+
+```
+$ lsusb | grep -i "rndis\|ethernet gadget\|gadget"
+Bus 001 Device 072: ID 0525:a4a2 Netchip Technology, Inc. Linux-USB Ethernet/RNDIS Gadget
+
+$ ip link show enx3ad74925ce01
+61: enx3ad74925ce01: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc fq_codel state DOWN ...
+    link/ether 3a:d7:49:25:ce:01 brd ff:ff:ff:ff:ff:ff
+
+$ ethtool enx3ad74925ce01
+...Speed: 425Mb/s...Auto-negotiation: off...Link detected: no
+
+$ sudo ip addr add 10.15.19.1/24 dev enx3ad74925ce01 && sudo ip link set enx3ad74925ce01 up
+$ ip link show enx3ad74925ce01
+61: enx3ad74925ce01: <NO-CARRIER,BROADCAST,MULTICAST,UP> ...
+
+$ ping -c 3 10.15.19.82
+PING 10.15.19.82 ... Destination Host Unreachable (3 packets, 0 received, 100% loss)
+```
+
+`cdc_ether` bound correctly (USB enumeration and descriptor exchange fully succeeded; `DRIVER=cdc_ether`, `PRODUCT=525/a4a2/606` confirmed via sysfs). The failure is the same as on the Mac: carrier never asserts from the Gemini side after the host driver binds — `NO-CARRIER`/`Link detected: no` throughout, identical to macOS's `status: inactive`.
+
+**Interpretation (per the guidance block above):** the failure reproducing on a fully independent host, after a complete Mac power-cycle and scatter-file restore, **conclusively rules out Mac-specific hardware/software state as the cause.** The problem is on the Gemini's own side.
+
+**Root cause identified 2026-07-08:** all of the "identical failure across builds #71/#159/#178" and both Mac + Linux host failures trace to a single cause: **the SP Flash Tool scatter-file restore wiped p29 (`linux` partition) and replaced the Debian 13 rootfs with the factory Kali image.** Every working SSH session in this project ran against the Debian 13 rootfs built by `scripts/mkrootfs.sh`, which installs `usb0.network` (static `10.15.19.82/24`) and enables `systemd-networkd`. The Kali image has none of that — so `usb0` on the device side is never configured, `10.15.19.82` is never assigned, and SSH is impossible regardless of kernel build or host machine. The USB enumeration and gadget bring-up themselves are fine (built-in `CONFIG_USB_ETH=y`, no userspace involvement needed for those). The kernel was never the problem. Every diagnostic trail from this blocker that blamed the kernel, NVRAM, battery, or PMIC can now be set aside pending a rootfs reflash.
+
+**Fix — reflash Debian 13 rootfs (run on Mac, build VM must be running):**
+
+```bash
+# 1. SSH into build VM (adjust IP/port as needed, see claude.md Machine Profiles)
+ssh -p 10022 root@localhost
+
+# 2. In the VM: rebuild the rootfs (takes ~5 min)
+cd ~/linux-6.6          # or wherever the repo is cloned in the VM
+bash scripts/mkrootfs.sh
+# Output: /mnt/host/OUTPUT/debian13-rootfs.img
+
+# 3. Exit VM; on Mac: put Gemini in preloader mode and flash linux partition
+# (hold Vol-Up while powering on with USB-C connected, or use mtkclient's
+# auto-detect — NEVER use `mtk wl`, only `mtk w linux ...`)
+/tmp/mtk-venv/bin/python3 ~/mtkclient/mtk.py w linux ~/gemini-build/OUTPUT/debian13-rootfs.img
+
+# 4. Power-cycle the Gemini (boot2 should still have the last-flashed Linux kernel)
+# 5. Confirm SSH:  ping 10.15.19.82  →  ssh root@10.15.19.82  (password: toor)
+# 6. On device after first boot, grow the partition to fill p29's full 25.8 GiB:
+#    resize2fs /dev/mmcblk0p29
+```
+
+After SSH is restored, resume B-17's original display investigation (the `flip_done` timeout / vblank loop) from the "Not yet investigated" candidates at the top of this section.
+
 | Date | Was | Resolution |
 |------|-----|-----------|
 | 2026-06-10 | Console identity contradiction (ttyMT0 vs ttyMT3 vs ttyS0) — risk of silent dead boot | **ttyMT0 = UART0 @ 0x11002000 @ 921600**, triple-sourced (vendor DTB bootargs + spec Table 2-7 pinmux + mainline dtsi). ttyMT3 was a never-used `CONFIG_CMDLINE` fallback. See kernel.md. |
