@@ -3850,3 +3850,161 @@ just `status = "okay"` in DT.
 No new flash/capture this entry — investigation was done entirely via live
 SSH (`journalctl -k -b`, `/proc/iomem`, `clk_summary`) on the already-booted
 build #159 from the recheck above.
+
+## BUILD #164: DSI IRQ/panel debug trace — no USB gadget across multiple boots (2026-07-08)
+
+Built and packed `patches/v6.6/zz-debug/0001-GEMINI-DEBUG-dsi-panel-enable-trace.patch`
+(candidate #1 from B-17's investigation list): `pr_info()` on every
+`mtk_dsi_irq()` fire, plus `dev_info()`/`pr_info()` traces in
+`mtk_dsi_poweron`, `mtk_output_dsi_enable`, the DSI bridge's
+`atomic_enable`/`atomic_pre_enable`, and the panel's `prepare`/`enable`/
+`get_modes`. Applied cleanly on top of the full patch stack (had to move it
+into a new `patches/v6.6/zz-debug/` directory — `build.sh patch` applies
+`find | sort` across *all* subdirectories, so a `debug/` directory sorted
+before `drm/`/`panel/` alphabetically and broke the apply order; `zz-debug`
+sorts last). Packed as build #164 (banner `#53`, image sha256
+`119db7db3a8a4a7768e35a16781a4c689fbfebf1286da924d84780a5366e2ce3`,
+`ALLOW_DEBUG=1` required and correctly enforced by the pack script's
+verification gate). Flashed to both `boot`/`boot2`.
+
+**Result across several flash/power-cycle attempts: no USB gadget ever
+appeared.** `ioreg -p IOUSB` showed only the always-attached FTDI serial
+adapter (on dedicated GPIO97/98 UART test pins, separate from the USB-C
+data port — confirmed this session that both can be connected
+simultaneously without conflict, since the mux is an internal SoC register
+flip, not a physical cable contention). No RNDIS/Ethernet Gadget device,
+at any point, across multiple attempts — restarting macOS's `usbd`, deleting
+the stale RNDIS network service in System Settings, toggling the `en12`
+interface, and reapplying the static IP all had no effect, ruling out
+Mac-side/cable state as the cause.
+
+Tried capturing the full boot on FTDI serial without swapping to USB this
+time (`logs/2026-07-08-166-dsi-panel-enable-trace-full-serial-boot.log`),
+hoping to see further than usual — but it cut off at the identical point as
+every previous capture (`mtu3 11271000.usb: u2p_dis_msk: 0, u3p_dis_msk: 0`
+at kernel time 0.4448s). This confirms the B-15 cutoff is driven by the
+`mtu3` driver itself flipping the UART/USB mux register during its own
+probe — a software event at a fixed point in boot, independent of which
+cable happens to be physically connected. So there is currently no way to
+observe boot past ~0.44s on this hardware for *any* build, debug or not.
+
+**Control test:** reflashed build #159 (banner `#48`, no debug
+instrumentation, sha256 `09b2ea91…` — the established known-good baseline)
+onto both partitions with no other change, same cable/setup.
+`logs/2026-07-08-167-159-rndis-recheck-boot.log` confirms a clean boot,
+cutting off at the same expected point (2.99s). RNDIS gadget enumerated
+normally this time, `en12` came up, `ping 10.15.19.82` and
+`ssh root@10.15.19.82` both succeeded immediately (`uname -a` confirmed
+banner `#48`). This isolates the stall specifically to build #164 — not a
+Mac/cable/network-service problem.
+
+**Working hypothesis, feeding back into B-17:** the unconditional
+`pr_info()` inside `mtk_dsi_irq()` fires on every interrupt. If DSI's IRQ
+(SPI 229) is storming — one of B-17's own leading candidates — a
+synchronous console print on every fire from interrupt context could be
+starving the CPU badly enough that boot never reaches USB gadget
+configuration (a userspace step, well after kernel init). If confirmed,
+this is actually a positive result for B-17 (proves the IRQ is storming),
+but the trace as currently written can't surface that finding, since it
+may itself be the reason nothing further happens. See blockers.md B-17
+"Update 2026-07-08 (evening)" for the full writeup and next step
+(rate-limit the trace).
+
+## BUILDS #168/#170/#172/#174: IRQ-storm isolation inconclusive; known-good #159 also fails; battery hypothesis (2026-07-08, later)
+
+Followed up build #164 with three further isolation builds of
+`patches/v6.6/zz-debug/0001-GEMINI-DEBUG-dsi-panel-enable-trace.patch`,
+each flashed to both partitions and captured on hardware:
+
+- **#168** (banner `#54`, sha256 `a63b23f8dae2561073b740814bf296ccc55e36559acdb6e963a8e2393868e847`):
+  rate-limited the `mtk_dsi_irq` print via a lock-free `atomic_long_t` fire
+  counter (log only the 1st and every 4096th fire) — same rest of the trace
+  set as #164. Still no USB gadget across attempts.
+- **#170** (banner `#55`, sha256 `0dbc951d7099dd2077ec25427404850ce5c03f08e5eea340a7668fb18d4eeb7e`):
+  stripped down to *only* the rate-limited IRQ counter, every other trace
+  point removed, to isolate the print itself from everything else. Capture:
+  `logs/2026-07-08-171-dsi-irq-only-minimal-trace-boot.log`. Still no USB
+  gadget; device also self-reset during this session.
+- **#172** (banner `#56`, sha256 `b5535e5068a4c1101d2c413e433dc927efa0ab33091c183abe045157bdff64ae`)
+  and **#174** (banner `#58`, sha256 `fcbff6a8e42cc3abd55b63fc0c4f26b0da3b961f0f206a79d69de103d9f76475`):
+  added an IRQ-storm circuit breaker to `mtk_dsi_irq()` — `disable_irq_nosync()`
+  once the fire count crosses `GEMINI_DEBUG_IRQ_STORM_LIMIT` (200000),
+  guarded by `atomic_xchg` so it trips only once — intended to force boot
+  past a genuine storm regardless of root cause. #174 also carried the new
+  `configs/gemini-pstore.config` (see below). Neither reached USB gadget
+  networking. Capture: `logs/2026-07-08-176-159-pstore-recheck-boot.log`
+  (this particular capture was actually a #159 recheck, see next).
+
+**Critical pivot — known-good build #159 also failed.** As a sanity check
+after #174, reflashed `logs/2026-07-07-159-ovl-larb-devicelink/new_kali_boot.img`
+(banner `#48`, zero debug instrumentation, the same image that cleanly
+isolated #164 in the very first control test above) — and it **also**
+failed to bring up a USB gadget, and the device self-reset unprompted. Since
+#159 carries none of the suspect debug code, this rules out the debug
+patches as the sole explanation for the run of failures across
+#164/#168/#170/#172/#174. A dedicated serial-only sanity capture,
+**#177** (`logs/2026-07-08-177-159-hardware-sanity-check-boot.log`, still
+banner `#48`), confirmed the board itself boots completely normally — clean
+banner, reaches the expected `mtu3`/mux cutoff at ~2.99s, no panics — so
+this is not a boot-level kernel hang. The board boots; specifically USB-C
+data enumeration/link-up was failing intermittently for every build tried
+late in this session, including the known-good one.
+
+**Revised working hypothesis: marginal/low battery, not software.** The
+user noted the device's battery had not been charging throughout the
+session's many flash/power-cycle operations and was very low. A
+marginal battery explains the pattern without any code change: brownout
+resets under a current spike (gadget enumeration, display init, CPU ramp),
+USB data-line negotiation being the first casualty of a sagging rail, and a
+previously-reliable build suddenly failing. This supersedes the IRQ-storm
+hypothesis as the leading suspect for the late-session failures (though the
+IRQ-storm circuit breaker remains available in `patches/v6.6/zz-debug/` if
+needed again — it does no harm and was never proven to be the cause).
+**Not yet confirmed** — pending retest after a proper charge.
+
+**Also folded in this session (unrelated to the above investigation) —
+build #178:** two independent fixes packed together once the debug patch
+was removed and the tree returned to a clean state:
+1. **Stable gadget MAC.** `CONFIG_USB_ETH=y` is built in, so `g_ether` had no
+   persistent MAC and randomized a new one every boot; since macOS keys its
+   Ethernet "service" identity off the MAC, every boot produced a brand-new
+   `enNN` interface, making "is the gadget up" hard to tell from "it's a
+   different interface than last time." Fixed with
+   `g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00`
+   added to `CONFIG_CMDLINE` in `configs/gemini-cmdline.config` (built-in
+   drivers still honor `<modname>.<param>=` on the cmdline). Verified on the
+   next boot: `en12` in `ioreg`/`ifconfig` showed the expected fixed MAC
+   `42:00:15:19:82:00`.
+2. **pstore/ramoops actually enabled.** The `ramoops@44410000`
+   reserved-memory node already existed in `dts/0001` (matching the
+   vendor's own pstore region, for dual-boot safety) but
+   `CONFIG_PSTORE_RAM` had never been turned on. Added
+   `configs/gemini-pstore.config` (`CONFIG_PSTORE=y`, `CONFIG_PSTORE_RAM=y`,
+   `CONFIG_PSTORE_CONSOLE=y`, `CONFIG_PSTORE_PMSG=y`) so kernel log output
+   now survives a crash/panic/watchdog reset, readable from
+   `/sys/fs/pstore/` on the *next* boot of our own kernel.
+
+Packed as **build #178** (banner `#63 SMP PREEMPT Wed Jul 8 04:49:15 UTC
+2026`, `logs/2026-07-08-178-stable-boot-fixed-mac/new_kali_boot.img`, sha256
+`eeca62d1ef9cddbbdc825c63b708568870f2b669e407eb43f55448c00c2e1b7c`), debug
+instrumentation confirmed absent by the pack script's verification gate.
+Flashed to both partitions; capture
+`logs/2026-07-08-179-stable-boot-fixed-mac-boot.log` shows a normal boot to
+the expected mux cutoff. Post-flash, the RNDIS gadget did enumerate with the
+correct fixed MAC — genuine progress — but link then went `inactive` and
+later the interface disappeared from macOS entirely, consistent with the
+battery hypothesis above rather than a problem with this build. This is the
+current baseline pending the battery-recharge retest.
+
+**Dead end investigated along the way:** checked whether stock Android's
+`/proc/last_kmsg` (via `adb shell`, no root available — production build)
+held anything from the #159 self-reset. It returned only an empty
+ram-console header (`hw_status: 0`, "Not Clear, old status is 0" — no crash
+recorded), and `/sys/fs/pstore/` was inaccessible without root
+(`adb root` refused: "cannot run as root in production builds"). Android's
+proprietary ram-console format is unrelated to the Linux pstore/ramoops
+format just enabled in build #178 — even sharing the same physical
+reserved-memory region, the two don't cross-read each other's data — so
+this can't retroactively explain the #159 reset. Only a future crash
+followed by *our own* kernel's `/sys/fs/pstore/` mount would be
+informative.

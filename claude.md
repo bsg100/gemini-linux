@@ -63,7 +63,7 @@ here.
 | 5 | Display enablement | **Re-opened 2026-07-07 — B-13 root-caused and neutralized.** The cpu0 hard-lock was the mtk_dsi driver unmasking its level-low IRQ (GIC SPI 229) at probe while LK's leftover DSI engine state held the line asserted; `mtk_dsi_irq()` wedged without EOI, blocking all interrupt delivery to cpu0 while the core kept executing. Proof chain (boot.md builds #127–#139, all 2026-07-07): in-kernel irqs-off cpu0 spin survives the fatal window → cpuidle.off/nohlt doesn't help (interrupt-triggered, not idle) → GIC observer on cpu1/7 catches SPI 229 stuck ACTIVE at hang time → `disable_irq()` after `request_irq` is already too late → `IRQ_NOAUTOEN` before request defeats it → build #139 boots to `systemd is-system-running: running` with the display stack enabled, SSH-validated. Interim patch `patches/v6.6/drm/0008-…-dsi-keep-irq-disabled-b13-test.patch`. Remaining: proper fix (enable the IRQ only at DSI power-on with clocks guaranteed), then ordinary deferred-probe bringup to get the DRM master bound and pixels on the panel. See blockers.md B-13. |
 | 6 | Keyboard enablement | Not started |
 | 7 | Power management | Not started |
-| 8 | Networking | **SSH-over-USB fast-track VERIFIED WORKING 2026-07-06:** build #53 (clean, no debug instrumentation) confirmed end-to-end on hardware — RNDIS/Ethernet gadget enumerates on the host, static IP + ping + `ssh root@10.15.19.82` all succeed (boot.md TWENTY-SIXTH RESULT). An apparent hang across builds #40–#52 was chased through clock/IPPC/PMIC forensics before being root-caused to the documented UART/USB console mux switching mid-boot, not a driver defect (B-15, resolved). Note the left USB-C port is shared with the UART console mux: serial and direct-to-Mac USB are mutually exclusive — verification requires a single-cable-swap protocol. WiFi (no mainline driver) remains not started. |
+| 8 | Networking | **SSH-over-USB fast-track VERIFIED WORKING 2026-07-06:** build #53 (clean, no debug instrumentation) confirmed end-to-end on hardware — RNDIS/Ethernet gadget enumerates on the host, static IP + ping + `ssh root@10.15.19.82` all succeed (boot.md TWENTY-SIXTH RESULT). An apparent hang across builds #40–#52 was chased through clock/IPPC/PMIC forensics before being root-caused to the documented UART/USB console mux switching mid-boot, not a driver defect (B-15, resolved). Note the left USB-C port is shared with the UART console mux: serial and direct-to-Mac USB are mutually exclusive — verification requires a single-cable-swap protocol. WiFi (no mainline driver) remains not started. **Update 2026-07-08:** `g_ether` gadget now has a fixed MAC (`g_ether.dev_addr`/`host_addr` in `configs/gemini-cmdline.config`) instead of randomizing one every boot, so macOS no longer treats each boot as a new device — folded into build #178 (banner #63). A late-session run of intermittent gadget-enumeration/self-reset failures (builds #164–#174, then even known-good #159) is suspected to be a **low/marginal battery** issue (device wasn't charging during the session's many flash cycles), not a software regression — see boot.md "BUILDS #168/#170/#172/#174" and blockers.md B-17 for the full writeup; retest pending a full charge. `CONFIG_PSTORE_RAM` also newly enabled (`configs/gemini-pstore.config`) so future crashes are diagnosable via `/sys/fs/pstore/` on the next boot. |
 | 9 | Optional hardware | Not started |
 
 Update the Status column as phases complete or open.
@@ -73,6 +73,40 @@ Update the Status column as phases complete or open.
 # Build Environment
 
 All kernel builds are performed inside the QEMU arm64 VM. Do not attempt to cross-compile on macOS — the kernel host-tool build chain requires Linux (confirmed again 2026-06-10: macOS's case-insensitive filesystem produces phantom file collisions in the kernel tree).
+
+## Machine Profiles (added 2026-07-08)
+
+The user works on this project from two machines. **The build VM always lives
+on the Mac** (`~/gemini-build/vm/gemini-build.qcow2`) regardless of which
+machine the user is on — it is never relocated to the Linux workstation. The
+user will state which machine they are currently on; adjust paths and
+flashing capability accordingly.
+
+**Profile: Mac (primary)**
+- Repo: `/Volumes/extdata/github/gemini_linux`, kernel source:
+  `/Volumes/extdata/github/linux-6.6`.
+- Runs the build VM directly (`~/gemini-build/vm/start-vm.sh`), the FTDI
+  serial monitor (`scripts/ftdi-monitor.py`), and `mtkclient`
+  (`~/gemini-build/mtk-venv`) for flashing/GPT reads. This is the only
+  machine with physical USB access to the Gemini hardware and the FTDI rig.
+- All flash (`mtk w ...`) and capture (`ftdi-monitor.py`) commands are run by
+  the user themselves, never executed directly by the assistant.
+
+**Profile: Linux workstation (secondary, added 2026-07-08)**
+- No direct hardware access (no FTDI rig, no USB connection to the Gemini,
+  no mtkclient venv) and no local build VM — the VM stays on the Mac.
+- Useful for: reading/editing patches, docs, and configs; `git apply --check`
+  and DTS compilation (same tool invocations documented above work on any
+  POSIX host with `dtc`/`clang` installed); research; drafting patches before
+  they're rsynced to the Mac-hosted VM for an actual build.
+- Cannot: start/reach the build VM, run `scripts/build.sh` or
+  `scripts/build-pack.sh` end-to-end (they target the VM over SSH on
+  `localhost:5522`, which only resolves from the Mac), flash partitions, or
+  capture serial logs. Any of those steps must be handed back to the Mac
+  session.
+- If asked to do a full build-and-flash cycle while on this profile, say so
+  explicitly rather than attempting it — coordinate with the Mac session
+  (e.g., push patches, switch machines, or ask the user to run the Mac side).
 
 > **VM rebuilt 2026-06-10** after the original was deleted in a disk cleanup.
 > Now Debian 13 (was Kali) provisioned headlessly via cloud-init — rebuild any

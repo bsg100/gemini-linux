@@ -1449,6 +1449,130 @@ SSH-reachable with this failure present; it is a rendering-pipeline stall,
 not a hang or crash. Current known-good baseline is build #159 (`boot`/
 `boot2` identical, flashed 2026-07-08).
 
+**Update 2026-07-08 (evening) — debug build #164 (candidate #1 trace) itself
+appears to hang/stall before reaching USB gadget config:** built and flashed
+`patches/v6.6/zz-debug/0001-GEMINI-DEBUG-dsi-panel-enable-trace.patch`
+(candidate #1 from the list above — `pr_info()` inside `mtk_dsi_irq()` on
+every fire, plus `dev_info()`/`pr_info()` traces in `mtk_dsi_poweron`,
+`mtk_output_dsi_enable`, the bridge `atomic_enable`/`atomic_pre_enable`
+callbacks, and `ssd2092_prepare`/`enable`/`get_modes`). Packed as build #164
+(banner #53, `ALLOW_DEBUG=1` — the pack script's debug-instrumentation gate
+correctly caught this and required the override).
+
+Across multiple flash/power-cycle attempts, build #164 **never presented a
+USB gadget device at all** (`ioreg` showed nothing but the always-attached
+FTDI serial adapter — no RNDIS/Ethernet Gadget, ever, at any point). Serial
+capture couldn't help distinguish "still booting" from "genuinely stuck",
+because the UART/USB mux cutoff (`mtu3` driver flipping the mux register
+during its own probe, ~0.44-3.0s kernel time) happens in software
+regardless of which cable is physically connected — confirmed this session
+by capturing with the FTDI left connected throughout (no swap), which still
+cut off at the identical point as every prior capture.
+
+**Control test:** reflashed known-good build #159 (banner #48, no debug
+instrumentation) on both `boot`/`boot2` with no other change. RNDIS gadget
+enumerated normally, link came up, `ping` and `ssh root@10.15.19.82`
+succeeded immediately (`uname -a` confirmed banner #48). This isolates the
+stall to something specific about build #164, not a Mac-side/cable/RNDIS-
+service problem (a stale macOS network service was also removed and USB
+services restarted along the way, with no effect on #164 — ruling out
+Mac-side state as the cause).
+
+**Working hypothesis:** the `pr_info()` inside `mtk_dsi_irq()` is the prime
+suspect. If DSI's IRQ (SPI 229) is firing at high frequency — which is
+exactly candidate #2's concern, IRQ storming — a synchronous console print
+on every fire from interrupt context could starve the CPU badly enough that
+boot never reaches the point of configuring the USB composite gadget
+(which happens from userspace, well after kernel init). This would
+actually be a positive result for root-causing B-17 (confirms the IRQ is
+storming) if true, but the trace as written can't get the data out to
+confirm it, since it may itself be the reason nothing further happens.
+
+**Next step:** rate-limit the IRQ trace (`pr_info_ratelimited()` instead of
+unconditional `pr_info()`, and/or a bounded per-boot counter) so it can
+report whether the IRQ is storming without adding enough overhead to stall
+boot outright. See `patches/v6.6/zz-debug/` for the revised patch.
+
+**Update 2026-07-08 (later same evening) — IRQ-storm hypothesis inconclusive
+after three isolation builds; reframed by a known-good build ALSO failing:**
+followed the isolation path above through three further debug builds, each
+flashed and captured on hardware:
+- **Build #168** (`patches/v6.6/zz-debug/0001-...patch` v2, banner #54): same
+  full trace set as #164 but with the `mtk_dsi_irq` print rate-limited via an
+  `atomic_long_t` fire counter (log only the 1st and every 4096th fire). Did
+  not reach USB gadget networking.
+- **Build #170** (v3, banner #55): stripped to *only* the rate-limited IRQ
+  counter — every other trace point removed, to isolate whether the IRQ
+  print alone (regardless of frequency) was the problem. Still did not reach
+  USB gadget networking.
+- **Build #172 / #174** (v4, banners #56/#58): added an IRQ-storm circuit
+  breaker (`disable_irq_nosync()` once the fire count crosses 200000,
+  guarded by `atomic_xchg` so it only fires once) so that even a genuine
+  storm would be forcibly broken and boot could proceed regardless of root
+  cause. #174 additionally carried the pstore config fix (see below). Neither
+  build reached USB gadget networking.
+
+**Critical pivot:** after build #174 also failed, known-good build **#159**
+(previously reliable, zero debug instrumentation, the same image that
+isolated #164 in the first control test above) was reflashed as a sanity
+check — and **it also failed to bring up the USB gadget, and the device
+self-reset unprompted**. This directly contradicts the working hypothesis
+that the debug patches (IRQ storm / print-in-ISR starvation) were
+responsible: #159 has none of that code and failed anyway. A follow-up
+serial-only sanity capture (build #177, no USB involved) confirmed the board
+itself boots completely normally on this same #159 image — clean banner,
+reaches the expected `mtu3`/mux cutoff at ~2.99s, no panics or anomalies —
+ruling out a boot-level kernel hang. So the board boots fine; specifically
+USB-C data enumeration/link-up was failing intermittently across every build
+tried late in this session, including known-good ones.
+
+**Working hypothesis revised: marginal battery / power delivery, not
+software.** The user observed the device's battery had not been charging
+throughout the session's many flash/power-cycle operations and was very low.
+A low/marginal battery would explain the whole pattern independent of which
+kernel was flashed: brownout-induced resets under a current spike (USB
+gadget enumeration, display init, CPU ramp), USB data-line negotiation being
+the first thing to suffer when the rail is marginal, and a previously
+reliable build suddenly failing with no code change. This is considered the
+leading explanation for the late-session #164/#168/#170/#172/#174/#159
+failures as of 2026-07-08, superseding the IRQ-storm hypothesis as the
+primary suspect (though the IRQ-storm circuit breaker and rate-limited trace
+remain harmless/available in `patches/v6.6/zz-debug/` if needed again).
+**Not yet confirmed** — next step is to retest once the device has had a
+proper charge: reflash the known-good baseline (build #178/banner #63, see
+below) and confirm consistent gadget enumeration and SSH reachability across
+multiple power cycles.
+
+**Unrelated fix folded in this session — stable gadget MAC address:**
+separately, `CONFIG_USB_ETH` is built in (`=y`), so `g_ether` had no
+persistent MAC and randomized one on every boot; macOS keys its Ethernet
+"service" identity off the MAC, so every boot produced a brand-new `enNN`
+interface and network service, making "is the gadget really not coming up"
+indistinguishable from "it came up as a different interface than expected."
+Fixed via `g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00`
+added to `CONFIG_CMDLINE` in `configs/gemini-cmdline.config` (built-in
+drivers still honor `<modname>.<param>=` on the kernel cmdline). Also folded
+in: `configs/gemini-pstore.config` (new file) enabling `CONFIG_PSTORE_RAM`/
+`CONFIG_PSTORE_CONSOLE`/`CONFIG_PSTORE_PMSG` — the `ramoops@44410000`
+reserved-memory node already existed in `dts/0001` (matches the vendor's own
+pstore region for dual-boot safety) but the kernel config to actually back
+it with pstore had never been enabled. Both changes built cleanly with debug
+instrumentation removed, packed as **build #178 (banner #63,
+`logs/2026-07-08-178-stable-boot-fixed-mac/`, sha256
+`eeca62d1ef9cddbbdc825c63b708568870f2b669e407eb43f55448c00c2e1b7c`)** —
+this is the current baseline pending the battery-recharge retest above.
+
+**Also investigated, dead end:** while troubleshooting the late-session USB
+failures, checked whether stock Android's `/proc/last_kmsg` (via `adb shell`
+in a production, non-rooted build) held anything from the #159 self-reset —
+it only contained an empty ram-console header (`hw_status: 0`, no crash
+recorded), and `/sys/fs/pstore/` was inaccessible without root. Android's
+ram-console format is unrelated to the Linux pstore/ramoops format just
+enabled above (different formats, even sharing the same physical region), so
+this path can't retroactively explain the #159 reset — only a future boot
+with build #178's pstore config, followed by a crash, followed by *our own*
+kernel's `/sys/fs/pstore/` would be informative.
+
 | Date | Was | Resolution |
 |------|-----|-----------|
 | 2026-06-10 | Console identity contradiction (ttyMT0 vs ttyMT3 vs ttyS0) — risk of silent dead boot | **ttyMT0 = UART0 @ 0x11002000 @ 921600**, triple-sourced (vendor DTB bootargs + spec Table 2-7 pinmux + mainline dtsi). ttyMT3 was a never-used `CONFIG_CMDLINE` fallback. See kernel.md. |
