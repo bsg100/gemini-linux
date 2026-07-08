@@ -3802,3 +3802,51 @@ identically this session), captures:
 `logs/2026-07-08-159-known-good-recheck-boot.log` (FTDI, cuts off at mux
 switch as expected) + live `journalctl -k -b` over SSH (password auth) for
 post-cutoff visibility.
+
+## B-17 D-PHY EBUSY reassessed: it's noise, not the blocker (2026-07-08, same session)
+
+Went to investigate B-17 further, on the same live build #159 SSH session
+(password auth via `sshpass`, no new flash/capture — the device was already
+booted from the recheck above). Checked `/proc/iomem` and
+`/sys/kernel/debug/clk/clk_summary`:
+
+```
+10215000-1021508f : 10215000.mipi-dphy mipi-dphy@10215000
+mipi_tx0_pll   1  1  1  927504000  0  0  50000  ?
+```
+
+The D-PHY *is* bound and its PLL is running live at 927.5 MHz — the real,
+built-in copy of `mediatek-mipi-tx` (`CONFIG_PHY_MTK_MIPI_DSI=y`) probed
+successfully. Re-reading the exact `journalctl -k -b` context around the
+`-16`/EBUSY line shows it's `Error: Driver 'mediatek-mipi-tx' is already
+registered, aborting...` — a **second** registration attempt on top of an
+already-successful one, not the only attempt. The culprit: a stale leftover
+`.ko` still present on the rootfs from an earlier build when this driver was
+`CONFIG_PHY_MTK_MIPI_DSI=m` —
+`/lib/modules/6.6.0-dirty/kernel/drivers/phy/mediatek/phy-mtk-mipi-dsi-drv.ko`
+— which module autoload/coldplug tries to insert after the built-in copy
+already owns the driver name. Harmless duplicate-load noise; **not** the
+reason the panel stays dark. blockers.md B-17 has been corrected in place to
+reflect this (previous framing around D-PHY EBUSY struck through/replaced).
+
+**Real symptom, root cause still open:** with the D-PHY confirmed working and
+the full DSI/panel bind chain completing (`panel-solomon-ssd2092
+1401c000.dsi.0: Solomon SSD2092 FHD DSI panel registered`, `probe of
+1401c000.dsi.0 returned 0`, `fb0: mediatekdrmfb`, `GEMINI-DEBUG bind:
+complete`), the DRM atomic commit loop still never produces a real frame —
+`flip_done timed out` / `commit wait timed out` on CRTC, PLANE and CONNECTOR
+in turn, repeating every ~10s indefinitely. No panel `prepare`/`enable`
+activity is visible at default log level (expected — no dyndbg enabled for
+`mtk_dsi.c` or `panel-solomon-ssd2092.c`, so this doesn't mean they didn't
+run). Next concrete steps (see blockers.md B-17 for full detail): enable
+dynamic debug on `mtk_dsi.c` + `panel-solomon-ssd2092.c` to see whether the
+panel's DSI init command sequence actually executes/succeeds; confirm the
+DSI IRQ (masked-until-power-on per the B-13 fix patch) is correctly
+unmasked again once the pipeline reaches enable, since a permanently-masked
+IRQ would prevent vblank/TE delivery by construction; check whether
+`disp_ovl0`/`mutex`/`disp_rdma0` reach real runtime configuration versus
+just `status = "okay"` in DT.
+
+No new flash/capture this entry — investigation was done entirely via live
+SSH (`journalctl -k -b`, `/proc/iomem`, `clk_summary`) on the already-booted
+build #159 from the recheck above.

@@ -1370,27 +1370,44 @@ before relying on the device being back to a good state.
 
 ---
 
-## 🟡 B-17 — MIPI DSI D-PHY (`mtk_mipi_tx`) probe fails with `-EBUSY`, panel stays dark
+## 🟡 B-17 — DRM atomic commit never completes (`flip_done`/vblank timeout loop), panel stays dark
 
 **Opened 2026-07-08**, split out of B-13 once B-13's original scope (cpu0
 hard-lock + `-517` DSI-attach probe-defer) was confirmed fully resolved
 (see B-13's "Update 2026-07-08" above and boot.md "BUILD #161 recheck / new
 blocker found: mtk_mipi_tx D-PHY probe EBUSY").
 
-**Symptom:** on build #159 (banner #48), with live SSH access confirmed
-and the full DSI/panel/DRM bind chain completing successfully (DSI host
-attaches on deferred retry after ~62s, panel registers, `fb0: mediatekdrmfb`
-created), the MIPI DSI D-PHY driver itself fails to probe:
+**Correction 2026-07-08 (same day, live SSH investigation on build #159):**
+the D-PHY `-EBUSY` this blocker was originally opened around is a **red
+herring**, not the cause. Live check on the running device:
 ```
-calling  mtk_mipi_tx_driver_init+0x0/0xfe8 [phy_mtk_mipi_dsi_drv] @ 247
-initcall mtk_mipi_tx_driver_init+0x0/0xfe8 [phy_mtk_mipi_dsi_drv] returned -16 after 1011 usecs
+# /proc/iomem
+10215000-1021508f : 10215000.mipi-dphy mipi-dphy@10215000
+# /sys/kernel/debug/clk/clk_summary
+mipi_tx0_pll   1  1  1  927504000  0  0  50000  ?
 ```
-`-16` = `-EBUSY`. Without a working D-PHY, DSI cannot physically clock data
-to the panel even though every higher-level DRM/panel object bound
-correctly — this is why the display stays completely dark despite B-13
-being closed. Consequence: every DRM atomic commit (driven by the fbdev
-helper's hotplug retry) times out waiting for vblank/flip completion, in an
-infinite ~10-second-period loop:
+The D-PHY *is* bound (built in via `CONFIG_PHY_MTK_MIPI_DSI=y`) and its PLL
+is running live at 927.5 MHz — proof the real, built-in copy of
+`mediatek-mipi-tx` probed successfully. The `-EBUSY`/"already registered"
+message logged later at boot is a **second, stale registration attempt**:
+`/lib/modules/6.6.0-dirty/kernel/drivers/phy/mediatek/phy-mtk-mipi-dsi-drv.ko`
+is a leftover `.ko` from an earlier build configuration (when this driver
+was `=m`) still present on the rootfs; something (module autoload/coldplug
+replay) tries to insert it after the built-in driver already owns the
+`"mediatek-mipi-tx"` driver name, and the second registration is correctly
+rejected. Harmless duplicate-load noise — not a probe failure of the real
+D-PHY, and not the reason the panel stays dark. (Cleanup: the stale `.ko`
+should be removed from the rootfs module tree in the next `mkrootfs.sh`
+run so this noise stops appearing in logs.)
+
+**Actual symptom (root cause still open):** on build #159 (banner #48),
+with live SSH access confirmed and the full DSI/panel/D-PHY/DRM bind chain
+completing successfully — DSI host attaches on deferred retry after ~62s,
+`panel-solomon-ssd2092 1401c000.dsi.0: Solomon SSD2092 FHD DSI panel
+registered`, `probe of 1401c000.dsi.0 returned 0`, `fb0: mediatekdrmfb`
+created, `GEMINI-DEBUG bind: complete` — every DRM atomic commit (driven by
+the fbdev helper's hotplug retry) times out waiting for vblank/flip
+completion, in an infinite ~10-second-period loop:
 ```
 mediatek-drm mediatek-drm.1.auto: [drm] *ERROR* flip_done timed out
 mediatek-drm mediatek-drm.1.auto: [drm] *ERROR* [CRTC:51:crtc-0] commit wait timed out
@@ -1401,23 +1418,36 @@ WARNING: ... drm_atomic_helper_wait_for_vblanks.part.0+0x23c/0x260
 ```
 System otherwise remains stable and fully reachable over SSH throughout —
 this is not a hang, just a permanently-dark, permanently-retrying display
-pipeline.
+pipeline. No panel-driver `prepare`/`enable` activity (regulator/reset/init
+command sequence) is visible in the default-level kernel log — this is
+expected at default log level (no dynamic-debug enabled for
+`panel-solomon-ssd2092.c` or `mtk_dsi.c`), not evidence they were skipped.
 
-**Not yet investigated:** what specifically holds the D-PHY resource
-`EBUSY` at probe time. Leading candidates (not yet checked): a clock or
-regulator the D-PHY driver requests already being held/enabled by another
-driver (e.g. the DSI host itself, or a shared MIPI TX macro also used by
-another interface), a duplicate/self-conflicting `devm_*` resource request
-inside the same driver, or a probe-ordering issue where the D-PHY needs to
-come up strictly before or after the DSI host rather than being independent.
-The vendor 3.18 `mtk_mipi_tx`/DSI-PHY driver source
-(`/Volumes/extdata/github/gemini-android-kernel-3.18`, per CLAUDE.md) is the
-next reference to check for the expected clock/reset sequencing.
+**Not yet investigated:** why the CRTC never produces a real vblank/frame.
+Leading candidates, in the order they should be checked next:
+1. Whether `drm_panel_prepare()`/`drm_panel_enable()` are actually being
+   invoked by the DSI bridge's atomic enable path, and whether the SSD2092
+   init command sequence (`panel/0005-drm-panel-add-solomon-ssd2092-fhd-panel.patch`)
+   completes or errors silently — enable `dyndbg` for both `mtk_dsi.c` and
+   `panel-solomon-ssd2092.c` on the next boot to see this.
+2. Whether the DSI host's own vblank/TE (tearing-effect) IRQ path is
+   correctly configured post-B-13 fix (patch
+   `0008-…-dsi-keep-irq-disabled-b13-test.patch` intentionally holds the IRQ
+   masked until DSI power-on — confirm it is actually unmasked again once
+   the pipeline reaches enable, otherwise no vblank can ever fire by
+   construction).
+3. Whether `disp_ovl0`/`mutex`/`disp_rdma0` etc. actually reach a running
+   state (their `status = "okay"` in `dts/0001` doesn't guarantee correct
+   runtime configuration) — cross-check the vendor 3.18 `dispsys`/DDP
+   config sequence for post-power-on register pokes not yet ported.
+The vendor 3.18 source (`/Volumes/extdata/github/gemini-android-kernel-3.18`,
+per CLAUDE.md) remains the reference for whichever of the above needs a
+concrete register/sequence answer.
 
 **Recovery:** no special recovery needed — the system remains stable and
-SSH-reachable with this failure present; it is a probe failure, not a hang
-or crash. Current known-good baseline is build #159 (`boot`/`boot2`
-identical, flashed 2026-07-08).
+SSH-reachable with this failure present; it is a rendering-pipeline stall,
+not a hang or crash. Current known-good baseline is build #159 (`boot`/
+`boot2` identical, flashed 2026-07-08).
 
 | Date | Was | Resolution |
 |------|-----|-----------|
