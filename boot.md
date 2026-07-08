@@ -4018,3 +4018,37 @@ Result: USB gadget (`ID 0525:a4a2 Linux-USB Ethernet/RNDIS Gadget`) enumerated o
 Conclusion: Mac-specific cause conclusively ruled out. Problem is on the Gemini's own side. See B-17 "Update 2026-07-08 — cross-host isolation complete" for full command output and interpretation.
 
 **Root cause subsequently identified:** the SP Flash Tool scatter-file restore wiped p29 (`linux` partition), replacing the Debian 13 rootfs (which had `usb0.network` + systemd-networkd) with the factory Kali image, which has no USB networking config. All kernel builds since the scatter restore appear broken because the device-side networking stack was never there — the kernel was always fine. Fix: rebuild and reflash Debian 13 rootfs via `scripts/mkrootfs.sh`, then `mtk w linux debian13-rootfs.img`. See B-17 for the full procedure.
+
+### FRESH DEBIAN 13 ROOTFS REFLASH — B-17 gadget/SSH fix confirmed, 2026-07-08, Mac
+
+Built a new rootfs image in the build VM (`scripts/mkrootfs.sh`,
+`debian13-rootfs.img`, sha256
+`a87d4780e7ccbbdba0a281b7e174c60f0eff181c1e470c5bdc8c5b3e8cd8c79e`), flashed
+to `linux` (p29) with `mtk w linux ...`. `boot2` untouched (build #71,
+banner #5, the earliest ever validated build — deliberately left as-is to
+isolate the rootfs as the only variable).
+
+Serial capture `logs/2026-07-09-185-freshrootfs-boot-check.log` (2112
+lines): clean boot, kernel init proceeds normally through `mtu3
+11271000.usb: u2p_dis_msk: 0, u3p_dis_msk: 0` — the expected UART/USB mux
+handoff point (B-15) — with no new errors versus prior known-good captures.
+
+Post-boot: macOS `en12` (RNDIS/Ethernet Gadget) came up `status: active`,
+100baseTX full-duplex — carrier now asserts, unlike every attempt since the
+scatter restore. Mac-side static IP added manually
+(`sudo ifconfig en12 alias 10.15.19.1 netmask 255.255.255.0`, since the
+interface only self-assigned an APIPA `169.254.x.x` address). `ping
+10.15.19.82` and `ssh root@10.15.19.82` (password `toor`, fresh host key —
+expected one-time `ssh-keygen -R 10.15.19.82` warning, not a real MITM)
+both succeeded:
+
+```
+Linux gemini 6.6.0-dirty #5 SMP PREEMPT Mon Jul  6 06:22:43 UTC 2026 aarch64 GNU/Linux
+Debian GNU/Linux 13 (trixie)
+```
+
+Confirms the root-cause diagnosis end-to-end: the gadget/SSH failure was a
+rootfs problem introduced by the scatter-file restore, not a kernel or
+driver regression — no code change was needed. B-17's gadget-networking
+sub-thread is now closed; the DRM/display sub-issue that gives B-17 its
+title remains open separately.

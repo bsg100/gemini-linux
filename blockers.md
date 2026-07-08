@@ -1853,6 +1853,30 @@ bash scripts/mkrootfs.sh
 
 After SSH is restored, resume B-17's original display investigation (the `flip_done` timeout / vblank loop) from the "Not yet investigated" candidates at the top of this section.
 
+**Update 2026-07-08 — fix verified end-to-end; B-17's gadget/SSH sub-issue CLOSED.**
+
+Ran the reflash procedure above (build VM on the Mac, `scripts/mkrootfs.sh` rebuilt a fresh `debian13-rootfs.img`, sha256
+`a87d4780e7ccbbdba0a281b7e174c60f0eff181c1e470c5bdc8c5b3e8cd8c79e`, flashed to `linux` (p29) with
+`mtk w linux ~/gemini-build/OUTPUT/debian13-rootfs.img`, boot2 left untouched at build #71). Serial capture
+(`logs/2026-07-09-185-freshrootfs-boot-check.log`) confirms a clean boot through `mtu3 11271000.usb` init (the
+expected UART/USB mux handoff point per B-15) with no new kernel-side errors. Post-boot, macOS's `en12`
+(RNDIS/Ethernet Gadget) came up `status: active` at 100baseTX — the carrier/link problem is gone, confirming the
+diagnosis. Mac side needed a static IP added manually (`sudo ifconfig en12 alias 10.15.19.1 netmask
+255.255.255.0`) since the interface only self-assigned an APIPA address; once set, `ping 10.15.19.82` and
+`ssh root@10.15.19.82` (password `toor`, fresh host key — expect and clear the one-time `ssh-keygen -R
+10.15.19.82` host-key-changed warning) both succeeded:
+
+```
+$ ssh root@10.15.19.82 uname -a
+Linux gemini 6.6.0-dirty #5 SMP PREEMPT Mon Jul  6 06:22:43 UTC 2026 aarch64 GNU/Linux
+Debian GNU/Linux 13 (trixie)
+```
+
+This closes the gadget-networking sub-thread of B-17 (root cause: SP Flash Tool scatter restore had wiped the
+rootfs, not a kernel/driver defect — no code change was needed, only a rootfs reflash). The **display** sub-issue
+(DRM atomic commit / `flip_done` timeout, panel dark) that gives this section its title remains open — see the
+"Not yet investigated" candidates above for where to resume that separately.
+
 | Date | Was | Resolution |
 |------|-----|-----------|
 | 2026-06-10 | Console identity contradiction (ttyMT0 vs ttyMT3 vs ttyS0) — risk of silent dead boot | **ttyMT0 = UART0 @ 0x11002000 @ 921600**, triple-sourced (vendor DTB bootargs + spec Table 2-7 pinmux + mainline dtsi). ttyMT3 was a never-used `CONFIG_CMDLINE` fallback. See kernel.md. |
