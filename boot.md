@@ -3729,3 +3729,76 @@ across several data points:
   sha256 `1c93eba0…`) now that USB is working again, and get a clean
   post-boot `dmesg` over SSH to resolve whether the `-517` DSI probe-defer
   is benign.
+
+## BUILD #161 recheck / new blocker found: mtk_mipi_tx D-PHY probe EBUSY (2026-07-08)
+
+Start of session: attempted to flash build #161 and reflash both `boot`/
+`boot2` with build #159 (last known-SSH-good) after a fresh USB-gadget
+enumeration scare (see below) that turned out to be the same
+host/cable-side symptom as 2026-07-07, not a kernel regression — resolved
+the same way, by capturing over FTDI first
+(`logs/2026-07-08-159-known-good-recheck-boot.log`, 5232 lines, cuts off
+normally at the expected mtu3/USB-mux switch point) to prove the kernel
+boot itself was fine, then re-seating the USB-C cable until the gadget
+enumerated and `ssh` (password auth, `sshpass -p toor`, publickey still
+rejected for an uninvestigated reason) succeeded.
+
+With live SSH access on build #159, pulled `journalctl -k -b` (the `dmesg`
+ring buffer itself had already wrapped past the boot-time DSI messages,
+overwritten by the still-present GEMINI-DEBUG cpu0 heartbeat spam — build
+#159 predates the debug-instrumentation strip that #161 has). This finally
+answers the open question from the previous session:
+
+**`-517` on `mtk_dsi_host_attach` is confirmed benign — the DSI host
+attaches successfully on a later deferred-probe retry:**
+```
+probe of 1401c000.dsi.0 returned 0 after 62276826 usecs
+```
+(i.e. ~62 seconds after the initial `-517`/EPROBE_DEFER). Following that:
+`mtk_drm_bind` completes, `panel-solomon-ssd2092 1401c000.dsi.0: Solomon
+SSD2092 FHD DSI panel registered`, `mediatek-drm mediatek-drm.1.auto: [drm]
+fb0: mediatekdrmfb frame buffer device`, and a `GEMINI-DEBUG bind: complete`
+marker. So the `disp-mutex` wait does resolve, and the whole DRM/panel bind
+chain finishes correctly. **B-13 (as originally scoped: cpu0 hard-lock +
+DSI probe) is now fully closed** — no lock, no permanent probe failure.
+
+**New blocker, found immediately after:** the MIPI DSI D-PHY driver fails
+to probe:
+```
+calling  mtk_mipi_tx_driver_init+0x0/0xfe8 [phy_mtk_mipi_dsi_drv] @ 247
+initcall mtk_mipi_tx_driver_init+0x0/0xfe8 [phy_mtk_mipi_dsi_drv] returned -16 after 1011 usecs
+```
+`-16` is `-EBUSY`. Without a working D-PHY, DSI can bind logically but
+cannot actually clock data out to the panel — consistent with the observed
+symptom (screen stays completely dark). This manifests as a continuous loop
+of DRM atomic-commit failures, repeating roughly every 10 seconds
+indefinitely:
+```
+mediatek-drm mediatek-drm.1.auto: [drm] *ERROR* flip_done timed out
+mediatek-drm mediatek-drm.1.auto: [drm] *ERROR* [CRTC:51:crtc-0] commit wait timed out
+mediatek-drm mediatek-drm.1.auto: [drm] *ERROR* [PLANE:33:plane-0] commit wait timed out
+mediatek-drm mediatek-drm.1.auto: [drm] *ERROR* [CONNECTOR:32:DSI-1] commit wait timed out
+[drm:mtk_drm_crtc_atomic_begin] *ERROR* new event while there is still a pending event
+WARNING: ... drm_atomic_helper_wait_for_vblanks.part.0+0x23c/0x260
+```
+i.e. every atomic commit (via `drm_fbdev_generic_client_hotplug` /
+`drm_client_dev_hotplug`) times out waiting for vblank/flip completion,
+because the CRTC/connector never actually produces a frame without a
+working PHY, and this repeats forever as the fbdev helper keeps retrying.
+
+**Tracked as the next concrete blocker (not yet numbered — will become
+B-17 or folded into B-13's remaining scope, see blockers.md).** Likely
+cause of the `-16`/EBUSY: a resource (clock, regulator, or MMIO region)
+the D-PHY driver requests is already held by something else — worth
+checking probe order against the vendor 3.18 `mtk_mipi_tx`/DSI PHY driver
+source for a specific clock/reset sequencing requirement. Not yet
+investigated further this session.
+
+**Full serial provenance:** kernel base v6.6, repo commit `f7e5cd5` (build
+#159 unchanged from 2026-07-07), `.config` at
+`logs/2026-07-07-159-ovl-larb-devicelink/config`, image sha256
+`09b2ea91…` (unchanged), partition `boot2` (and `boot`, both flashed
+identically this session), captures:
+`logs/2026-07-08-159-known-good-recheck-boot.log` (FTDI, cuts off at mux
+switch as expected) + live `journalctl -k -b` over SSH (password auth) for
+post-cutoff visibility.

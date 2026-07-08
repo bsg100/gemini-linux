@@ -628,6 +628,35 @@ the rest of this session; root-caused as unrelated to the kernel, see boot.md
 throughout showed a completely normal, unhung boot) to determine whether the
 DSI host eventually attaches or the `disp-mutex` wait blocks it permanently.
 
+**Update 2026-07-08 (`-517` confirmed benign — B-13 closed; new blocker
+opened as B-17):** got the live `journalctl -k -b` dump over SSH on build
+#159 that the previous session needed (dmesg's own ring buffer had already
+wrapped past the boot-time messages). Confirms the DSI host attach
+**does** succeed on retry:
+```
+probe of 1401c000.dsi.0 returned 0 after 62276826 usecs
+```
+(~62s after the initial `-517`). `mtk_drm_bind` then completes, the panel
+registers (`panel-solomon-ssd2092 1401c000.dsi.0: Solomon SSD2092 FHD DSI
+panel registered`), and DRM creates `fb0: mediatekdrmfb`. So the
+`disp-mutex` wait resolves and the deferred-probe retry is a normal,
+harmless part of driver bring-up here — **not** a real block. **B-13, as
+originally scoped (cpu0 hard-lock at DSI probe + this probe-defer
+question), is now fully closed.**
+
+Immediately after, a new failure appeared that actually explains the still-dark
+screen: `mtk_mipi_tx_driver_init` (`phy_mtk_mipi_dsi_drv`, the MIPI DSI
+D-PHY) returns **`-16`/`-EBUSY`** on probe. With no working D-PHY, DSI binds
+logically (host+panel+fb all register) but can't physically clock data to
+the glass, so every DRM atomic commit times out waiting for vblank/flip
+completion — an infinite ~10s-period loop of `flip_done timed out` /
+`commit wait timed out` across CRTC/PLANE/CONNECTOR as the fbdev helper
+keeps retrying. Tracked as new blocker **B-17** (see entry below) — root
+cause of the EBUSY not yet investigated (leading candidate: a clock,
+regulator, or MMIO region the D-PHY driver requests is already held by
+another driver/instance; cross-reference the vendor 3.18 `mtk_mipi_tx`/DSI
+PHY source for a specific sequencing requirement).
+
 **Update 2026-07-05 (evening):** severity upgraded — this is no longer just
 "DRM never binds". With `CONFIG_COMMON_CLK_MT6797_MMSYS=y` (added to fix the
 DSI engine-clk -517 defer), the kernel **hard-hangs silently at ~0.52s**
@@ -1341,7 +1370,54 @@ before relying on the device being back to a good state.
 
 ---
 
-## 🟢 Resolved (history)
+## 🟡 B-17 — MIPI DSI D-PHY (`mtk_mipi_tx`) probe fails with `-EBUSY`, panel stays dark
+
+**Opened 2026-07-08**, split out of B-13 once B-13's original scope (cpu0
+hard-lock + `-517` DSI-attach probe-defer) was confirmed fully resolved
+(see B-13's "Update 2026-07-08" above and boot.md "BUILD #161 recheck / new
+blocker found: mtk_mipi_tx D-PHY probe EBUSY").
+
+**Symptom:** on build #159 (banner #48), with live SSH access confirmed
+and the full DSI/panel/DRM bind chain completing successfully (DSI host
+attaches on deferred retry after ~62s, panel registers, `fb0: mediatekdrmfb`
+created), the MIPI DSI D-PHY driver itself fails to probe:
+```
+calling  mtk_mipi_tx_driver_init+0x0/0xfe8 [phy_mtk_mipi_dsi_drv] @ 247
+initcall mtk_mipi_tx_driver_init+0x0/0xfe8 [phy_mtk_mipi_dsi_drv] returned -16 after 1011 usecs
+```
+`-16` = `-EBUSY`. Without a working D-PHY, DSI cannot physically clock data
+to the panel even though every higher-level DRM/panel object bound
+correctly — this is why the display stays completely dark despite B-13
+being closed. Consequence: every DRM atomic commit (driven by the fbdev
+helper's hotplug retry) times out waiting for vblank/flip completion, in an
+infinite ~10-second-period loop:
+```
+mediatek-drm mediatek-drm.1.auto: [drm] *ERROR* flip_done timed out
+mediatek-drm mediatek-drm.1.auto: [drm] *ERROR* [CRTC:51:crtc-0] commit wait timed out
+mediatek-drm mediatek-drm.1.auto: [drm] *ERROR* [PLANE:33:plane-0] commit wait timed out
+mediatek-drm mediatek-drm.1.auto: [drm] *ERROR* [CONNECTOR:32:DSI-1] commit wait timed out
+[drm:mtk_drm_crtc_atomic_begin] *ERROR* new event while there is still a pending event
+WARNING: ... drm_atomic_helper_wait_for_vblanks.part.0+0x23c/0x260
+```
+System otherwise remains stable and fully reachable over SSH throughout —
+this is not a hang, just a permanently-dark, permanently-retrying display
+pipeline.
+
+**Not yet investigated:** what specifically holds the D-PHY resource
+`EBUSY` at probe time. Leading candidates (not yet checked): a clock or
+regulator the D-PHY driver requests already being held/enabled by another
+driver (e.g. the DSI host itself, or a shared MIPI TX macro also used by
+another interface), a duplicate/self-conflicting `devm_*` resource request
+inside the same driver, or a probe-ordering issue where the D-PHY needs to
+come up strictly before or after the DSI host rather than being independent.
+The vendor 3.18 `mtk_mipi_tx`/DSI-PHY driver source
+(`/Volumes/extdata/github/gemini-android-kernel-3.18`, per CLAUDE.md) is the
+next reference to check for the expected clock/reset sequencing.
+
+**Recovery:** no special recovery needed — the system remains stable and
+SSH-reachable with this failure present; it is a probe failure, not a hang
+or crash. Current known-good baseline is build #159 (`boot`/`boot2`
+identical, flashed 2026-07-08).
 
 | Date | Was | Resolution |
 |------|-----|-----------|
