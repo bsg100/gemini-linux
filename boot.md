@@ -5898,3 +5898,34 @@ rendered as \"" report was the missing Fn layer, not a layout issue.
 keyboard) for the first time under mainline Linux. Follow-ups tracked:
 Fn layer (all punctuation beyond , . ' lives there), keymap spot-check,
 B-18 (USB gadget), B-11/EINT (Stage B, IRQ-driven keypad).
+
+## BUILD #171 (banner #138) + live console keymap — Fn LAYER WORKING (2026-07-12) ⭐
+
+Kernel side: DTS Fn key (matrix 4,3) remapped KEY_FN → KEY_RIGHTALT
+(AltGr) — the console's level-3 modifier; matrix_keypad can't do layers,
+the console keymap can. Flashed and validated (capture
+logs/2026-07-12-172, session -173).
+
+Keymap side (rootfs, no reflash): extracted Gemian's authoritative XKB
+map from the 2019 Kali image with debugfs (planet/linux.img,
+/usr/share/X11/xkb/symbols/planet_vndr/gemini — "us" variant; Gemian's
+Fn = ISO_Level3_Shift on <LWIN>, same idea). Encoded its level-3 layer +
+US-silkscreen shift fixes into a busybox bkeymap (base = `busybox
+dumpkmap` of the running kernel map; 23 entries patched: Fn+1..0 =
+~`£<>[]{}; Fn+i/o/p = +-=; Fn+j/k/l = _;"; Fn+m = '; Fn+\ = :;
+shift+comma = /; shift+period = ?; apostrophe-position key corrected to
+\ | per US silkscreen). Transferred over serial via base64/echo (md5
+verified), loaded with `busybox loadkmap` — **user confirmed all Fn keys
+work.** No pipe/redirect-free workarounds needed anymore.
+
+Persistence: `/etc/gemini.bkmap` + `gemini-keymap.service` (oneshot,
+Before=getty.target, StandardInput=file:) enabled on the device;
+committed to the repo as `rootfs-files/` and folded into
+`scripts/mkrootfs.sh` (+ busybox-static and iputils-ping added to
+PKGS_TOOLS). DTS also fixed for the next build: matrix (5,0)
+KEY_APOSTROPHE → KEY_BACKSLASH (keymap covers both keycodes 40 and 43,
+so it works on the current kernel too).
+
+Remaining keymap niceties (not blockers): Esc key (not in the 53-key
+matrix?), media/brightness Fn keys (X11-only in Gemian), arrow
+PgUp/Home combos.

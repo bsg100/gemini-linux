@@ -32,7 +32,9 @@ LINUX_SRC="${LINUX_SRC:-$HOME/linux-6.6}"
 
 PKGS_BASE=systemd,systemd-sysv,udev,dbus,kmod,util-linux,e2fsprogs,ca-certificates,apt
 PKGS_NET=openssh-server,iproute2,ifupdown,isc-dhcp-client
-PKGS_TOOLS=i2c-tools,mmc-utils,evtest,usbutils,less,vim-tiny,htop
+# busybox-static: loadkmap (gemini-keymap.service) + devmem/base64 debug
+# tools; iputils-ping: basic connectivity checks (was missing on minbase)
+PKGS_TOOLS=i2c-tools,mmc-utils,evtest,usbutils,less,vim-tiny,htop,busybox-static,iputils-ping
 
 command -v mmdebstrap >/dev/null || apt-get install -y mmdebstrap
 
@@ -78,6 +80,18 @@ Name=usb0
 Address=10.15.19.82/24
 EOF
 chroot "$TARGET" systemctl enable systemd-networkd >/dev/null 2>&1
+
+# Gemini console keymap: Fn key = AltGr (DTS maps it to KEY_RIGHTALT), and
+# this busybox bkeymap adds the Fn/AltGr layer + US-silkscreen shift fixes
+# (derived from Gemian's XKB planet_vndr/gemini "us" variant — see boot.md
+# 2026-07-12 "Fn layer"). Loaded at boot by gemini-keymap.service; needs
+# busybox (loadkmap applet). rootfs-files/ lives in the repo next to
+# scripts/; the rsync to the VM carries it.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cp "$SCRIPT_DIR/../rootfs-files/gemini.bkmap" "$TARGET/etc/gemini.bkmap"
+cp "$SCRIPT_DIR/../rootfs-files/gemini-keymap.service" \
+   "$TARGET/etc/systemd/system/gemini-keymap.service"
+chroot "$TARGET" systemctl enable gemini-keymap.service >/dev/null 2>&1
 
 echo "==> [3/5] Install kernel modules from $LINUX_SRC"
 make -C "$LINUX_SRC" ARCH=arm64 modules_install \

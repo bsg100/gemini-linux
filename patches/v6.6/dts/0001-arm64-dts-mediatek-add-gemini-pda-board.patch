@@ -297,7 +297,7 @@ index 000000000..25211133d
 +			MATRIX_KEY(2, 0, KEY_S)
 +			MATRIX_KEY(3, 0, KEY_Z)
 +			MATRIX_KEY(4, 0, KEY_COMMA)
-+			MATRIX_KEY(5, 0, KEY_APOSTROPHE)
++			MATRIX_KEY(5, 0, KEY_BACKSLASH) /* US silkscreen: \ | (Fn: :) */
 +			MATRIX_KEY(6, 0, KEY_8)
 +			MATRIX_KEY(7, 0, KEY_J)
 +			/* col 1 (P1_1) */
@@ -323,7 +323,7 @@ index 000000000..25211133d
 +			MATRIX_KEY(1, 3, KEY_T)
 +			MATRIX_KEY(2, 3, KEY_F)
 +			MATRIX_KEY(3, 3, KEY_X)
-+			MATRIX_KEY(4, 3, KEY_FN)
++			MATRIX_KEY(4, 3, KEY_RIGHTALT) /* Fn: AltGr layer */
 +			MATRIX_KEY(5, 3, KEY_RIGHTSHIFT)
 +			MATRIX_KEY(6, 3, KEY_P)
 +			/* col 4 (P1_4) */

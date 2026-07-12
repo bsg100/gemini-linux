@@ -1,0 +1,12 @@
+[Unit]
+Description=Gemini console keymap (Fn/AltGr layer)
+Before=getty.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/busybox loadkmap
+StandardInput=file:/etc/gemini.bkmap
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
