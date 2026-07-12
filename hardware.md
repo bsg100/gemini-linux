@@ -88,7 +88,7 @@ Reference projects: Kali Linux (Re4son, kernel 3.18), Gemian (kernel 3.18), Jasu
 | Display Controller (MMSYS/DDP) | Partial | Android/MTK vendor | Port Driver — **code complete, compiles** — [details](driver_ports.md#mt6797-display-controller) |
 | Display Panel (R63419) | Not Upstreamed | Android/MTK vendor | Port Driver — **code complete, compiles** — [details](driver_ports.md#r63419-panel) |
 | Touchscreen (Novatek NT) | Not Upstreamed | Android/MTK vendor | Research Further |
-| Keyboard Matrix (AW9523B) | Not Upstreamed | Downstream Linux (Gemian) | Port Driver — **code complete, compiles; I2C5/0x5b confirmed; full keymap in DTS** — [details](driver_ports.md#aw9523b-keyboard) |
+| Keyboard Matrix (AW9523B) | Not Upstreamed | Downstream Linux (Gemian) | Port Driver — **WORKING ON HARDWARE 2026-07-12** (typing at panel console, build #164/#168; polled via `patches/v6.6/input/0001` until EINT/B-11; Fn layer + B-18 USB regression outstanding) — [details](driver_ports.md#aw9523b-keyboard) |
 | USB 3.0 (xhci-mtk) | Upstreamed | Android/MTK vendor | Use Upstream |
 | USB-C CC (FUSB301A) | Not Upstreamed | Android/MTK vendor | Port Driver — **code complete, compiles; I2C0/0x25 confirmed** — [details](driver_ports.md#fusb301a-cc-controller) |
 | Wi-Fi / BT (MT6797 CONSYS) | Not Upstreamed | Android/MTK vendor + Re4son patches | Port Driver — deferred to Phase 9; USB-Ethernet for Phase 8 — [details](driver_ports.md#mt6797-consys-wifibt) |

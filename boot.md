@@ -5736,3 +5736,165 @@ Validation checklist: fbcon on glass (rotated, big font), no
 flip_done/vblank timeouts, g_ether + SSH at 10.15.19.82, boot survives
 late clk cleanup (the old scanout-WDT suspect), serial console goes quiet
 at ~0.45s when the left-port mux switches to USB (expected, B-15).
+
+---
+
+# PHASE 6 — KEYBOARD
+
+## LIVE PROBE (no build) — AW9523B confirmed on hardware over SSH (2026-07-12)
+
+Phase 6 gate 1, done entirely on the running production build (#145 kernel,
+no kernel changes) via SSH + i2c-dev:
+
+- i2c5 hardware (0x1101c000) is registered as Linux bus **i2c-3** (buses
+  enumerate in DTS order, not by vendor numbering: 0=0x11007000,
+  1=0x11008000, 2=0x11010000, 3=0x1101c000).
+- Initial `i2cdetect -y 3` scan: completely empty. Cause: **LK leaves SHDN
+  (GPIO58, active-low reset) driven low** — chip held in reset.
+- GPIO58 register math (pinctrl-mt6797: 32 pins/reg, stride 0x10):
+  DIR 0x10005010 bit 26 = 1 (output), DOUT 0x10005110 bit 26 = 0 (low),
+  MODE 0x10005370 bits 8–11 = 0 (GPIO). Set DOUT bit 26 via busybox
+  devmem (`busybox-static` deb pushed over scp — the rootfs has no
+  libgpiod/sysfs-gpio/devmem; plain `dd` on /dev/mem gets EFAULT for MMIO).
+- After SHDN high: chip ACKs at **0x5b**, ID register 0x10 reads **0x23**
+  (expected AW9523B ID; matches the driver patch's AW9523B_ID_VALUE).
+  Port registers at power-on defaults (P0/P1 input 0xff, config 0x00,
+  LED-mode 0xff = GPIO mode).
+
+Conclusions: i2c5 pinmux (GPIO240/241) is correct as-is; address 0x5b
+confirmed; the driver's `reset-gpios` deassert at probe is mandatory
+(LK will always hand over with the chip in reset). Both driver_ports.md
+"Open Questions" for AW9523B are closed.
+
+## BUILD #147 — keyboard enablement, polled matrix (2026-07-12)
+
+Changes vs #145:
+- `patches/v6.6/input/0001-Input-matrix_keypad-add-polling-mode.patch`
+  (NEW): optional `poll-interval` DT property → self-rescheduling
+  delayed-work scan loop; skips all row-IRQ request/enable/disable/wakeup
+  paths. Needed because pinctrl-mt6797 has no EINT (B-11) so the AW9523B
+  INT line (GPIO87/EINT10) cannot deliver, and v6.6 matrix_keypad is
+  IRQ-only (no upstream polling mode exists even in current mainline —
+  checked the full matrix_keypad.c git log; the prior blockers.md B-11
+  claim that it "can poll" was wrong).
+- `patches/v6.6/dts/0001` regenerated (applied-edit-rediff, no hand-hunks):
+  aw9523b node → `status = "okay"`, interrupt properties removed
+  (annotated for B-11 restore); keyboard node gains `poll-interval = <20>`.
+- `configs/gemini-keyboard.config` (NEW): GPIO_AW9523B=y,
+  INPUT_KEYBOARD=y, KEYBOARD_MATRIX=y (built-in — must work at the fbcon
+  login prompt).
+- Full patch series `git apply` + dtc compile of the board DTS verified
+  clean on the Mac before the VM build (poll-interval and enabled aw9523b
+  confirmed present in the output dtb).
+
+## BUILDS #147–#153 diagnostics — keyboard silent-fail + two red herrings (2026-07-12)
+
+Run log: #147 flashed (capture `logs/2026-07-12-148-...`), USB cable in →
+panel stuck at penguins, no gadget on the Mac, no SSH. FTDI swap capture
+ends at mtu3 `u2p_dis_msk` (t=0.448) — that is the **B-15 console mux
+switch**, not the hang. Diagnostic rebuilds #149/#151 turned out to be
+**config-identical to #147**: `build-pack`'s rsync does not `--delete`, so
+renaming `gemini-usb.config` → `.disabled` on the Mac left the old file
+merging in the VM, and `CONFIG_USB_MTU3=y` comes from the arm64 defconfig
+anyway (the `#151` fragment landed but was overridden by the stale
+`gemini-usb.config` sorting after it). Lesson: **always verify the
+provenance `config` after changing fragments; clean deleted/renamed
+fragments out of the VM by hand.**
+
+Findings from the identical-kernel boots:
+- FTDI attached: boots to login on panel (#149 observation) → the keyboard
+  code does NOT hang boot; the #147 "hang at penguins" correlates with the
+  USB cable/Mac attached at boot. Cause unknown, parked (see below).
+- Keyboard dead either way.
+
+Build #153 (real `CONFIG_USB_MTU3 is not set`, capture
+`logs/2026-07-12-154-...`): serial finally survives past 0.448 and shows
+**`aw9523b 3-005b: AW9523B ready: 16 GPIOs, irq=0` at t=0.459 — the
+expander probes cleanly on hardware.** But no `input:` registration and no
+matrix-keypad output at all (silently deferred?), and the boot **dies at
+`clk: Disabling unused clocks` (~t=0.99) → watchdog reset into Android**:
+with mtu3 gone nothing holds the SSUSB-adjacent clocks and the unused-clk
+sweep gates something fatal — new constraint: **no-USB diagnostic builds
+need `clk_ignore_unused`** (added to gemini-nousb-debug.config as a
+CMDLINE override; production keeps mtu3 and is unaffected).
+
+Open items: (1) why gpio-matrix-keypad never probes — next build #155
+(no-USB + clk_ignore_unused) gives a serial shell to read
+`/sys/kernel/debug/devices_deferred`; (2) USB-cable-at-boot hang on the
+keyboard build — revisit after the keyboard works.
+
+## BUILDS #155–#164 — keyboard root-caused and WORKING (2026-07-12) ⭐
+
+Chain of evidence after #153's crash:
+- **#155** (nousb + clk_ignore_unused): stable serial shell all boot.
+  Live session found `/proc/device-tree/keyboard/status` = **"disabled"**
+  — the gpio-matrix-keypad node had a SECOND status property after the
+  53-line keymap in dts/0001, missed when the aw9523b node was enabled.
+  No platform device was ever created; every "keyboard" build so far had
+  shipped a disabled keyboard. Fixed in dts/0001 (status = "okay").
+- **#157** (fix + production USB): with USB host attached at boot → stuck
+  at penguins again, gadget never enumerates (same as #147 — and note in
+  #147–#155 the keypad was inert, so the USB-attached hang correlates with
+  the aw9523b probe alone, NOT key scanning). With FTDI: boots.
+- **#159** (+ console=tty0, kernel log on panel — now PERMANENT per user):
+  reached prompt; keypad registered but keys dead.
+- **#161** (fix + nousb serial diag): serial session shows the smoking gun:
+  `matrix-keypad keyboard: polling mode, interval 20 ms`, input0 bound to
+  kbd — but /sys/kernel/debug/gpio shows idle cols OUT-HI and the active
+  scan col HIGH against pulled-up rows (P0 in 0xff, P1 out latch 0xff).
+  **matrix_keypad is a legacy-GPIO driver: it ignores GPIO_ACTIVE_LOW
+  flags in row-/col-gpios and only honors the `gpio-activelow` property**,
+  which the node lacked — the scan polarity was inverted, no keypress
+  could ever change a row. (Device hard-hung at the end of this session
+  while forced i2cget reads raced the 20 ms poll on the same bus — avoid
+  concurrent i2c-dev access to the live keypad bus.)
+- **#164** (gpio-activelow added, dts/0001): **KEYBOARD WORKS — user
+  confirmed typing at the panel login prompt** (capture
+  logs/2026-07-12-165-keyboard-activelow-boot.log). Keymap spot-check
+  pending.
+
+Keyboard root-cause chain (three stacked defects, cf. Phase 5's three):
+1. LK hands over with AW9523B in reset (SHDN/GPIO58 low) → driver
+   reset-gpios deassert is mandatory (found by live i2c probe, no build).
+2. Keyboard DT node carried a hidden second status="disabled" → no
+   platform device (found via /proc/device-tree on a serial shell).
+3. Matrix polarity inverted: legacy matrix_keypad needs `gpio-activelow`,
+   ignores gpiod flags (found via /sys/kernel/debug/gpio snapshot).
+
+Still open: USB-host-attached-at-boot hang on aw9523b-enabled builds
+(#147/#157 hung; #159 reached prompt — cable state that boot unconfirmed).
+Production build #166 (USB restored + all fixes + console=tty0) is the
+discriminating test: clean USB boot + SSH = Stage A complete.
+
+## BUILD #166 (production attempt) + #168 BASELINE (banner #135) — keyboard production; USB gadget regression → serial-console operating mode (2026-07-12)
+
+**#166** (all keyboard fixes + USB restored + console=tty0, sha256
+ea6ddf0f…ee3c): boots WITH the USB host attached (the #147/#157 full hang
+did not reproduce with all fixes in), **keyboard works at the panel
+login** — but the gadget never enumerates on the Mac (no interface with
+host MAC 42:00:15:19:82:00, 10.15.19.82 unreachable) → SSH dead. Serial
+also dead on mtu3 builds (B-15 mux, switches at t=0.45s and never
+returns even after cable swap — confirmed empirically this session). The
+aw9523b↔USB interaction is now blocker **B-18**; device-side dmesg could
+not be captured because the base keymap cannot type `|`/`-`/`>` (no Fn
+layer yet).
+
+**User decision:** disable USB, operate over serial + on-device keyboard.
+Config state committed: `gemini-usb.config` → `.disabled`, new
+`gemini-serial-console.config` (USB_MTU3 off + clk_ignore_unused +
+console=tty0 CMDLINE). **#168** rebuilt from this committed state,
+config-identical to validated #164 (verified by diff), sha256
+51b9a3fb…1844, flashed as the new baseline: display + keyboard + serial
+console/shell all boot + kernel log on panel. Confirmed live over a
+serial session (banner #135, `logs/2026-07-12-170-locale-check-session.log`).
+
+Console layout/locale check (user request): no kbd/locales packages on
+the minbase rootfs → kernel built-in **US keymap** is in effect and
+locale is C.UTF-8 (English) — both already US/English; en_US.UTF-8
+generation deferred until network returns (B-18). The earlier "|
+rendered as \"" report was the missing Fn layer, not a layout issue.
+
+**PHASE 6 STAGE A COMPLETE** — the Gemini is usable standalone (screen +
+keyboard) for the first time under mainline Linux. Follow-ups tracked:
+Fn layer (all punctuation beyond , . ' lives there), keymap spot-check,
+B-18 (USB gadget), B-11/EINT (Stage B, IRQ-driven keypad).

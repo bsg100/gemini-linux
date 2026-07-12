@@ -1,0 +1,87 @@
+
+gemini login: 
+>>> SENT: 'root'
+root
+Password: 
+>>> SENT: 'toor'
+
+Linux gemini 6.6.0-dirty #134 SMP PREEMPT Sun Jul 12 08:55:42 UTC 2026 aarch64
+
+The programs included with the Debian GNU/Linux system are free software;
+the exact distribution terms for each program are described in the
+individual files in /usr/share/doc/*/copyright.
+
+Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+permitted by applicable law.
+[?2004hroot@gemini:~# 
+>>> SENT: "PS1='GPROMPT# '"
+PS1='GPROMPT# '
+[?2004l[?2004hGPROMPT# 
+>>> SENT: 'dmesg | grep -iE "aw9523|keypad|matrix|input:"'
+dmesg | grep -iE "aw9523|keypad|matrix|input:"
+[?2004l[    0.472226] aw9523b 3-005b: AW9523B ready: 16 GPIOs, irq=0
+[    1.090448] input: keyboard as /devices/platform/keyboard/input/input0
+[    1.104369] matrix-keypad keyboard: polling mode, interval 20 ms
+[?2004hGPROMPT# 
+>>> SENT: 'cat /sys/kernel/debug/devices_deferred'
+cat /sys/kernel/debug/devices_deferred
+[?2004l[?2004hGPROMPT# 
+>>> SENT: 'cat /proc/bus/input/devices'
+cat /proc/bus/input/devices
+[?2004lI: Bus=0019 Vendor=0000 Product=0000 Version=0000
+N: Name="keyboard"
+P: Phys=
+S: Sysfs=/devices/platform/keyboard/input/input0
+U: Uniq=
+H: Handlers=sysrq kbd event0 
+B: PROP=0
+B: EV=100013
+B: KEY=10000 0 0 0 0 0 168000000000 35ff57ff3ffcffc
+B: MSC=10
+
+[?2004hGPROMPT# 
+>>> SENT: 'ls /dev/input/ 2>&1'
+ls /dev/input/ 2>&1
+[?2004lby-path  event0
+[?2004hGPROMPT# 
+[?2004l[?2004hGPROMPT# 
+>>> SENT: "PS1='GPROMPT# '"
+PS1='GPROMPT# '
+[?2004l[?2004hGPROMPT# 
+>>> SENT: 'cat /sys/kernel/debug/gpio'
+cat /sys/kernel/debug/gpio
+[?2004lgpiochip0: GPIOs 512-773, parent: platform/10005000.pinctrl, pinctrl_paris:
+ gpio-570 (                    |reset               ) out hi ACTIVE LOW
+ gpio-572 (                    |enable              ) out hi 
+ gpio-692 (                    |reset               ) out hi ACTIVE LOW
+ gpio-763 (                    |enable              ) out hi 
+
+gpiochip1: GPIOs 774-789, parent: i2c/3-005b, aw9523b, can sleep:
+ gpio-774 (                    |matrix_kbd_row      ) in  hi 
+ gpio-775 (                    |matrix_kbd_row      ) in  hi 
+ gpio-776 (                    |matrix_kbd_row      ) in  hi 
+ gpio-777 (                    |matrix_kbd_row      ) in  hi 
+ gpio-778 (                    |matrix_kbd_row      ) in  hi 
+ gpio-779 (                    |matrix_kbd_row      ) in  hi 
+ gpio-780 (                    |matrix_kbd_row      ) in  hi 
+ gpio-781 (                    |matrix_kbd_row      ) in  hi 
+ gpio-782 (                    |matrix_kbd_col      ) in  lo 
+ gpio-783 (                    |matrix_kbd_col      ) in  lo 
+ gpio-784 (                    |matrix_kbd_col      ) in  lo 
+ gpio-785 (                    |matrix_kbd_col      ) out hi 
+ gpio-786 (                    |matrix_kbd_col      ) in  lo 
+ gpio-787 (                    |matrix_kbd_col      ) in  lo 
+ gpio-788 (                    |matrix_kbd_col      ) in  lo 
+[?2004hGPROMPT# 
+>>> SENT: 'modprobe i2c-dev 2>/dev/null; for r in 0x00 0x01 0x02 0x03 0x04 0x05 0x11 0x12 0x13; do echo "reg $r = $(i2cget -y -f 3 0x5b $r)"; done'
+modprobe i2c-dev 2>/dev/null; for r in 0x00 0x01 0x02 0x03 0x04 0x05 0x11 0x12 0x13; do echo "reg $r = $(i2cget -y -f 3 0x5b $r)"; done
+[?2004lreg 0x00 = 0xff
+reg 0x01 = 0x20
+reg 0x02 = 0xff
+reg 0x03 = 0xff
+reg 0x04 = 0xff
+reg 0x05 = 0x80
+reg 0x11 = 0x10
+reg 0x12 = 0xff
+reg 0x13 = 0xff
+[?2004hGPROMPT# 

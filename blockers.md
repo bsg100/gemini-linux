@@ -507,9 +507,20 @@ The charger node in `dts/0001` was `status="okay"` with
   `"eint"` reg + `interrupt-controller` + `interrupts` on the pio node
   (see `pinctrl-mt2701.c` for a same-generation example).
 - **Workaround until then:** polled mode where drivers support it
-  (`gpio-matrix-keypad` can poll; rt9467 cannot — charger stays disabled).
+  (rt9467 cannot poll — charger stays disabled).
+  **Correction 2026-07-12 (Phase 6):** the original claim that
+  `gpio-matrix-keypad` "can poll" was wrong — v6.6 `matrix_keypad.c` is
+  IRQ-only, and no polling mode exists upstream even in current mainline
+  (checked the file's full git log). Polling support was added locally:
+  `patches/v6.6/input/0001-Input-matrix_keypad-add-polling-mode.patch`
+  (optional `poll-interval` DT property → delayed-work scan loop, no row
+  IRQs). The Gemini keyboard (build #147) uses it with
+  `poll-interval = <20>`; the aw9523b DTS node has its interrupt
+  properties removed until EINT exists (annotated in-DTS for restore).
 - **Unblocks:** EINT support in `pinctrl-mt6797.c` — **driver work, queued
-  behind the freeze**; not needed for Phase 3/4.
+  behind the freeze**; not needed for Phase 3/4. Now also the Phase 6
+  Stage B follow-up (switch keyboard from polling to IRQ) and a Phase 7
+  prerequisite (RT9466 charger IRQ).
 
 ## 🟡 B-12 — MT6351 PMIC has no mainline support (hardware.md was wrong)
 
@@ -2400,3 +2411,46 @@ perfect stable image (build #138) and then a readable landscape console
 (rotate:3 + TER16x32, build #143). All fixes productized in build #145
 (banner #126): folded into panel/0005 and drm/0015, zz-debug stripped, USB
 restored, clk_ignore_unused dropped. See boot.md builds #136–#145.
+
+---
+
+## 🟡 B-18 — AW9523B keyboard enablement breaks USB gadget (SSH-over-USB); USB disabled by decision 2026-07-12
+
+**Symptom evolution (all 2026-07-12, Phase 6):** on every build with the
+AW9523B GPIO expander enabled (`GPIO_AW9523B=y` + DTS node okay) AND
+`USB_MTU3` enabled:
+- #147/#157: with a USB host (Mac) attached at power-on → boot wedges
+  before userspace (panel stuck at penguins, no gadget enumeration, no
+  console visibility — serial dies at the B-15 mux switch t=0.45s).
+- #159/#166: boot completes (login on panel, keyboard works on #166) but
+  the gadget never enumerates on the Mac: no interface with the fixed
+  host MAC 42:00:15:19:82:00, device unreachable at 10.15.19.82.
+- Baseline #145 (no aw9523b) boots + SSH works with the same USB config,
+  so the regression tracks the aw9523b bring-up, NOT key scanning (the
+  keypad node was still status-disabled in #147–#157; the expander probe
+  alone — soft-reset + register init + GPIO58/SHDN driven high — is the
+  active ingredient).
+
+**Suspects (untested):** GPIO58 (SHDN) high or the AW9523B INT line
+(GPIO87/EINT10, now floating enabled) interacting with the left-port
+USB-C mux / charger / CC logic when VBUS is present; check vendor 3.18
+sources (aw9523_key.c power-up sequencing, USB-C mux GPIO usage) and the
+vendor DTB for GPIO58/87 dual roles before the next hardware experiment.
+Device-side dmesg of a failed-gadget boot (#166) was not captured — the
+working keyboard cannot type `|`/`-`/`>` (no Fn layer yet) and serial is
+dead on mtu3 builds; capture it once the Fn layer or a file-based
+diagnostic exists.
+
+**Decision (user, 2026-07-12):** disable USB entirely and operate over
+the serial console + on-device keyboard: `configs/gemini-usb.config` →
+`.disabled`, new `configs/gemini-serial-console.config` (USB_MTU3 off +
+clk_ignore_unused + console=tty0 cmdline). With mtu3 off the B-15 mux
+never switches, so ttyS0 (console + getty) works for the whole session —
+USB-broken + mtu3-on would have left no remote access at all.
+clk_ignore_unused is mandatory in this mode (build #153 wedged in the
+unused-clock sweep without mtu3 holding SSUSB clocks).
+
+**Current baseline:** build #164 (= #168 rebuild from committed configs):
+display + working keyboard + serial console/shell + panel kernel log.
+**Unblocks:** root-causing the aw9523b↔USB interaction → restore
+gemini-usb.config, drop gemini-serial-console.config, SSH returns.

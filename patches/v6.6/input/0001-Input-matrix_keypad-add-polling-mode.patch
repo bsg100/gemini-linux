@@ -1,0 +1,134 @@
+diff --git a/drivers/input/keyboard/matrix_keypad.c b/drivers/input/keyboard/matrix_keypad.c
+index a1b037891..97e612e7a 100644
+--- a/drivers/input/keyboard/matrix_keypad.c
++++ b/drivers/input/keyboard/matrix_keypad.c
+@@ -88,6 +88,9 @@ static void enable_row_irqs(struct matrix_keypad *keypad)
+ 	const struct matrix_keypad_platform_data *pdata = keypad->pdata;
+ 	int i;
+ 
++	if (pdata->poll_interval_ms)
++		return;
++
+ 	if (pdata->clustered_irq > 0)
+ 		enable_irq(pdata->clustered_irq);
+ 	else {
+@@ -101,6 +104,9 @@ static void disable_row_irqs(struct matrix_keypad *keypad)
+ 	const struct matrix_keypad_platform_data *pdata = keypad->pdata;
+ 	int i;
+ 
++	if (pdata->poll_interval_ms)
++		return;
++
+ 	if (pdata->clustered_irq > 0)
+ 		disable_irq_nosync(pdata->clustered_irq);
+ 	else {
+@@ -166,10 +172,16 @@ static void matrix_keypad_scan(struct work_struct *work)
+ 
+ 	activate_all_cols(pdata, true);
+ 
+-	/* Enable IRQs again */
++	/* Enable IRQs again, or schedule the next scan when polling */
+ 	spin_lock_irq(&keypad->lock);
+ 	keypad->scan_pending = false;
+-	enable_row_irqs(keypad);
++	if (pdata->poll_interval_ms) {
++		if (!keypad->stopped)
++			schedule_delayed_work(&keypad->work,
++				msecs_to_jiffies(pdata->poll_interval_ms));
++	} else {
++		enable_row_irqs(keypad);
++	}
+ 	spin_unlock_irq(&keypad->lock);
+ }
+ 
+@@ -236,7 +248,9 @@ static void matrix_keypad_enable_wakeup(struct matrix_keypad *keypad)
+ 	unsigned int gpio;
+ 	int i;
+ 
+-	if (pdata->clustered_irq > 0) {
++	if (pdata->poll_interval_ms) {
++		/* polling mode: no IRQs to arm for wakeup */
++	} else if (pdata->clustered_irq > 0) {
+ 		if (enable_irq_wake(pdata->clustered_irq) == 0)
+ 			keypad->gpio_all_disabled = true;
+ 	} else {
+@@ -258,7 +272,9 @@ static void matrix_keypad_disable_wakeup(struct matrix_keypad *keypad)
+ 	unsigned int gpio;
+ 	int i;
+ 
+-	if (pdata->clustered_irq > 0) {
++	if (pdata->poll_interval_ms) {
++		/* polling mode: no IRQs to disarm */
++	} else if (pdata->clustered_irq > 0) {
+ 		if (keypad->gpio_all_disabled) {
+ 			disable_irq_wake(pdata->clustered_irq);
+ 			keypad->gpio_all_disabled = false;
+@@ -333,7 +349,9 @@ static int matrix_keypad_init_gpio(struct platform_device *pdev,
+ 		gpio_direction_input(pdata->row_gpios[i]);
+ 	}
+ 
+-	if (pdata->clustered_irq > 0) {
++	if (pdata->poll_interval_ms) {
++		/* polling mode: no row IRQs at all */
++	} else if (pdata->clustered_irq > 0) {
+ 		err = request_any_context_irq(pdata->clustered_irq,
+ 				matrix_keypad_interrupt,
+ 				pdata->clustered_irq_flags,
+@@ -384,7 +402,9 @@ static void matrix_keypad_free_gpio(struct matrix_keypad *keypad)
+ 	const struct matrix_keypad_platform_data *pdata = keypad->pdata;
+ 	int i;
+ 
+-	if (pdata->clustered_irq > 0) {
++	if (pdata->poll_interval_ms) {
++		/* polling mode: no IRQs were requested */
++	} else if (pdata->clustered_irq > 0) {
+ 		free_irq(pdata->clustered_irq, keypad);
+ 	} else {
+ 		for (i = 0; i < pdata->num_row_gpios; i++)
+@@ -438,6 +458,7 @@ matrix_keypad_parse_dt(struct device *dev)
+ 	of_property_read_u32(np, "debounce-delay-ms", &pdata->debounce_ms);
+ 	of_property_read_u32(np, "col-scan-delay-us",
+ 						&pdata->col_scan_delay_us);
++	of_property_read_u32(np, "poll-interval", &pdata->poll_interval_ms);
+ 
+ 	gpios = devm_kcalloc(dev,
+ 			     pdata->num_row_gpios + pdata->num_col_gpios,
+@@ -539,6 +560,10 @@ static int matrix_keypad_probe(struct platform_device *pdev)
+ 	device_init_wakeup(&pdev->dev, pdata->wakeup);
+ 	platform_set_drvdata(pdev, keypad);
+ 
++	if (pdata->poll_interval_ms)
++		dev_info(&pdev->dev, "polling mode, interval %u ms\n",
++			 pdata->poll_interval_ms);
++
+ 	return 0;
+ 
+ err_free_gpio:
+diff --git a/include/linux/input/matrix_keypad.h b/include/linux/input/matrix_keypad.h
+index b8d8d69eb..931a9bed3 100644
+--- a/include/linux/input/matrix_keypad.h
++++ b/include/linux/input/matrix_keypad.h
+@@ -44,6 +44,8 @@ struct matrix_keymap_data {
+  * @col_scan_delay_us: delay, measured in microseconds, that is
+  *	needed before we can keypad after activating column gpio
+  * @debounce_ms: debounce interval in milliseconds
++ * @poll_interval_ms: when non-zero, scan the keypad every this many
++ *	milliseconds instead of relying on row GPIO interrupts
+  * @clustered_irq: may be specified if interrupts of all row/column GPIOs
+  *	are bundled to one single irq
+  * @clustered_irq_flags: flags that are needed for the clustered irq
+@@ -71,6 +73,14 @@ struct matrix_keypad_platform_data {
+ 	/* key debounce interval in milli-second */
+ 	unsigned int	debounce_ms;
+ 
++	/*
++	 * poll interval in milli-seconds; when non-zero the keypad is
++	 * scanned periodically instead of interrupt-driven, and no row
++	 * IRQs are requested (for row GPIOs whose controller cannot
++	 * deliver interrupts, e.g. I2C expanders without a wired INT)
++	 */
++	unsigned int	poll_interval_ms;
++
+ 	unsigned int	clustered_irq;
+ 	unsigned int	clustered_irq_flags;
+ 

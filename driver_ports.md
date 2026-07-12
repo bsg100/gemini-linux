@@ -511,7 +511,7 @@ Full DRM panel driver written from scratch. Init sequence (`lcm_initialization_s
 
 **Subsystem:** Keyboard Matrix Controller  
 **hardware.md Action:** Port Driver  
-**Status:** Code complete — **compiled as module in full kernel build 2026-06-10** (`GPIO_AW9523B=m`; the earlier "compiles" claim predated any real build and hid a fabricated-API bug, since fixed — see findings.md "Full-build validation pass"); DT binding written; keyboard DTS node with full keymap added; not yet tested on hardware. **IRQ blocked by missing EINT support in mainline pinctrl-mt6797 (blockers.md B-11)** — `matrix-keypad` polling is the workaround.  
+**Status:** **WORKING ON HARDWARE 2026-07-12 (Phase 6 Stage A complete)** — physical typing at the panel console confirmed (build #164; baseline #168). Full root-cause chain: (1) LK hands over with SHDN (GPIO58) low → chip in reset; the driver's `reset-gpios` deassert at probe is mandatory (chip validated live first via i2c-dev: bus i2c-3 = i2c5 hw @0x1101c000, ACKs at 0x5b, ID 0x23); (2) the keyboard DT node carried a second hidden `status="disabled"` after the keymap — no platform device; (3) matrix polarity — legacy `matrix_keypad` ignores GPIO_ACTIVE_LOW flags in row-/col-gpios and requires the `gpio-activelow` property (live register proof: idle cols out-high vs pulled-up rows, logs/2026-07-12-163 session). **IRQ blocked by missing EINT (B-11)** — polling via local patch `patches/v6.6/input/0001` (`poll-interval = <20>`; v6.6 matrix_keypad is otherwise IRQ-only, the earlier "can poll" claim was wrong). **Known side-effect: enabling the expander breaks the USB gadget (B-18)** — USB currently disabled by decision. Remaining: Fn layer (base keymap = 53 keys; all other punctuation needs it), keymap verification, B-18, EINT (Stage B).  
 **Priority:** Usability Critical — Phase 6
 
 ### Background
@@ -630,8 +630,8 @@ Path A chosen and implemented. The AW9523B GPIO driver (`drivers/gpio/gpio-aw952
 
 ### Open Questions
 
-- Confirm i2c5 pin mux on Gemini hardware (mainline uses GPIO240/241 for i2c5; Gemini may use different pins — verify once serial console is available).
-- Verify key mapping against physical keyboard layout on arrival of FTDI cable.
+- ~~Confirm i2c5 pin mux on Gemini hardware~~ **Closed 2026-07-12:** GPIO240/241 mux is correct — chip responds over i2c-dev with the stock pinctrl (boot.md "LIVE PROBE").
+- Verify key mapping against physical keyboard layout (build #147 on-device typing test).
 
 ---
 

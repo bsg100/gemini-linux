@@ -1,0 +1,60 @@
+
+>>> SENT: "PS1='GPROMPT# '"
+
+gemini login: 
+>>> SENT: 'root'
+root
+Password: 
+>>> SENT: 'toor'
+
+Linux gemini 6.6.0-dirty #135 SMP PREEMPT Sun Jul 12 09:03:56 UTC 2026 aarch64
+
+The programs included with the Debian GNU/Linux system are free software;
+the exact distribution terms for each program are described in the
+individual files in /usr/share/doc/*/copyright.
+
+Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+permitted by applicable law.
+[?2004hroot@gemini:~# 
+>>> SENT: "PS1='GPROMPT# '"
+PS1='GPROMPT# '
+[?2004l[?2004hGPROMPT# 
+>>> SENT: 'cat /etc/default/keyboard 2>&1'
+cat /etc/default/keyboard 2>&1
+[?2004lcat: /etc/default/keyboard: No such file or directory
+[?2004hGPROMPT# 
+>>> SENT: 'cat /etc/default/locale 2>&1'
+cat /etc/default/locale 2>&1
+[?2004lcat: /etc/default/locale: No such file or directory
+[?2004hGPROMPT# 
+>>> SENT: 'localectl status 2>&1'
+localectl status 2>&1
+[?2004l[   48.629078] systemd[1]: Starting systemd-localed.service - Locale Service...
+[   48.857029] systemd[1]: Started systemd-localed.service - Locale Service.
+[0;94mSystem Locale:[0m LANG=C.UTF-8
+[0;94m    VC Keymap:[0m [0;38:5:245m(unset)     [0m
+[0;94m   X11 Layout:[0m [0;38:5:245m(unset)     [0m
+[?2004hGPROMPT# 
+>>> SENT: 'uname -a'
+uname -a
+[?2004lLinux gemini 6.6.0-dirty #135 SMP PREEMPT Sun Jul 12 09:03:56 UTC 2026 aarch64 GNU/Linux
+[?2004hGPROMPT# 
+[?2004l[?2004hGPROMPT# 
+>>> SENT: "PS1='GPROMPT# '"
+PS1='GPROMPT# '
+[?2004l[?2004hGPROMPT# 
+>>> SENT: 'dpkg -l kbd console-setup locales 2>&1 | tail -4'
+dpkg -l kbd console-setup locales 2>&1 | tail -4
+[?2004l||/ Name           Version      Architecture Description
++++-==============-============-============-=================================
+un  kbd            <none>       <none>       (no description available)
+un  locales        <none>       <none>       (no description available)
+[?2004hGPROMPT# 
+>>> SENT: 'ls /usr/share/keymaps/ 2>&1 | head -3'
+ls /usr/share/keymaps/ 2>&1 | head -3
+[?2004lls: cannot access '/usr/share/keymaps/': No such file or directory
+[?2004hGPROMPT# 
+>>> SENT: 'grep -c en_US /usr/share/i18n/SUPPORTED 2>&1'
+grep -c en_US /usr/share/i18n/SUPPORTED 2>&1
+[?2004lgrep: /usr/share/i18n/SUPPORTED: No such file or directory
+[?2004hGPROMPT# [   78.898168] systemd[1]: systemd-localed.service: Deactivated successfully.

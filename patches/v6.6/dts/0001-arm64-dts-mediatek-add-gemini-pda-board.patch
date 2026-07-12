@@ -12,10 +12,10 @@ index c99c3372a..ffe1ab530 100644
  dtb-$(CONFIG_ARCH_MEDIATEK) += mt7622-bananapi-bpi-r64.dtb
 diff --git a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
 new file mode 100644
-index 000000000..e1cf85b91
+index 000000000..25211133d
 --- /dev/null
 +++ b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
-@@ -0,0 +1,900 @@
+@@ -0,0 +1,923 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Device tree for Planet Computers Gemini PDA
@@ -248,7 +248,11 @@ index 000000000..e1cf85b91
 +	 *
 +	 * 8 rows (P0_0..P0_7 of AW9523B) × 7 columns (P1_0..P1_6).
 +	 * Keymap derived from vendor: drivers/misc/mediatek/aw9523/aw9523_key.c.
-+	 * Disabled by default; enable once AW9523B GPIO driver is validated.
++	 *
++	 * poll-interval: scan-driven, not IRQ-driven — the AW9523B INT line
++	 * (GPIO87/EINT10) is unusable until pinctrl-mt6797 gains EINT
++	 * support (blockers.md B-11). Needs the matrix_keypad polling-mode
++	 * patch (patches/v6.6/input/0001). Drop when B-11 is fixed.
 +	 */
 +	keyboard {
 +		compatible = "gpio-matrix-keypad";
@@ -274,6 +278,17 @@ index 000000000..e1cf85b91
 +
 +		debounce-delay-ms = <5>;
 +		col-scan-delay-us = <2>;
++		poll-interval = <20>;
++
++		/*
++		 * matrix_keypad is a legacy-GPIO driver: it IGNORES the
++		 * GPIO_ACTIVE_LOW flags in row-/col-gpios and only honors
++		 * this property. Without it the scan drives columns HIGH
++		 * and no keypress can ever change a pulled-up row (live
++		 * register proof: logs/2026-07-12-163 session — P1 out
++		 * latch 0xff idle, active col high, rows 0xff).
++		 */
++		gpio-activelow;
 +
 +		linux,keymap = <
 +			/* col 0 (P1_0) */
@@ -337,7 +352,7 @@ index 000000000..e1cf85b91
 +			MATRIX_KEY(6, 6, KEY_0)
 +		>;
 +
-+		status = "disabled";
++		status = "okay";
 +	};
 +
 +};
@@ -501,19 +516,27 @@ index 000000000..e1cf85b91
 +	 * GPIO 0..7  (Port 0): keyboard row inputs.
 +	 * GPIO 8..14 (Port 1): keyboard column outputs.
 +	 *
-+	 * Disabled: enable once GPIO driver validated on hardware.
++	 * Chip verified live 2026-07-12 via i2c-dev on the running device
++	 * (Linux bus i2c-3 = i2c5 hardware @0x1101c000): ACKs at 0x5b, ID
++	 * register 0x10 reads 0x23, after driving SHDN (GPIO58) high — LK
++	 * leaves it low, holding the chip in reset, so the driver's
++	 * reset-gpios deassert at probe is mandatory.
++	 *
++	 * No interrupt-parent/interrupts: mainline pinctrl-mt6797 has no
++	 * EINT support (blockers.md B-11), so GPIO87/EINT10 cannot deliver
++	 * and the driver's irqchip half stays unused (client->irq == 0 is
++	 * a supported configuration). Restore
++	 *   interrupt-parent = <&pio>; interrupts = <87 IRQ_TYPE_LEVEL_LOW>;
++	 *   interrupt-controller; #interrupt-cells = <2>;
++	 * when B-11 is fixed.
 +	 */
 +	aw9523b: gpio@5b {
 +		compatible = "awinic,aw9523b";
 +		reg = <0x5b>;
 +		reset-gpios = <&pio 58 GPIO_ACTIVE_LOW>;
-+		interrupt-parent = <&pio>;
-+		interrupts = <87 IRQ_TYPE_LEVEL_LOW>;
 +		gpio-controller;
 +		#gpio-cells = <2>;
-+		interrupt-controller;
-+		#interrupt-cells = <2>;
-+		status = "disabled";
++		status = "okay";
 +	};
 +};
 +
