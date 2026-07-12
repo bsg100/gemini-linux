@@ -4052,3 +4052,1687 @@ rootfs problem introduced by the scatter-file restore, not a kernel or
 driver regression — no code change was needed. B-17's gadget-networking
 sub-thread is now closed; the DRM/display sub-issue that gives B-17 its
 title remains open separately.
+
+### BUILD #195/#197 — B-17 DSI IRQ bounded-timeout fix, first attempt (regression: watchdog reset), 2026-07-09
+
+Wrote `patches/v6.6/drm/0012-drm-mediatek-dsi-bound-irq-busy-wait-timeout.patch`:
+replaces the unbounded `do { mtk_dsi_mask(RACK); tmp = readl(INTSTA); } while
+(tmp & DSI_BUSY);` spin in `mtk_dsi_irq()` with a bounded
+`readl_poll_timeout_atomic()` (1us poll / 20ms timeout), intended to prevent
+an infinite hardirq-context spin if `DSI_BUSY` never deasserts after RACK
+(the working theory for what causes the B-13-adjacent cpu0 hard-lock to
+recur).
+
+Build #195 (`logs/2026-07-09-195-b17-dsi-irq-timeout-plus-trace`, banner #69)
+included this fix **plus** the parked `zz-debug`
+`0001-GEMINI-DEBUG-b17-dsi-panel-enable-trace.patch`. Flashed and captured
+(`logs/2026-07-09-196-...-boot.log`): reproduced a hard failure — device
+fell back to booting the Android `boot` partition instead of `boot2`,
+serial showed watchdog-reset markers (`RGU STA: A0000000`, `"SW reset with
+bypass power key flag"`, `"[PLFM] WDT reboot bypass power key!"`,
+`androidboot.bootreason=wdt_by_pass_pwk`).
+
+To isolate whether the regression was the new IRQ-timeout patch or the debug
+trace patch, built #197 (`logs/2026-07-09-197-b17-dsi-irq-timeout-only`,
+banner #70) with the debug patch temporarily held out
+(`patches/v6.6/zz-debug/` moved to a scratch dir for the build, restored
+immediately after). Same watchdog-reset failure signature reproduced
+(`logs/2026-07-09-198-...-boot.log`). **This exonerates the debug trace
+patch and implicates patch 0012 (or its interaction with 0008) as the
+regression.**
+
+Root-cause analysis of patch 0012 (code review, no hardware cycle spent):
+the timeout branch returned `IRQ_HANDLED` **without** clearing/masking
+`DSI_INTSTA` or waking `dsi->irq_wait_queue`. Since the IRQ line is
+level-triggered, leaving `status` set means the handler re-fires
+immediately — turning the intended one-shot bounded 20ms poll into an
+**unbounded storm of hardirq re-entries with no forward progress**, which
+would still trip the hardware watchdog, just spread across many entries
+instead of one spin. Patch rewritten to always clear/mask `DSI_INTSTA` and
+call `wake_up_interruptible()` even on timeout, leaving recovery to
+`mtk_dsi_wait_for_irq_done()`'s existing timeout + `mtk_dsi_reset_engine()`
+path.
+
+Device recovered by reflashing `boot2` to the build #71 baseline both times
+(`logs/2026-07-08-194-baseline-restore-boot.log` after #196,
+`logs/2026-07-09-199-baseline-restore-boot.log` after #198) — both captures
+match the known-good build #71 serial signature exactly, SSH reconfirmed.
+
+### BUILD #200 — B-17 DSI IRQ bounded-timeout fix, corrected (intermittent, still unresolved), 2026-07-09
+
+Rebuilt with the corrected patch 0012 (clears/masks status and wakes the
+waiter on both the normal and timeout paths), debug trace patch again held
+out (`logs/2026-07-09-200-b17-dsi-irq-timeout-fixed`, banner #71, sha256
+`c077b3bc6613fb746d9c089a963bd67be581d36a3470f7381c39bed63bf2738c`).
+
+Capture `logs/2026-07-09-201-b17-dsi-irq-timeout-fixed-boot.log` spans
+**three** power-on attempts on the same flashed image, with three different
+outcomes:
+
+1. First attempt: hung. No kernel console output ever appeared; ATF's own
+   hang detector fired 10s after `el3_exit` (`aee_wdt_dump: on cpu0`,
+   `pc == lr == 0xffffffc000087fa8`, i.e. cpu0 stuck executing a tight
+   loop). Capture ends mid register-dump.
+2. Second attempt (after the user power-cycled): booted **cleanly** —
+   banner #71, SMP brought up all 8 CPUs, DRM component matching, the
+   expected benign `-517 EPROBE_DEFER` on `mtk_dsi_host_attach`, through to
+   the normal `mtu3`/UART-USB mux-switch cutoff. Indistinguishable from a
+   working baseline boot on serial. But `en12` never came up
+   (`status: inactive`, no USB device visible to `system_profiler
+   SPUSBDataType` at all on the Mac) even after ~45s of polling with the
+   gadget cable connected — so despite a clean-looking kernel log, the
+   device never actually finished bringing up USB gadget networking this
+   cycle either.
+3. Third attempt (another power-cycle): also booted cleanly on serial
+   (identical pattern, cut off normally at `mtu3`), and again no USB
+   gadget enumeration observed.
+
+**Conclusion: patch 0012 (corrected version) does not reliably fix the
+hang.** Same image produces three different outcomes across three power-on
+attempts — full watchdog-class hang, clean-looking serial boot with silent
+USB-gadget failure, clean-looking serial boot with silent USB-gadget
+failure again. This is consistent with a **timing-dependent race**, not a
+deterministic logic bug reachable by reading the C code alone — the exact
+window in which LK's leftover DSI engine state happens to still be
+asserting the IRQ line relative to when Linux's `mtk_dsi` driver first
+touches it likely varies boot to boot.
+
+Checked `/sys/fs/pstore/` after reflashing back to the build #71 baseline
+(`logs/2026-07-09-202-baseline-restore-boot.log`, SSH confirmed, banner #5):
+empty (`total 0`), and `dmesg | grep -i ramoops` showed only the
+reserved-memory registration line, no "found existing... buffer" message at
+all — meaning the ramoops region came back completely fresh. **No crash
+record survived** any of the three build #200 attempts. This is expected
+for the watchdog-hang failure mode: `aee_wdt_dump` is ATF's own hang
+detector firing on a wedged cpu0, which never reaches Linux's panic/oops
+path, so pstore/ramoops (which only captures kernel oops/panic output, or
+console output if `CONFIG_PSTORE_CONSOLE` state survives a *warm* reset)
+never gets a chance to write anything — and the physical power-cycles the
+user performed likely dropped DRAM self-refresh entirely, wiping even that.
+
+**Baseline restored and confirmed working** (`logs/2026-07-09-202-...`, SSH
+banner #5, matches build #71 exactly). Patch 0012 held out of the patch
+stack pending further diagnosis. See blockers.md B-17 for the updated
+status and next-step plan (stress-test 0008 alone; add unconditional
+non-ratelimited debug printk trace points around `mtk_dsi_irq()` so any run
+leaves a trail viewable via pstore/console-ramoops after the fact).
+
+### BUILD #203 — B-17 stress test: patch 0008 alone + pstore trace; hang RE-ATTRIBUTED to Android fallback boots, 2026-07-09
+
+Build `logs/2026-07-09-203-b17-0008-only-plus-pstore-trace` (banner #73,
+sha256 `3eda93ee165eb4cb6a37fa2d6eab5647483df618d61e655af7ba5d46f0f87344`):
+drm stack with patch 0012 **held out** (0008 only), plus
+`patches/v6.6/zz-debug/0002-GEMINI-DEBUG-dsi-irq-poweron-poweroff-trace.patch`
+(unconditional `pr_info` trace in `mtk_dsi_irq`/`poweron`/`poweroff`,
+mirrored to pstore via `CONFIG_PSTORE_CONSOLE=y`).
+
+Multiple power-on sessions were captured, but **all to the same log path**
+(`logs/2026-07-09-204-b17-0008-only-plus-pstore-trace-boot.log`), so each
+relaunch of `ftdi-monitor.py` overwrote the previous session — only the
+final (clean) session survives as raw evidence. Observed across sessions
+(details preserved in blockers.md, "Update 2026-07-09 (later)"):
+
+1. Clean boot, `RGU STA: 0`, normal `mtu3` cutoff — but the silent
+   USB-gadget failure again (`en12` inactive, zero USB devices in
+   `system_profiler`). Third occurrence of this pattern.
+2. A hang session: `el3_exit`, no kernel output, `aee_wdt_dump: on cpu0`,
+   `pc == lr == 0xffffffc000087fa8`, followed by a ~33s watchdog bootloop —
+   **but that session's LK line read `jump to K64 0x40080000`** (Android
+   `boot` partition), and the hang PC resolves to the *3.18-era* arm64 VA
+   layout (`0xffffffc000080000` text base), not our 6.6 kernel
+   (`0xffff800080000000` per this build's System.map). The hang was almost
+   certainly the **Android kernel**, silent because LK sets
+   `printk.disable_uart=1` for Android boots.
+3. Final session (surviving log): genuine cold start (`RGU STA: 0` line
+   111), `jump to K64 0x40200000` (line 1819), correct `#73` banner (line
+   1828), clean serial boot to the `mtu3` cutoff (line 2111) — and again no
+   USB gadget enumeration, SSH timeout.
+
+**Conclusions:** (a) no confirmed hang of *our* kernel exists in the
+#200/#203 data — every `0x40200000` boot was serially clean; the "early
+cpu0 hard-lock" evidence points at Android-fallback cycles; (b) the
+reproducible open problem is the clean-boot silent USB-gadget failure;
+(c) the GEMINI-DEBUG trace never fired (expected — DSI defers with -517 and
+poweron is never reached at this stage). Next capture: button-controlled
+power-on test, fresh log file per attempt, checking `jump to K64` each
+time. See blockers.md for the full revised next-step list.
+
+### B-17 ROOT-CAUSED AND FIXED — OVL leftover-IRQ NULL-deref panic; builds #212/#218/#221, 2026-07-10
+
+**The full crash chain (supersedes the "hang re-attributed" entry's open
+questions):** journal evidence (`journalctl --list-boots` on the shared
+Debian rootfs: 10 boots, *all* banner #5) proved build #203 never once
+reached userspace — its "clean serial boots" were an artifact of the
+console-mux cutoff at ~0.45s (mtu3 init switches the left-port mux away
+from UART). The crash lives in the invisible 0.5–6s window. Also observed:
+boot2 briefly drove a **green screen** before resetting — first pixels ever
+from the mainline display stack (uninitialized framebuffer scan-out).
+
+**pstore dead end (important negative result):** ramoops at the vendor's
+own `mediatek,pstore` region (0x44410000, 0xe0000 — exactly what
+`docs/vendor-dtb/gemini_kali_boot.dts` reserves) does NOT survive any
+reset on this device. Readout kernel = build #212 (banner #75,
+`CONFIG_PSTORE_RAM=y`, `CONFIG_DRM_MEDIATEK=m` so display can't bind;
+sha256 540d345a…). A controlled test (marker into `/dev/pmsg0`, plain
+`reboot`, next boot checks `/sys/fs/pstore` + `/var/lib/systemd/pstore`)
+came back empty — the preloader re-initializes DRAM on every boot path,
+warm or cold. A sysrq-c panic test (same #212 image flashed to boot2,
+`sysctl kernel.panic=5`, `echo c > /proc/sysrq-trigger`) confirmed the
+panic→auto-reboot path works but the buffer arrives as garbage
+("found existing invalid buffer"). RAM-based crash capture is a dead end;
+serial visibility is the vehicle that works (below).
+
+**Build #218 (banner #76, `logs/2026-07-10-218-b17-crasher-serial-visible/`,
+sha256 bf6d3628…):** the #203 config with USB/mtu3 **disabled**
+(`CONFIG_USB_MTU3/GADGET/ETH` off via a temp fragment) so the console mux
+never switches — serial stays live through the crash window. First boot
+attempt landed in the `boot` slot (banner #75 — always verify the banner);
+after reflash+boot2, capture `logs/2026-07-10-219-…` caught the death live:
+
+```
+[0.554] Unable to handle kernel NULL pointer dereference at 0000000000000150
+[0.566] pc : mtk_crtc_ddp_config+0x3c/0x244   lr : mtk_crtc_ddp_irq+0xd0/0xd4
+        mtk_disp_ovl_irq_handler → __handle_irq_event_percpu → … → el1h_64_irq
+[0.595] Kernel panic - not syncing: Oops: Fatal exception in interrupt
+```
+
+Root cause: LK leaves the OVL running (boot splash — hence the green
+screen) with `OVL_INTEN` armed. `mtk_disp_ovl_probe()` requests the IRQ
+with that leftover state live; the interrupt fires during component bind —
+after the vblank callback is registered but **before the CRTC has an atomic
+state** — and `mtk_crtc_ddp_config()` dereferences
+`mtk_crtc->base.state` (NULL, offset 0x150 = `pending_config`). Panic in
+IRQ context → hardware watchdog → LK falls back to the Android `boot`
+slot. Same disease class as the B-13 DSI IRQ (patch 0008), one engine over.
+
+**Fix — `patches/v6.6/drm/0012-drm-mediatek-quiesce-ovl-irq-at-probe-and-guard-null-crtc-state.patch`:**
+(a) in `mtk_disp_ovl_probe()`, clear `OVL_INTEN`/`OVL_INTSTA` (clock held
+via `clk_prepare_enable`) before `devm_request_irq`; (b) defensive early
+return in `mtk_crtc_ddp_irq()` when `crtc->state` is NULL. Both hunks
+upstreamable.
+
+**Build #221 (banner #77, `logs/2026-07-10-221-b17-ovl-irq-quiesce-fix/`,
+sha256 563ff6c7…, still USB-free for serial visibility) — VALIDATED,
+capture `logs/2026-07-10-222-…`:** sails through 0.55s, DRM fully bound,
+no oops, GEMINI-DEBUG shows one clean DSI IRQ (`spins=1`), kernel alive at
+93+s. The panic is fixed. **Next blocker now exposed:** repeating
+`[drm] *ERROR* flip_done timed out` + `vblank wait timed out` every ~10s
+from the fbdev client (PID 68 worker) — atomic commits never complete
+because the OVL frame-done interrupt never fires post-enable, i.e. no
+frames flow through the pipeline (panel dark); systemd never appears on
+serial, suggesting the fbcon takeover retry loop stalls boot. Lead: LK's
+DDP log configures the path as `vido_mode`; verify our DSI/panel mode
+(video vs command), TE/trigger and mutex SOF configuration against the
+vendor 3.18 source.
+
+**Ops notes:** (1) booting with the USB cable in from power-on breaks
+gadget enumeration; the reliable protocol is FTDI in at boot, swap to USB
+after the mtu3 line (adopted as standard). (2) relaunching
+`ftdi-monitor.py` onto an existing log path OVERWRITES it — always a fresh
+NN-numbered file. (3) `mtk w` to boot2 while the device sits in a
+just-booted state can be followed by an accidental default-slot boot —
+always verify the banner before analysing.
+
+### BUILD #223 — mutex EOF fix for flip_done timeout (banner #78), 2026-07-10
+
+**Hypothesis:** the post-fix blocker on build #221 (`flip_done timed out` /
+`vblank wait timed out` every ~10s, OVL frame-done never firing, panel dark,
+boot stalled before systemd) is a DDP mutex misconfiguration: our
+`mt6797_mutex_driver_data` (patches/v6.6/soc/0001) borrowed
+`mt2712_mutex_sof`, which programs only the SOF field (value 1 for DSI0).
+The vendor 3.18 `ddp_get_mutex_src()`
+(kernel-3.18/drivers/misc/mediatek/video/mt6797/dispsys/ddp_path.c) sets
+**both** SOF and EOF to DSI0 for a video-mode DSI path — EOF field is
+`REG_FLD(3, 6)`, i.e. register value 0x41, per ddp_reg.h
+(`SOF_VAL_MUTEX0_EOF_FROM_DSI0 == 1`). Mainline's mt8183 table has the
+identical construction with the comment "Add EOF setting so overlay
+hardware can receive frame done irq" — exactly our symptom. Without EOF the
+mutex never cycles on DSI end-of-frame, so OVL frame-done never fires and
+every atomic commit times out.
+
+**Change:** added `mt6797_mutex_sof[]` (SOF | SOF<<6 for DSI0/DSI1/DPI0) to
+`patches/v6.6/soc/0001-soc-mediatek-mtk-mutex-add-mt6797-mutex-data.patch`
+and pointed `mt6797_mutex_driver_data.mutex_sof` at it. Verified
+`git apply --check` clean on pristine v6.6.
+
+**Build:** #223, banner `#78 SMP PREEMPT Fri Jul 10 05:23:18 UTC 2026`,
+sha256 `d535cb7201645cacf5739ad2c0cf06b2ad77bdaa14040ee92e0e4e394da0680b`,
+provenance `logs/2026-07-10-223-b17-mutex-eof-fix/`. Still the no-USB debug
+config (serial visible throughout) + GEMINI-DEBUG DSI trace, on top of the
+#221 patch set (drm/0012 OVL quiesce fix included).
+
+**Flash/capture:** `mtk w boot2 .../223.../new_kali_boot.img`, capture
+`logs/2026-07-10-224-b17-mutex-eof-fix-boot.log`.
+
+**Expected outcome if correct:** no flip_done/vblank WARNs, fbcon commits
+complete, boot proceeds to systemd on serial — and possibly first pixels on
+the panel.
+
+### CAPTURE 224 result + BUILD #225 — DSI cmd-mode quiesce (banner #79), 2026-07-10
+
+Capture `logs/2026-07-10-224-b17-mutex-eof-fix-boot.log` (build #223, banner
+#78 verified): the mutex EOF fix alone did **not** clear the timeouts
+(flip_done ×9, vblank ×4). But the capture exposed the next layer: at 1.13s
+`[drm] Wait DSI IRQ(0x00000008) Timeout` → `failed to switch cmd mode` →
+`panel-solomon-ssd2092: DSI write (cmd 0x28) failed: -62` → `init sequence
+failed: -62`. Root cause: LK leaves `DSI_MODE_CTRL` in video mode from the
+splash; `mtk_dsi_reset_engine()` (DSI_CON_CTRL soft reset) does not clear
+it, so `mtk_dsi_host_transfer()` sees MODE set, tries to stop a video
+stream that isn't running and waits for a VM_DONE that never comes — every
+panel init command fails with -62. Third instance of the
+"never-trust-LK-leftover-display-state" class (after B-13 DSI IRQ and the
+OVL leftover-IRQ crash).
+
+**Fix:** new `patches/v6.6/drm/0013-drm-mediatek-dsi-force-cmd-mode-at-poweron.patch`
+— force `mtk_dsi_set_cmd_mode(dsi)` in `mtk_dsi_poweron()` right after
+`mtk_dsi_reset_engine()`. Build #225, banner #79, provenance
+`logs/2026-07-10-225-b17-dsi-cmd-mode-quiesce/` (sha256 `45f10d5afc42ddc7…`).
+
+### CAPTURE 226 result + BUILD #227 — mipitx PLL prepare fix (banner #80), 2026-07-10
+
+Capture `logs/2026-07-10-226-b17-dsi-cmd-mode-quiesce-boot.log` (banner #79
+verified): **drm/0013 validated on hardware** — all init-sequence/-62/
+cmd-mode errors gone; GEMINI-DEBUG dsi trace shows a CMD_DONE IRQ (status
+0x2) per panel command. flip_done/vblank timeouts persist. New finding
+(present in captures 222/224/226 alike, i.e. pre-existing): `BUG: scheduling
+while atomic: kworker/u20:2` at 0.53s — our MT6797 mipitx PHY driver had
+`usleep_range()` in clk_ops `.enable`, which runs under the CCF enable
+spinlock (trace: `mt6797_mipi_tx_pll_enable → clk_core_enable → …
+phy_power_on → mtk_dsi_poweron`); a second BUG (preempt_count underflow to
+0) followed inside the panel's `msleep`. Sleeping ops belong in
+`.prepare/.unprepare` — exactly what mainline mt8173 mipi_tx does; caller
+uses `clk_prepare_enable` so behaviour is preserved.
+
+**Fix:** `patches/v6.6/phy/0004-…-mt6797-mipitx-phy-driver.patch` reworked:
+pll `.enable/.disable` → `.prepare/.unprepare` (functions renamed
+`mt6797_mipi_tx_pll_prepare/_unprepare`). Build #227, banner #80,
+provenance `logs/2026-07-10-227-b17-mipitx-pll-prepare-fix/`.
+
+### CAPTURE 228 result + BUILD #229 — DDP register dump diagnostic (banner #81), 2026-07-10
+
+Capture `logs/2026-07-10-228-b17-mipitx-pll-prepare-fix-boot.log` (banner
+#80 verified): **phy fix validated** — `scheduling while atomic` count 0
+(was 2). Panel init completes cleanly (187 CMD_DONE IRQs, last at 0.79s),
+`mtk_output_dsi_enable`'s poweron at 0.85s, then **silence**: no frame-done
+or vblank interrupt ever arrives; flip_done ×9 / vblank ×4 timeouts
+unchanged; panel registered at 62.7s after the fbcon retry ladder. The
+pipeline (OVL0→…→RDMA0→DSI0) is now configured with no software errors at
+all, but the hardware produces no frames — we are blind to which block is
+stalled.
+
+**Diagnostic:** new `patches/v6.6/zz-debug/0003-GEMINI-DEBUG-ddp-register-dump.patch`
+— standalone `drivers/soc/mediatek/gemini-ddp-dump.c` (obj-y), delayed work
+at t≈8s (while the stuck commit still holds the pipeline powered) dumps raw
+registers of mmsys CG_CON0/1, mutex0 (INTEN/INTSTA/EN/MOD/SOF), OVL0
+(STA/INTEN/INTSTA/EN/ROI/SRC_CON/L0/RDMA0_CTRL/L0_ADDR), RDMA0
+(INT_EN/INT_STA/GLOBAL_CON/SIZE/FIFO_CON) and DSI0 (START/INTEN/INTSTA/
+CON_CTRL/MODE_CTRL/TXRX/PSCTRL/VDO timings/PHY_LCCON/LD0CON/state-debug
+0x148–0x168), twice 500ms apart so moving status bits show. A banner line
+precedes each block so a bus hang on a gated block identifies itself.
+
+Build #229, banner `#81 SMP PREEMPT Fri Jul 10 05:54:43 UTC 2026`, sha256
+`aac1824f4f2ff0587de265f6e2b67f92f6910b245fb5665d3b55fc8fa5bf69df`,
+provenance `logs/2026-07-10-229-b17-ddp-register-dump/`.
+
+**Interpretation matrix for capture 230:**
+- `DSI_MODE_CTRL != 1` (not sync-pulse video mode) or `DSI_START == 0` →
+  DSI never started streaming; look at mtk_output_dsi_enable ordering.
+- DSI streaming but `RDMA0 GLOBAL_CON` engine off / SIZE zero → RDMA never
+  configured/started; mutex or comp-config issue.
+- OVL0 `INTEN` without FRAME_COMPLETE bit → vblank enable path never armed
+  OVL (check drm/0012 interaction).
+- All engines running, INTSTA counters advancing between passes → IRQ
+  delivery problem, not a pipeline stall.
+- Dump hangs at a block banner → that block's clock/power domain is gated.
+
+### CAPTURE 230 result + BUILD #231 — extended DDP dump (banner #82), 2026-07-10
+
+Capture `logs/2026-07-10-230-b17-ddp-register-dump-boot.log` (banner #81;
+note: user's capture overwrote the intended 228 file, renamed to 230 — the
+original build #227 capture is lost but was fully analysed in the entry
+above). Dump analysis:
+
+- mutex: EN=1, SOF=0x41 (SOF+EOF from DSI0 — EOF fix confirmed in hardware),
+  MOD=0x05fcb400 (ours OR'd over LK leftovers; extra bits 15/24/26 =
+  OVL1_2L/UFOE/PWM0 are LK's).
+- OVL0: EN=1, ROI 1080x2160, INTEN=0x2 (FME_CPL armed), SRC_CON=0 (no
+  layers — expected pre-first-vblank: plane config is applied from the OVL
+  irq, which never fires), **INTSTA=0x2014 = FME_UND + FME_HWRST_DONE +
+  ABNORMAL_SOF, FME_CPL never latched** — OVL receives SOFs, starts frames,
+  never completes them: output blocked downstream.
+- RDMA0: EN, size correct, INT_STA=0x7e (frame start/end + **EOF abnormal +
+  FIFO underflow**) — running but starved/disrupted.
+- DSI0: START=1, MODE_CTRL=1 (video sync-pulse), INTSTA bit31 (BUSY),
+  state-debug 0x168 changes between passes — DSI actively streaming.
+- MMSYS CG_CON0=0x00110000: only OVL1/RDMA1 gated (not in path) — clocks OK.
+
+Vendor `ddp_path.c` reveals the mt6797 primary path muxes (OVL0_VIRTUAL
+stage, DITHER_MOUT, RDMA0_SOUT, DSI0_SEL_IN). A routing table covering our
+path was **already present and applying**
+(`patches/v6.6/soc/0002-…mtk-mmsys-add-mt6797-routing-table.patch`, from an
+earlier session) — a duplicate written this session was removed. So the
+routing registers *should* hold: DITHER→RDMA0, RDMA0→DSI0 direct (bypassing
+LK's PATH0/UFOE), OVL0_2L→VIRTUAL→COLOR0. But this has never been verified
+in hardware, and the stall signature (OVL blocked at its output) is exactly
+what a routing mismatch would produce.
+
+**Build #231** (banner `#82 SMP PREEMPT Fri Jul 10 06:12:19 UTC 2026`,
+sha256 `fb5f09caac13f86018b68ba7271808cd276342f9598129f73fd93ce9211e4617`,
+provenance `logs/2026-07-10-231-b17-ddp-dump-extended/`): zz-debug/0003
+extended to also dump the mmsys routing muxes (0x034/0x038/0x03c/0x040/
+0x068/0x07c/0x088/0x08c/0x090/0x098/0x09c), the OVL_2L0 block (0x1400d000,
+incl. DATAPATH_CON to check BGCLR_SEL_IN), OD0 (0x14017000) and DITHER0
+(0x14018000), plus OVL RDMA_CTRL(0)/ROI_BGCLR. Expected reads if routing is
+correct: mmsys+0x03c=0x1, +0x090=0x2, +0x07c=0x2, +0x068=0x1, +0x098=0x0,
++0x09c=0x0, +0x034=0x1; ovl2l0+0x024 bit2 set (BGCLR_SEL_IN), ovl2l0+0x00c=1.
+Any deviation fingers the broken link.
+
+### CAPTURE 232 result + BUILD #233 — OVL0 layer-poke experiment (banner #83), 2026-07-10
+
+Capture `logs/2026-07-10-232-b17-ddp-dump-extended-boot.log` (banner #82
+verified). Extended dump eliminates every config hypothesis:
+
+- **Routing muxes all correct**: 0x034=1 (VIRTUAL→COLOR0), 0x03c=1
+  (DITHER→RDMA0), 0x068=1 (COLOR0←VIRTUAL), 0x07c=2 (DSI0←RDMA0), 0x090=2
+  (RDMA0→DSI0), 0x098=0/0x09c=0 (OVL0_2L→VIRTUAL) — the pre-existing
+  soc/0002 routing table works. (0x040=1 UFOE_MOUT is an LK leftover,
+  harmless since DSI0 selects RDMA0.)
+- **OVL_2L0 cascade correct**: EN=1, DATAPATH_CON=0x5 (BGCLR_SEL_IN set),
+  ROI right — and it has FME_CPL *latched* (completed at least one frame).
+- OD0 EN=1 CFG=0x4 and DITHER0 EN=1 CFG=0x2 — exactly what mainline's
+  mtk_od_config/mtk_dither_config write (OD relay is overwritten by
+  mtk_dither_set's DISP_DITHERING; same as working mt8173). OD INTSTA=0xf:
+  processing frames.
+- Vendor ovl_connect() confirms cascade needs only BGCLR_SEL_IN on the
+  downstream OVL — nothing missing on OVL0's side.
+- Mutex MOD bit map verified identical to vendor module_mutex_map.
+
+So every register our driver writes is right, the whole downstream chain
+shows frame activity — only OVL0 (cascade head, the CRTC's vblank source)
+never latches FME_CPL, with FME_UND + ABNORMAL_SOF instead, and SRC_CON=0.
+
+**Remaining hypothesis:** this OVL IP doesn't complete background-only
+frames. Mainline leaves all layers off at first enable (plane config is
+applied from the vblank irq) — chicken-and-egg: no layer → no FME_CPL → no
+irq → plane config never applied. mt8173's OVL tolerates layerless frames;
+MT6797's may not (vendor never runs OVL without a layer).
+
+**Build #233** (zz-debug/0003 extended): after dump pass 2 (~8.5s) the
+debug module re-enables OVL0 layer 0 mirroring mtk_ovl_layer_on()
+(RDMA_CTRL(0)=1, SRC_CON|=1), reusing LK's leftover L0 config (addr
+0x7dfb0000 = LK splash buffer, still fully programmed). Dump pass 3 at ~9s
+shows the result. If FME_CPL latches after the poke (and/or the fbcon
+commit suddenly completes, possibly with the LK splash re-appearing on the
+panel), the hypothesis is proven and the proper fix is to make the first
+frame's plane config apply at enable time (or enable a layer before
+starting the mutex) for mt6797.
+
+### CAPTURE 234 result + BUILD #235 — clock-rate report (banner #84), 2026-07-10
+
+Capture `logs/2026-07-10-234-b17-ovl0-layer-poke-boot.log` (banner #83
+verified). **Layer-poke hypothesis disproven**: after the poke, SRC_CON=1
+and the layer fetcher is demonstrably active (RDMA_CTRL(0)=0x00e80001 —
+FSM bits live; GMC register changed; OVL_STA 0x1f→0x1d), but FME_CPL still
+never latches; instead a new INTSTA bit 5 appears (RDMA0_EOF_ABNORMAL —
+the layer fetch is being aborted mid-frame). flip_done timeouts continue
+unchanged. So OVL0 aborts every frame regardless of layers, with each
+abort coinciding with the next SOF arriving while it is still busy
+(ABNORMAL_SOF).
+
+**New hypothesis — DDP clocked too slow**: that signature (head-of-pipe
+frame never finishes before the next SOF, underrun, downstream FIFO
+underflow, while DSI streams at full rate off its own PLL) fits the DDP
+engines running far below the DSI drain rate (~165 Mpix/s for
+1080x2160@60). All DDP engines run from `mm_sel` (topckgen +0x40 bits
+25:24; parents 0=clk26m/26MHz, 1=imgpll_ck, 2=univpll1_d2, 3=syspll1_d2).
+Nothing in our DTS or drivers assigns mm_sel a parent or rate — it is pure
+LK leftover, and the CCF may also have reparented/disabled its PLL parent
+during late clk cleanup (we no longer boot with clk_ignore_unused; an
+unused imgpll/univpll would be shut off, forcibly reparenting or killing
+mm_sel).
+
+**Build #235** (banner `#84 SMP PREEMPT Fri Jul 10 06:34:54 UTC 2026`,
+sha256 `ef322d69bf7f28207ccf424cfba14a548f6e6b16cff34b35f5e00e5b10ba99d1`,
+provenance `logs/2026-07-10-235-b17-clk-rate-report/`): zz-debug/0003 now
+also dumps topckgen CLK_CFG_0..6 (0x10000040..0xa0) raw and reports CCF
+rate/enabled/parent for mm_sel, clk26m, imgpll_ck, univpll1_d2, syspll1_d2,
+mm_disp_ovl0, mm_disp_rdma0, mm_dsi0_mm_clock, mm_smi_common. If mm_sel
+reads parent=clk26m (mux field 0) or its PLL parent is off/slow, the stall
+is explained and the fix is a DTS assigned-clocks (like MSDC's) pinning
+mm_sel to a fast parent.
+
+## CAPTURE 236 result + BUILD #237 — OVL0 soft-reset poke (banner #85), 2026-07-10
+
+**Capture:** `logs/2026-07-10-236-b17-clk-rate-report-boot.log` (banner #84
+verified). **Clock hypothesis DISPROVEN.** GEMINI-CLK report: `mm_sel` rate
+325000000, enabled, parent `imgpll_ck` (325 MHz, on); raw topck+0x040 bits
+25:24 = 1 (imgpll_ck) agrees. All display gates (`mm_disp_ovl0`,
+`mm_disp_rdma0`, `mm_dsi0_mm_clock`, `mm_smi_common`) inherit 325 MHz —
+~2x the ~165 Mpix/s the mode needs. `univpll1_d2`/`syspll1_d2` off is
+irrelevant (unused parents). Rest of dump identical to capture 232: OVL0
+INTSTA=0x2014 (FME_UND + FME_HWRST_DONE + ABNORMAL_SOF, no FME_CPL), DSI
+streaming (state-debug advancing between passes), flip_done/vblank timeouts
+unchanged.
+
+**Eliminated so far:** mmsys routing, OVL cascade wiring, layerless-frame
+limitation (poke, capture 234), MM CG gating, OD/DITHER config, mutex
+MOD/SOF, and now engine clock rate.
+
+**Remaining asymmetry → new hypothesis: OVL0 FSM wedged from LK handoff.**
+OVL_2L0 (never used by LK) latches FME_CPL (INTSTA 0x201e); OVL0 (LK's
+splash engine, still carrying leftover layer addr 0x7dfb0000 / GMC / CON
+values) never does. Mainline `mtk_disp_ovl.c` never resets the engine;
+vendor `ddp_ovl.c ovl_reset()` always pulses OVL_RST (+0x14, write 1 then
+0) during path init. OVL0's latched FME_HWRST_DONE is LK-era.
+
+**BUILD #237 (banner `#85 SMP PREEMPT Fri Jul 10 06:45:55 UTC 2026`,
+sha256 `036859140419062e3974b682f366105becee652e8487516414e8b04ba43b0845`,
+provenance `logs/2026-07-10-237-b17-ovl0-reset-poke/`):** rewrote
+zz-debug/0003 — topck/CLK report removed; after dump pass 1 (8 s), pulse
+OVL0 OVL_RST (1 → udelay → 0) and clear INTSTA, then passes 2/3 at +500 ms.
+ovl_offs now include 0x14 (RST).
+
+**Interpretation:** if post-reset INTSTA shows FME_CPL (bit 1) latching in
+passes 2/3 (and ideally flip_done timeouts stop for later commits), the
+wedged-FSM hypothesis is confirmed → proper fix = reset pulse in
+mtk_disp_ovl probe/enable (same LK-quiesce family as drm/0012). If INTSTA
+returns to 0x2014-style with no FME_CPL, the wedge survives soft reset or
+the cause is elsewhere (next suspect: SMI/M4U fetch path).
+
+## CAPTURE 238 result + BUILD #239 — mid-chain backpressure dump (banner #86), 2026-07-10
+
+**Capture:** `logs/2026-07-10-238-b17-ovl0-reset-poke-boot.log` (banner #85
+verified). **Wedged-FSM hypothesis DISPROVEN:** the OVL_RST pulse took
+effect (STA 0x1f→0x1e, INTSTA cleared to 0), but within 500 ms OVL0 was
+back to INTSTA 0x2014 (FME_UND + ABNORMAL_SOF, no FME_CPL). The failure is
+live, not stuck LK state.
+
+**Breakthrough from the same capture:** offset +0x240 — previously
+misread as a GMC register — is OVL_FLOW_CTRL_DBG, the FSM debug register,
+decodable with vendor `ddp_ovl.c ovl_printf_status()`. OVL0 = 0x080f1020:
+FSM state 0x020 = eng_act (processing), ovl_running=1, all four layer
+RDMAs idle, and critically **out_valid=1 / out_ready=0** — OVL0 has output
+pixels the downstream never accepts. OVL_2L0 = 0x080c1020: identical
+signature. So the head of the pipeline is stalled on **backpressure from
+the mid-chain** (COLOR0→CCORR→AAL0→GAMMA→OD0→DITHER0), which has never
+been dumped — this also retro-explains FME_UND/ABNORMAL_SOF (frame can't
+drain before the next DSI SOF) and RDMA0's FIFO underflow (nothing gets
+through to it while DSI drains).
+
+**BUILD #239 (banner `#86 SMP PREEMPT Fri Jul 10 06:54:53 UTC 2026`,
+provenance `logs/2026-07-10-239-b17-midchain-backpressure-dump/`):**
+zz-debug/0003 rewritten (poke removed, 2 passes @8s/+500ms) to dump the
+mid-chain: COLOR0 (CFG_MAIN 0x400, START 0xc00, OUT_SEL 0xc08, internal
+width/height 0xc50/0xc54), CCORR/AAL/GAMMA/OD/DITHER (EN 0x00, INTSTA
+0x0c, CFG 0x20, IN_CNT 0x24, OUT_CNT 0x28, SIZE 0x30 — vendor ddp_reg.h
+offsets), plus both OVLs' FLOW_CTRL_DBG/ADDCON_DBG and RDMA0/DSI0.
+
+**Interpretation:** walk the chain; the blocker is the engine whose
+IN_CNT advances while OUT_CNT stays 0, or the first whose IN_CNT stays 0
+while the upstream is stalled out_valid — likely not started (COLOR START
+reg?), zero SIZE, or wrong relay bit. Fix follows directly from which
+engine it is.
+
+## CAPTURE 240 result + BUILD #241 — OD0 is the blocker; relay-mode poke (banner #87), 2026-07-10
+
+**Capture:** `logs/2026-07-10-240-b17-midchain-backpressure-dump-boot.log`
+(banner #86 verified). **Blocking engine identified: OD0.** Pixel counters
+across the two passes: CCORR IN/OUT frozen (y=1,x=15 / y=1,x=7); AAL
+frozen; GAMMA crawling (~28 px per 500 ms); **OD0 IN_CNT frozen at
+y=1,x=3 while OD0 OUT_CNT free-runs (hundreds of lines per pass)**;
+DITHER0 streaming at full rate. OD0 blocks its input port and
+self-generates output — it is the backpressure source stalling
+GAMMA/AAL/CCORR/both-OVLs, while feeding DITHER→RDMA0→DSI a self-timed
+stream (which is why DSI "works" and RDMA0 shows underflow-style
+abnormal IRQs).
+
+**Root cause (vendor `video/common/od10/ddp_od.c`):** OD_CFG[1:0] is the
+mode field — 0x1 relay/bypass, 0x2 core-enable; vendor init default is
+CFG=0x1. Mainline `mtk_od_config` writes OD_RELAYMODE (bit 0) but then
+calls `mtk_dither_set`, which **overwrites** OD_CFG with DISP_DITHERING
+(bit 2) only — hardware reads back 0x4: dither on, neither relay nor
+core enabled, mode undefined. MT8173 tolerates this; MT6797's OD (needs
+table/DRAM init we never do) does not.
+
+**BUILD #241 (banner `#87 SMP PREEMPT Fri Jul 10 07:02:37 UTC 2026`,
+sha256 `fd5022d044e623a497b72d2a244622b0e8dd791de5924365034e0980749afbb2`,
+provenance `logs/2026-07-10-241-b17-od0-relay-poke/`):** zz-debug/0003 now
+pokes OD0_CFG=0x5 (relay + dithering) after pass 1, then passes 2/3.
+Expected if confirmed: CCORR/AAL/GAMMA counters unfreeze, OVL0 INTSTA
+gains FME_CPL (bit 1), OVL FLOW_CTRL_DBG leaves eng_act/out_ready=0.
+Proper fix then = drm patch making mtk_od_config preserve the relay bit
+(write OD_CFG = RELAYMODE | dithering, or set relay after dither_set).
+
+## CAPTURE 242 result — OD0 ROOT CAUSE CONFIRMED; new crash at first real scanout, 2026-07-10
+
+**Capture:** `logs/2026-07-10-242-b17-od0-relay-poke-boot.log` (banner #87
+verified; capture also contains the post-crash reboot into the `boot`
+slot, banner #75 readout build — the device WDT-reset and fell back).
+
+**The OD_CFG poke fixed flip_done.** Sequence in the log:
+- 8.68s: pass 1 identical to capture 240 (OD0 blocking, CFG=0x4); poke
+  writes CFG=0x5 (relay + dithering), reads back 0x5.
+- 8.83s: `Console: switching to colour frame buffer device 135x135` —
+  the atomic commit that has timed out on every build **completed**.
+- 9.19s: `fb0: mediatekdrmfb frame buffer device`, SSD2092 panel
+  registered.
+- Pass 2 (9.19s): OVL0 STA=0x1d, INTSTA=0x200 (only layer-0 FIFO
+  underflow latched — old FME_UND/ABNORMAL_SOF pattern gone), SRC_CON=0x1
+  — a real plane was enabled and OVL0 started fetching an actual
+  framebuffer via DMA. FME_CPL/vblank clearly fired (plane config is
+  only applied from the vblank IRQ path).
+
+**Conclusion (CONFIRMED):** the flip_done/vblank timeout root cause is
+mainline `mtk_od_config` writing OD_RELAYMODE then letting
+`mtk_dither_set` overwrite OD_CFG with DISP_DITHERING only → OD_CFG=0x4,
+mode undefined; MT6797's OD blocks its input and free-runs its output.
+Poking relay mode (0x5) instantly unstuck the whole pipeline.
+
+**New, separate crash:** ~9.21s, immediately after
+`clk: Disabling unused clocks` and ~0.4s into first real scanout, the
+pass-2 dump stopped mid-read (after ovl0+0x02c; next read 0x240 never
+printed), serial degraded to garbage, WDT reset → Android slot. Two
+suspects: (1) SMI larb0 IOMMU-bypass gap (blockers.md B-13 finding from
+vendor source) — first real layer DMA through larb0 wedges the MM bus;
+the freshly latched layer-0 FIFO-underflow bit fits a starving fetch;
+(2) late clk cleanup gating a now-needed clock (e.g. imgpll losing its
+last reference). Plan: proper OD fix as drm/0014 + one build with
+`clk_ignore_unused` temporarily restored to separate the suspects.
+
+## BUILD #243 — proper OD relay fix (drm/0014) + temporary clk_ignore_unused (banner #88), 2026-07-10
+
+**New permanent patch:**
+`patches/v6.6/drm/0014-drm-mediatek-preserve-OD-relay-mode-after-dither-set.patch`
+— in `mtk_od_config()`, after `mtk_dither_set()` (which overwrites OD_CFG
+with the dithering bit alone), re-assert OD_RELAYMODE with
+`mtk_ddp_write_mask()` so OD_CFG ends as 0x5 (relay + dithering) instead
+of 0x4 (no mode). Sourced from vendor common/od10/ddp_od.c (OD_CFG[1:0]:
+0x1 relay, 0x2 core-en). Upstream candidate. The zz-debug/0003 OD poke is
+retained — it now writes 0x5 over an already-correct 0x5, doubling as
+verification (pre CFG should read 0x5 this time).
+
+**Temporary:** `clk_ignore_unused` re-added to
+`configs/gemini-cmdline.config` (comment block marks it TEMPORARY) to
+split the capture-242 scanout crash: if the WDT reset still happens with
+late clk cleanup disabled, the clk path is exonerated and the SMI larb0
+IOMMU-bypass gap becomes the prime suspect.
+
+Banner `#88 SMP PREEMPT Fri Jul 10 07:26:07 UTC 2026`, sha256
+`959273f616bfcad4682b71c0a0bda688a353c4cd7f8a01db92540a681fc5ac6e`,
+provenance `logs/2026-07-10-243-b17-od-relay-fix-clk-ignore/`.
+
+**Expected:** commit completes without any poke (fbcon by ~1 s rather
+than after the 8.7 s poke). Outcomes: (a) survives + panel shows fbcon →
+crash was clk cleanup, fix = proper clk refs; (b) WDT reset again at
+first scanout → SMI/M4U path next; (c) no fbcon at all → fix regression,
+inspect OD_CFG in dump.
+
+## CAPTURE 244 result — FLIP_DONE FIXED, FULL CLEAN BOOT WITH DISPLAY STACK (banner #88), 2026-07-10
+
+**Capture:** `logs/2026-07-10-244-b17-od-relay-fix-clk-ignore-boot.log`
+(banner #88 verified). **Best display-stack boot of the project:**
+- fbcon bound at 1.01 s (`Console: switching to colour frame buffer
+  device 135x135`), `fb0: mediatekdrmfb` at 1.28 s — no poke involved;
+  dump pass 1 reads OD0_CFG=0x5 already, confirming drm/0014.
+- Zero flip_done / vblank-wait timeouts, zero WARNINGs.
+- All three dump passes completed; no WDT reset; boot to
+  `graphical.target` in 10.076 s; Debian login prompt on ttyS0.
+
+**Conclusions:** (1) drm/0014 (preserve OD relay mode) is the proper,
+validated fix for the flip_done/vblank timeout — pipeline now completes
+frames continuously. (2) The capture-242 scanout crash did NOT reproduce
+with `clk_ignore_unused` → prime suspect is late clk cleanup disabling a
+display-needed clock (SMI/M4U gap did not bite during a full boot of
+real scanout). Remaining follow-up: identify which clock the late
+cleanup killed (likely an unreferenced parent in the mm/imgpll tree),
+fix the reference properly, drop the TEMPORARY cmdline flag, then strip
+zz-debug and rebuild production config (USB restored).
+
+## CAPTURE 244 follow-up + BUILD #245 — panel dark w/ backlight lit; full DSI reg dump (banner #89), 2026-07-10
+
+Physical observation on build #243's clean boot: **backlight lit, image
+black**. PWM confirmed on via serial login (`/sys/kernel/debug/pwm`:
+pwm-0 enabled, duty=period; brightness 200/255, bl_power=0). Pixels
+aren't reaching the glass despite the pipeline completing frames →
+suspect DSI video timing/format mismatch vs. what the panel expects.
+`/dev/mem` reads return nothing (kernel config blocks it), so the diff
+moves into the debug module.
+
+**Golden reference in hand:** LK dumps its working DSI block
+(`DSI+0000..0180`) in every capture — 4 lanes, packed RGB888
+(PSCTRL=0x00030ca8), VSA=3/VBP=0xf/VFP=0xa/VACT=0x870,
+HSA_WC=0x1c/HBP_WC=0x94/HFP_WC=0x74, PHY_TIMCON 0x080f0708/0x10280c20/
+0x0a280100/0x00102406.
+
+**BUILD #245 (banner `#89 SMP PREEMPT Fri Jul 10 07:42:25 UTC 2026`,
+sha256 `0503b139b34e55b1997b006ea116b23633e6b4a38af8a4fc6225bcc37f2f4647`,
+provenance `logs/2026-07-10-245-b17-full-dsi-reg-dump/`):** zz-debug/0003
+dsi0 dump extended from 4 regs to the full 0x000–0x1AC block, dumped
+each pass. Next capture: diff kernel values against LK's lines from the
+same log; mismatches in lane count, PS format, porches or PHY timing
+name the fix.
+
+## CAPTURE 246 result — DSI diff done: EOT/clock-mode + porch mismatches + BUILD #247 (banner #90), 2026-07-10
+
+Capture `logs/2026-07-10-246-b17-full-dsi-reg-dump-boot.log` (banner #89
+verified; clean boot to prompt again; panel still backlit-black). Full
+kernel DSI dump diffed against LK's golden dump (capture 244):
+
+**Matching:** PSCTRL 0x00030ca8 (packed RGB888, 3240 B/line), VACT 0x870,
+4 lanes, video sync-pulse mode, 0x100=0x55, 0x10c=0xb8, 0x130=0x21,
+0x90=0x3c, 0xa0/0xa4. Not a gross format/lane mismatch.
+
+**Mismatches:**
+- **TXRX_CTRL (0x18): LK 0x0001003c vs kernel 0x0000007c.** LK sends EOT
+  packets (bit6 DIS_EOT clear) and lets the HS clock drop to LP between
+  transmissions (bit16 HSTX_CKLP_EN). Kernel disables EOT and runs a
+  continuous clock — mtk_dsi sets DIS_EOT unless the panel declares
+  MIPI_DSI_MODE_NO_EOT_PACKET (inverted-looking logic, mtk_dsi.c:410).
+  Prime suspect for backlit-black: panels commonly reject HS video
+  without EOT.
+- **Vertical porches: LK VSA=3/VBP=15/VFP=10 vs kernel 1/43/76** — the
+  panel patch had used vendor-3.18 LCM source values; LK (which provably
+  lights the panel) programs different ones. vtotal 2188 vs 2280.
+- **Horizontal WCs: LK 0x1c/0x94/0x74 vs kernel 0x02/0x32/0x4e** — much
+  narrower blanking.
+- PHY_TIMCON differs moderately (LK longer margins) — left alone this
+  build to keep attribution clean.
+
+**BUILD #247 (banner `#90 SMP PREEMPT Fri Jul 10 07:55:01 UTC 2026`,
+sha256 `617c69c15ab7605abf89fe575274a5c4f0e473e12be598dd5d418f3b95fe09a1`,
+provenance `logs/2026-07-10-247-b17-lk-dsi-timing-eot/`):** panel/0005
+updated: (1) mode_flags += MIPI_DSI_MODE_NO_EOT_PACKET |
+MIPI_DSI_CLOCK_NON_CONTINUOUS → TXRX_CTRL becomes bit-identical to LK's
+0x1003c; (2) mode timings adopted from LK registers: VSA=3 VBP=15 VFP=10,
+HSA=13 HBP=53 HFP=42 (reversed through mainline's px*3−10 WC formula,
+within one byte of LK), clock 155961 kHz (1188×2188×60). Expected next
+capture: TXRX_CTRL=0x1003c and porch regs matching LK in the dump —
+and, if EOT/porches were the blocker, pixels on the glass.
+
+## CAPTURE 248 result — registers now LK-identical, still black; panel side implicated + BUILD #249 (banner #91), 2026-07-10
+
+Capture `logs/2026-07-10-248-b17-lk-dsi-timing-eot-boot.log` (banner #90
+verified). All intended register changes landed: TXRX_CTRL=0x0001003c
+(bit-identical to LK), VSA/VBP/VFP=3/15/10, HSA_WC=0x1d (LK 0x1c). DSI
+INTSTA=0x80000790 across all passes (busy, frame-done/VM-done cycling,
+no error bits), zero flip_done timeouts — the link streams frames
+correctly. **Panel still black.** Remaining reg diffs (0x64/0x68/0x88 =
+BLLP_WC/MEM_CONTI-class housekeeping per vendor ddp_dsi.c) are not
+blank-screen material. Controller-misconfig theory exhausted.
+
+**Decisive user observation: the Planet logo IS displayed by LK, then
+goes dark at kernel takeover.** Panel hardware + LK init proven good;
+our driver's takeover (reset pulse / avdd+avee toggling / init table)
+kills it. Note the vendor 3.18 tree has NO ssd2092 LCM source (Halium
+stripped it), so the init table can't be source-checked — the panel
+must be interrogated directly.
+
+**BUILD #249 (banner `#91 SMP PREEMPT Fri Jul 10 08:09:14 UTC 2026`,
+sha256 `a0723a8757995c3ef91e199e74362d1f9f4f6168560fcadea443a836add68323`,
+provenance `logs/2026-07-10-249-b17-panel-dcs-readback/`):** new
+zz-debug/0004: differential DCS read-back in the panel driver — reads
+0x0a/0x0b/0x0c/0x0d/0x0e (1) at the top of prepare(), before our reset
+pulse, while the panel still holds LK's working state (expect
+0x0a=0x9c; also validates the read path), and (2) after our init
+sequence. Interpretation: pre-reset read fails → read plumbing broken
+(inconclusive); pre-reset good + post-init dead → our reset/init breaks
+the panel; both good but black → panel-internal format/mapping issue.
+
+## CAPTURE 250 result — PANEL-DARK ROOT CAUSE: TPS65132 bias never programmed + BUILD #251 (banner #92), 2026-07-10
+
+Capture `logs/2026-07-10-250-b17-panel-dcs-readback-boot.log` (banner #91
+verified). Read-back results: pre-reset reads all timed out (-62; panel
+in LK video state, secondary). **Post-init reads all succeed: 0x0a=0x1c
+— sleep-out ✓, normal mode ✓, display ON ✓, but bit7 (booster) OFF.**
+The panel is fully initialized and displaying — it has no analog drive
+voltage. 0x0c=0x70 (24bpp) correct.
+
+**Root cause chain:** AVDD/AVEE come from a TI TPS65132 charge pump on
+I2C1 @0x3e (ENP=GPIO60, ENN=GPIO251 — vendor DTB aeon_lcd_bias pin
+nodes decode to these). Its VPOS/VNEG output registers are volatile;
+LK programs them over I2C on EVERY boot — visible in our own captures
+as `SSD2092--------cmd=0/1--i2c write success` (0x0E = 5.4 V). Our DTS
+modelled the bias as GPIO-only fixed regulators; the panel driver
+power-cycles them in prepare(), the chip comes back unprogrammed, the
+panel booster finds no rails → backlit black. The old DTS comment even
+documented the needed I2C writes — never implemented.
+
+**BUILD #251 (banner `#92 SMP PREEMPT Fri Jul 10 08:19:04 UTC 2026`,
+sha256 `1dd49fd25faec05a349b080ce3403dd1fa78a444bed24cdc3f364908fd3a8cdf`,
+provenance `logs/2026-07-10-251-b17-tps65132-bias/`):** dts/0001 —
+lcd_avdd/lcd_avee fixed regulators replaced with a `ti,tps65132` node
+on &i2c1 (outp/outn, min=max=5.4 V so the core applies the voltage via
+the driver's I2C write on enable, enable-gpios 60/251);
+gemini-display.config += CONFIG_REGULATOR_TPS65132=y (mainline driver).
+DTB spot-checked in the packed image. zz-debug/0004 read-back retained:
+expected next capture — post-init 0x0a=0x9c (booster ON) and pixels on
+the glass.
+
+## CAPTURE 252/253 result — tps65132 probe -ETIMEDOUT; I2C1 combined-transfer bug found + BUILD #254 (banner #93), 2026-07-10
+
+Capture 252 (banner #92): tps65132 probe failed (`regulator
+tps65132-outp register failed: -110`) → panel driver never probed → LK's
+scanout was left running (Planet logo stayed on the glass through a full
+boot to prompt — incidentally proving the kernel boots clean without
+ever touching the display pipeline it inherited).
+
+Interactive session (capture 253, first use of `--interactive`):
+`i2cdetect -l` shows 4 mt65xx adapters; `i2cdetect -y -r 1` sees the
+whole bus fine — 0x25 (fusb301a), **0x3e (TPS65132)**, 0x48, 0x69
+(bmi160) all ACK; but `i2cget -y 1 0x3e 0x00` fails. Diagnosis:
+single-message transfers work, **combined write-then-read (repeated
+start / WRRD) fails** — exactly what the tps65132 regmap read does.
+Root cause: mainline mt6797.dtsi i2c nodes fall back to the
+"mediatek,mt6577-i2c" compat (auto_restart=0, aux_len_reg=0 — no WRRD),
+but MT6797's I2C block is MT8173-generation (vendor mt6797 mt_i2c uses
+DIR_CHANGE + TRANSFER_LEN_AUX and 33-bit DMA).
+
+**BUILD #254 (banner `#93 SMP PREEMPT Fri Jul 10 08:30:35 UTC 2026`,
+sha256 `456d1fe4ab29db27ccb113497368aa75b5acae0fed2a1fd5608ebf3677756c36`,
+provenance `logs/2026-07-10-254-b17-i2c-mt6797-wrrd/`):** new patch
+`i2c/0001` — add `{ "mediatek,mt6797-i2c", &mt8173_compat }` to
+i2c-mt65xx (the dtsi already lists mt6797-i2c as primary compat; no DTS
+change needed). Upstream candidate. Expected: tps65132 probes, panel
+binds, booster ON, pixels.
+
+## CAPTURE 255 result — FIRST PIXELS; supply side fully verified; init table is the last suspect + BUILD #256 (banner #94), 2026-07-10
+
+Capture 255 (banner #93): I2C fix works — tps65132 probed and programmed
+the bias over I2C (`Bringing 5500000uV into 5400000-5400000uV`). Panel
+init ran; fbcon bound at 11.09s and the user saw **real pixels**
+(horizontal bands) for a moment before the glass went black. Live
+interactive audit afterwards: TPS65132 VPOS/VNEG read back 0x0e (±5.4V,
+LK-identical), both EN GPIOs (572/763 = pins 60/251) physically high,
+panel reset (gpio-692/pin 180) deasserted, PWM at 100% duty, backlight
+visibly glowing, DRM state scanning plane-0/fbcon on crtc-0, DSI
+INTSTA frame-done cycling. Panel post-init reads: display ON, sleep out,
+24bpp — but **0x0a bit7 (booster) still 0**. Everything measurable is
+good except the panel's internal drive stage; hypothesis: our init
+table trips the panel's protection moments after drive starts (the
+brief pixels), leaving it dark. Init table provenance can't be
+source-verified (no ssd2092 LCM in the vendor 3.18 tree).
+
+**BUILD #256 (banner `#94 SMP PREEMPT Fri Jul 10 08:45:02 UTC 2026`,
+sha256 `f4c2e97de6b6d3da541c5635df08ef49ab0b69c49a0e63a407dbf8625651b930`,
+provenance `logs/2026-07-10-256-b17-panel-skip-init-keep-lk/`):** new
+zz-debug/0005 — skip-init experiment: prepare() keeps regulator enables
+and the DCS read-back but performs NO reset pulse and NO init table;
+LK's proven init survives and our LK-identical video stream attaches to
+it. Pixels persisting ⇒ init table is the culprit. The read-back also
+finally samples a known-good LK-initialized panel in cmd mode —
+calibrating whether 0x0a bit7=0 is even abnormal for this panel.
+
+## CAPTURE 257 result — init table ACQUITTED; suspect moves to D-PHY lane rate + BUILD #258 (banner #95), 2026-07-10
+
+Capture 257 (banner #94): skip-init build — LK's init preserved
+untouched (logo died at 0.556s when mtk_dsi_poweron reset the host, as
+expected for a video-mode panel losing its stream), our LK-identical
+stream attached at 10.8s… **still black**. (LK-state panel also doesn't
+answer LP reads — all -62 — so the read-back calibration was
+inconclusive.) With init, controller registers, bias, backlight and
+pipeline all eliminated, the only never-compared layer is the analog
+D-PHY (mipi_tx0 @0x10215000). Physics motive: mainline derives the lane
+rate from the pixel clock (155961 kHz × 24 / 4 ≈ 936 Mbps) but the
+vendor LCM ran a fixed PLL_CLOCK=502 MHz (1004 Mbps) — the SSD2092's
+init contains MIPI RX trims tuned for that rate; a receiver that can't
+lock shows exactly this signature (LP ACKs fine, HS video invisible).
+LK dumps its working PHY (`DSI_PHY+0000..0090`) in every capture.
+
+**BUILD #258 (banner `#95 SMP PREEMPT Fri Jul 10 08:49:50 UTC 2026`,
+sha256 `bb07aebe74f845020824b2961ebb4b983f813e4d5b0019378a9a606de845e40e`,
+provenance `logs/2026-07-10-258-b17-mipitx-phy-dump/`):** zz-debug/0003
+gains a `mipitx0 @0x10215000` block (0x00–0xAC, every reg) for the
+kernel-vs-LK PHY diff. zz-debug/0005 (skip-init) retained so the panel
+state matches LK's during the diff. Next capture: line up kernel
+mipitx0 values against LK's DSI_PHY dump; a PLL divider mismatch names
+the fix (match LK's 1004 Mbps lane rate).
+
+## CAPTURE 259 result — PHY PLL BUG FOUND: lanes at half rate + BUILD #260 (banner #96), 2026-07-10
+
+Capture 259 (banner #95): kernel mipitx0 dump vs LK's DSI_PHY dump
+(capture 255). Lane/BG/SW regs identical; PLL differs: LK CON0
+0xf0002001 / PCW 0x43b13b13 (67.69) vs kernel CON0 0xf0002011 (POSDIV
+÷2) / PCW 0x47fb645a (71.98). Vendor formula recovered from 3.18
+ddp_dsi.c DSI_PHY_clk_setting: fixed S2Q ÷2 stage always in the chain,
+pcw = rate(Mbps)*ratio/13, ≥500 Mbps → posdiv=0. LK decodes to
+**880 Mbps** (not the LCM comment's 1004). Our phy/0004 table was one
+octave off (posdiv one step too high per range): PCW right for 936 Mbps
+but extra ÷2 → **lanes ran at 468 Mbps, half rate**. Panel receiver
+can't lock half-rate HS → LP ACKs fine, video invisible — matches every
+symptom including the transient pixels.
+
+**BUILD #260 (banner `#96 SMP PREEMPT Fri Jul 10 08:57:37 UTC 2026`,
+sha256 `9df61650fa2dd2c1e952679ca17f2cee6fe1d8700acd77347eaaf496f45a4707`,
+provenance `logs/2026-07-10-260-b17-mipitx-pll-octave-fix/`):**
+phy/0004 fixed: vendor POSDIV table (≥500M→0 … ≥50M→4, limit 1250M) and
+PCW gains the ×2 S2Q compensation. Expected mipitx0 regs: CON0
+0xf0002001, PCW ≈ 0x48000000 (936 Mbps). zz-debug/0005 (skip-init) still
+in — cleanest test: LK's init + correct-rate stream. If pixels persist,
+next build re-enables our init table and strips skip-init.
+
+## CAPTURE 261 — PLL fix confirmed, FIRST KERNEL PIXELS (flicker), residual rate mismatch + BUILD #262 (banner #97) — 2026-07-10
+
+Log: `logs/2026-07-10-261-b17-mipitx-pll-octave-fix-boot.log` (banner #96 ✓).
+
+**PLL fix verified in-register:** mipitx0+0x050 (PLL_CON0) = `0xf0002001` —
+POSDIV now ÷1 (was ÷2), PCW `0x47fb645a` (71.98) → **936 Mbps/lane**, exactly
+as computed. Boot fully clean: fbcon bound 10.7s, graphical.target 20s, zero
+DSI errors. Skip-init (zz-debug/0005) active; pre-reset DCS reads all -62 as
+always (LK-mode panel doesn't answer LP reads).
+
+**On the glass:** first boot of this build (no FTDI attached, user report):
+Planet logo → **screen flashed lots of colors** — the panel visibly receiving
+kernel HS video for the first time in the project. Second boot (captured):
+logo → dark. Intermittent lock.
+
+**Interpretation — one rate mismatch left:** LK drives this panel at
+**880 Mbps** (its own PLL dump: PCW 0x43b13b13, POSDIV ÷1), but our mode
+clock 155961 kHz × 24bpp ÷ 4 lanes demands 936. With LK's init preserved,
+we streamed 936 at a panel configured for 880 — close enough to almost lock
+(flicker), not enough to hold. Nondeterministic across boots = marginal lock.
+
+**BUILD #262** `logs/2026-07-10-262-b17-lk-rate-880-own-init/`, sha256
+`f9511cf561421aa34f680165a101a754c6611f1698d25433d176af5eef74d7b8`, banner
+`#97 SMP PREEMPT Fri Jul 10 09:07:59 UTC 2026`. Two changes:
+1. panel/0005 `.clock` 155961 → **146667** kHz (= 880e6·4/24, LK's exact
+   measured rate; ~56.4 Hz refresh — LK never ran this panel at 60 Hz).
+2. zz-debug/0005 skip-init **deleted** — our full reset + init table runs
+   again, now validated end-to-end at the proven rate (needed anyway for
+   cold boots without LK's init).
+
+Expected: mipitx0 PCW ≈ 0x43b13b13-ish, POSDIV ÷1 (880 Mbps); post-init DCS
+reads answering (0x0a=0x1c etc.); stable pixels/fbcon on the glass.
+
+## CAPTURE 263 — build #262 was a dud (patch-edit truncated the panel driver) + BUILD #264 (banner #98) — 2026-07-10
+
+Log: `logs/2026-07-10-263-b17-lk-rate-880-own-init-boot.log` (banner #97 ✓).
+Planet logo persisted; boot clean to graphical.target 9s, but **no DRM bind
+at all** — zero "bound" lines, no fbcon, no GEMINI-PANEL messages.
+
+Live diagnosis over serial: `devices_deferred` empty; tps65132 bound fine
+(regulator_summary shows lcd_avdd/lcd_avee 5400 mV); panel device
+`1401c000.dsi.0` present but driverless; `/sys/bus/mipi-dsi/drivers/` has no
+panel-solomon-ssd2092 at all. Build forensics: build #262's System.map has
+**zero** ssd2092 symbols (build #260 had 14); the compiled .o was 32 bytes.
+
+**Root cause (assistant error, not hardware):** the hand-edit of
+panel/0005's mode-clock comment added 5 lines inside the new-file hunk
+without updating the `@@ -0,0 +1,516 @@` count. `git apply` took only 516
+lines and silently dropped the patch tail — including
+`module_mipi_dsi_driver(ssd2092_driver);` — so the whole driver was
+dead-code-eliminated. Kconfig/Makefile hunks were intact, so the build
+"succeeded". Fixed by correcting the hunk header to `+1,521` and verifying
+the applied file ends with MODULE_LICENSE (521 lines) and that
+zz-debug/0004 still applies. Lesson: after hand-editing a patch, verify the
+applied file's tail, not just `git apply --check` (which did NOT catch
+this).
+
+**BUILD #264** `logs/2026-07-10-264-b17-lk-rate-880-own-init-fixed/`, sha256
+`4c33ed087928b8c426189cbe2854ddbd52f3ac1d4776cb9d181448ee51b4b605`, banner
+`#98 SMP PREEMPT Fri Jul 10 09:18:07 UTC 2026`. Same intent as #262 (LK
+880 Mbps clock 146667 kHz + our full init, skip-init removed); System.map
+now shows 15 ssd2092 symbols. Expected: mipitx0 PCW ≈ 0x43b1…, POSDIV ÷1
+(880 Mbps); post-init DCS reads answer; stable pixels on the glass.
+
+## CAPTURE 267 — kernel-side signals all healthy while panel is dark; BUILD #268 adds live poke debugfs — 2026-07-10
+
+Log: `logs/2026-07-10-267-b17-lk-rate-880-own-init-fixed-boot.log` (banner #98,
+build #264 — LK rate 880 Mbps + our full init). Boot showed pixels (planet
+logo, then color/white/pattern content responsive to `/dev/fb0` writes),
+then faded to black on its own during the session — same "fade" symptom as
+several earlier builds, but this time fully instrumented live over SSH
+while it was happening:
+
+- fb0 writes (white fill, RGB bar test) succeeded (`echo $?` = 0), correct
+  geometry (1080x2160, 32bpp) — no format/stride bug.
+- DRM atomic state: plane-0 bound to crtc-0, fbcon's framebuffer, correct
+  1080x2160 size, still "active" from software's point of view.
+- PWM: `pwm-0 (backlight)` enabled, duty=period=39385ns (100% duty).
+- backlight class: brightness=actual=max=255, bl_power=0 (on).
+- reset GPIO (gpio-692, pin 180, ACTIVE LOW): driven **high** = inactive,
+  panel not held in reset.
+- uptime/dmesg: no reboot, no watchdog reset, no crash — 15+ minutes clean.
+
+**Conclusion:** every Linux-side signal in the pipeline (PWM, DRM, fb,
+GPIO) is healthy and unchanged; the panel itself has silently gone dark
+without the kernel doing anything to it after boot. This narrows the "fade"
+bug to inside the SSD2092 panel: either it self-triggers a sleep/low-power
+mode, or its internal booster (DCS 0x0a bit7) drops after some time/thermal
+condition, invisible to the driver because it never re-polls status after
+`prepare()`.
+
+**BUILD #268** `logs/2026-07-10-268-b17-panel-live-poke-debugfs/`, sha256
+`81f2323ed2ea19858c74d22c08a4b8182281a9daad16e252792a4f9e90d0aea3`, banner
+`#99 SMP PREEMPT Fri Jul 10 09:58:48 UTC 2026`. Adds
+`zz-debug/0005-GEMINI-DEBUG-panel-live-poke.patch`: a
+`/sys/kernel/debug/gemini_panel_poke` debugfs write trigger that, on demand
+(`echo 1 > .../gemini_panel_poke`), re-reads DCS status regs 0x0a-0x0e live,
+re-sends sleep-out(0x11)+display-on(0x29), and re-reads again — all via
+dev_info, visible on serial without needing a reboot. Plan: reproduce the
+fade, then poke and read the live DCS state to see whether the panel
+reports itself asleep/booster-off, and whether the re-nudge revives it.
+
+## CAPTURE 269 — poke revives the picture then it fades again; BUILD #270 adds on-demand DDP dump — 2026-07-10
+
+Log: `logs/2026-07-10-269-b17-panel-live-poke-debugfs-boot.log` (banner #99,
+build #268). `echo 1 > /sys/kernel/debug/gemini_panel_poke` was run while
+the glass was dark. DCS reads were mostly inconclusive by design — this
+panel doesn't answer register reads while the DSI engine is actively
+streaming HS video (`[drm] dsi get 0 byte data from the panel address`,
+i.e. the transaction "succeeds" with zero payload bytes; two full -62
+timeouts too). Not proof of anything wrong — the read path itself doesn't
+work mid-stream.
+
+**But the re-nudge (sleep-out 0x11 + display-on 0x29) visibly revived the
+picture** — horizontal-block pattern reappeared on the glass — **then
+faded to black again within a couple seconds**, same as every prior fade.
+This rules "panel silently entered sleep and stayed there" *out*: sending
+the same two commands that already ran during our normal init briefly
+un-blanks it, so the panel is still receiving and reacting to the DSI
+stream; something in the pipeline (or the panel's own internal state) is
+periodically re-entering a blocked/blanked condition after being unblocked.
+
+Checked whether this is a recurrence of the OD_CFG relay-mode clobber
+(build #243, `drm/0014`): no — that fix re-asserts relay mode *inside*
+`mtk_od_config()` itself via `mtk_ddp_write_mask`, so it self-heals on
+every call regardless of how often the function runs; not a plausible
+repeat offender from that specific bug.
+
+**BUILD #270** `logs/2026-07-10-270-b17-ddp-dump-on-demand/`, sha256
+`598dd6e61e682659473a01aec74a76dca050bbfce39c21aae1a016ba6e2db0f4`, banner
+`#100 SMP PREEMPT Fri Jul 10 10:06:58 UTC 2026`. Adds
+`zz-debug/0006-GEMINI-DEBUG-ddp-dump-on-demand.patch`: extends the boot-time
+`gemini-ddp-dump.c` (3 passes at 8s/+500ms, ovl/color/ccorr/aal/gamma/od/
+dither/rdma/dsi0/mipitx0) with a `/sys/kernel/debug/gemini_ddp_dump_now`
+write-trigger, so the full register set (esp. OD0_CFG, DSI0 status/IRQ
+regs, mipitx0 PLL) can be captured live at the moment of a fade, alongside
+the existing panel poke. Plan: reproduce the fade, dump immediately before
+touching anything, dump again after the poke revives it, diff the two —
+whichever block differs (frozen counter, wrong CFG value, PLL unlock) names
+the recurring blocker.
+
+## BUILD #272 — periodic panel keepalive workaround (fade stabilizer) — 2026-07-10
+
+Confirmed live: continuous `/dev/fb0` writes (color-cycling loop) keep the
+panel lit indefinitely — never fades, gets *brighter* with fresh content
+(photo IMG_2627). This rules out a hardware/electrical fault outright
+(stock Android on the same physical hardware/cable/bias chip never
+exhibits the fade either, per user). Checked `mtk_ovl_disable_vblank()`
+(masks OVL_FME_CPL IRQ only, doesn't touch scanout — DDP dumps already
+proved OVL keeps completing frames while dark) and `mtk_dsi.c` (no
+autosuspend/idle timer) — neither explains the mechanism. Root cause of
+*why* static content fades while a live SoC-side pipeline doesn't is still
+unknown; parking further hunting.
+
+**BUILD #272** `logs/2026-07-10-272-b17-panel-keepalive-workaround/`, sha256
+`808eb3d52798395dada11a4c45e290f310f986387e6c3bc036e4900142d9cf2a`, banner
+`#101 SMP PREEMPT Fri Jul 10 11:29:33 UTC 2026`. Adds
+`zz-debug/0007-GEMINI-WORKAROUND-panel-keepalive.patch`: a
+`delayed_work` in the panel driver that re-sends sleep-out(0x11)+
+display-on(0x29) — the same pair `gemini_panel_poke` proved revives the
+picture — once per second for as long as the panel is enabled, started in
+`ssd2092_enable()` and cancelled in `ssd2092_disable()`. This is an
+explicit workaround, not a fix (labelled as such in the patch header) —
+remove once the actual trigger is found. Candidates for the real cause,
+for whoever picks this up: something in the DRM fbdev/fbcon idle/damage
+path that behaves differently for a static vs. changing image, or a
+content-adaptive brightness/idle feature inside the SSD2092 itself
+distinct from sleep mode (since ESD-check is confirmed disabled in the
+vendor 3.18 driver, ruling that specific mechanism out).
+
+## BUILD #274 — keepalive tuned to 250ms for full brightness — 2026-07-10
+
+User confirmed build #272's 1 Hz keepalive holds the picture lit (no fade)
+through 30+ seconds static at the login prompt — the workaround works.
+Photo (IMG_2629) showed a real, undamaged LCD image (solid green fill,
+backlight vignetting, top-line artifact) at reduced brightness vs. the
+~4/s color-cycle test that originally revealed the fix. Confirms brightness
+scales with update rate, not just on/off — content-adaptive behavior.
+
+**BUILD #274** `logs/2026-07-10-274-b17-panel-keepalive-250ms/`, sha256
+`ac80228d52a9618d252bcc4dd70b9718917b0ffa0e539ccb2918c09e4dd77a0f`, banner
+`#102 SMP PREEMPT Fri Jul 10 11:38:24 UTC 2026`. `zz-debug/0007` keepalive
+interval reduced from `HZ` (1 s) to `HZ / 4` (250 ms) to match the update
+rate that produced full brightness. Expected: picture stays lit and as
+bright as the rapid-cycle test, indefinitely, at a static prompt.
+
+Known remaining items, in priority order: (1) verify brightness at 250ms
+keepalive; (2) top-of-screen thin horizontal line artifact (separate,
+likely vertical-timing/porch issue); (3) real root cause of the
+static-content fade (workaround only); (4) strip zz-debug patches and
+restore production USB config once the display is fully stable; (5) pin
+the clock `clk_ignore_unused` currently masks (capture 242 crash, still
+parked).
+
+## BUILD #276 — CABC-disable attempted as real fix, keepalive disabled for isolation — 2026-07-10
+
+Capture 275 (build #274, 250ms keepalive) still faded to black despite the
+DSI IRQ trace confirming the keepalive's sleep-out/display-on writes fired
+continuously throughout (no timeouts, no errors). This falsifies the
+"resending commands helps" theory — the earlier apparent revival from
+manual poking was likely a brief re-lit window, not a real fix. The
+distinguishing factor is specifically **framebuffer content changing**,
+not DSI command traffic.
+
+That points at CABC (Content-Adaptive Backlight Control) — a standard
+mobile-panel feature that dims static/low-motion content to save power.
+Neither the vendor init table nor ours sends any CABC command (0x51/0x53/
+0x55) at all; if this panel defaults to CABC-on at reset (common), nothing
+in either driver has ever disabled it. Android's compositor redraws
+continuously (status bar clock, animations) even on a nominally static
+screen, which would mask CABC entirely — explaining why stock Android
+never shows the fade while our idle mainline console does.
+
+**BUILD #276** `logs/2026-07-10-276-b17-panel-cabc-disable-test/`, sha256
+`14ebebb8e8a49c506ed876b3b6709b8201e30a7c476f8e2d1a978583fc2bd7bb`, banner
+`#103 SMP PREEMPT Fri Jul 10 11:47:24 UTC 2026`. Adds
+`panel/0006-drm-panel-ssd2092-disable-cabc-force-max-brightness.patch`:
+after the init table's sleep-out+display-on, sends `0x51 0xff` (max
+manual brightness), `0x53 0x24` (BCTRL+BL on), `0x55 0x00` (CABC off) —
+standard MIPI DCS commands. `zz-debug/0007` (keepalive workaround)
+**disabled** (renamed `.disabled`) for this build so the CABC fix can be
+tested in isolation, not masked by the workaround. If this holds a static
+screen lit indefinitely, it supersedes the keepalive workaround entirely
+(delete 0007) and is a genuine fix, not a mitigation.
+
+**Result (2026-07-10): CABC-disable did NOT fix the fade.** User reported
+the same horizontal-block-rows-fade-to-black behavior on build #276 as on
+every prior build — standard DCS CABC-disable commands sent successfully
+(no I/O errors) but had zero effect. This panel's proprietary controller
+(heavy 0xB0-0xBD custom register use per vendor init table) most likely
+doesn't implement standard MIPI CABC at all, so this theory is now
+falsified alongside the DSI-command-resend theory. Both confirm: the fade
+is tied specifically to framebuffer *content* not changing, not to any
+DSI command traffic (of either kind) reaching the panel.
+
+## Userspace keepalive workaround, take 2 — full-frame writes vs. single-pixel — 2026-07-10/11
+
+Given two kernel-level fix attempts falsified, pivoted to a pragmatic
+userspace workaround on the live device (not a kernel patch): a systemd
+service (`gemini-fb-keepalive.service`, `Restart=always`,
+`/usr/local/bin/gemini-fb-keepalive.sh`) that continuously rewrites
+`/dev/fb0` to keep the panel lit, installed directly via a live serial
+session (pyserial to `/dev/cu.usbserial-B001VBPM`) rather than a rootfs
+rebuild — **this is NOT yet folded into `scripts/mkrootfs.sh`**, so it will
+be lost on any future rootfs reflash/rebuild unless added there.
+
+First attempt: toggling a single 4-byte corner pixel every 100ms via plain
+`write()`. Result: **did not prevent the fade** — screen went to
+backlight-on/blank even with the service confirmed `active (running)`.
+Register dump (`gemini_ddp_dump_now`) taken during the blank period showed
+the full DDP pipeline still healthy (OD relay mode 0x5, OVL/RDMA/color/
+ccorr/aal/gamma/dither all enabled, DSI still streaming) — same signature
+as every previous fade, confirming the SoC-side pipeline is not the
+problem; the panel itself is doing something independent of pipeline
+health. A single small, infrequent write is not enough to prevent it.
+
+Second attempt: pre-generated two full-framebuffer pattern files
+(`/usr/local/lib/gemini-fb-{white,black}.bin`, 9,331,200 bytes each =
+1080×2160×4) and rewrote the script to `dd` them alternately in a tight
+loop (no sleep) instead of poking one pixel. Result: **holds the display
+lit and stable** — user confirmed "screen is solid white with a few thin
+black lines at the top - stable display" after a reboot + relogin cycle.
+This is the first successful userspace mitigation and matches the
+originally-observed empirical fact (this session's predecessor) that fast
+full-frame content changes prevent the fade and increase brightness,
+while sparse/small writes do not.
+
+The thin black lines at the top are the pre-existing, separate
+vertical-timing/porch artifact (tracked as its own open item, blocking
+readable console text) — not related to the fade.
+
+**Root cause of the fade itself remains unknown.** Two theories now
+falsified (DSI command resend at up to 4 Hz; standard MIPI CABC disable).
+Leading remaining candidates: (a) a DRM fbdev/fbcon damage-tracking/idle
+path that treats static vs. changing content differently, something
+Android's continuously-compositing stack never exercises; (b) a
+panel-internal content-adaptive/dimming feature that only responds to
+real GRAM writes reaching a large fraction of the panel fast, not
+controllable via any DCS command tried so far — possibly needing
+proprietary 0xB0-0xBD range commands this SSD2092 variant needs that
+neither driver has ever sent.
+
+Next steps: fold the keepalive script + pattern files + systemd unit into
+`scripts/mkrootfs.sh` so it survives rootfs rebuilds; consider a lighter
+CPU-cost variant (smaller regions changed faster, vs. full 9MB writes
+twice per loop iteration) once proven this direction is the accepted
+long-term approach; continue root-cause investigation if a proper fix is
+still wanted instead of the workaround.
+
+**Decision (2026-07-11): workaround accepted as "good enough for now."**
+User confirmed the full-frame userspace keepalive is an acceptable interim
+state — not closing the underlying issue. Explicitly flagged as needing
+future improvement: (1) it currently only flashes solid white/black at
+full brightness, not real content — no readable console/desktop is visible
+through it yet; (2) it is not yet folded into `mkrootfs.sh`, so lost on
+rootfs rebuild; (3) the actual fade root cause is still unknown (see
+falsified theories above). Do not treat this as resolved — it's a known,
+documented gap. Priority shifts now to the separate top-of-screen thin
+horizontal line timing artifact, which is blocking readable text
+regardless of the fade workaround.
+
+**Tearing hypothesis tested and falsified (2026-07-11):** the keepalive
+writes to `/dev/fb0` are unsynced single-buffered raw writes racing live
+OVL scanout — a plausible source of a thin horizontal tear line. Test:
+stopped `gemini-fb-keepalive.service` and watched the last static frame
+before the display faded. **The thin line was still present on the static,
+non-updating frame** ("the thin line remains" — user, immediately after
+stop). A genuinely static frame cannot tear, so this rules out the
+keepalive write pattern as the cause. The artifact is a real DSI/panel
+timing defect, independent of the fade workaround. Service restarted to
+relight the screen.
+
+Leading candidate reopened: the still-unresolved single-word `HSA_WC`
+mismatch from capture 248 (kernel 0x1d vs LK's 0x1c, `hsync_len=13` giving
+`13*3-10=29=0x1d` per mainline's `mtk_dsi_ps_control` formula in
+`mtk_dsi.c:475`) — previously judged "not blank-screen material" when the
+screen was fully black, but re-examine now that real content is visible:
+a 1-word HSA error is tiny (~1 pixel-time) and an unlikely sole cause of a
+visible line, but worth first ruling out with an exact `hsync_len` value
+LK actually uses (reverse the vendor formula precisely rather than
+rounding) before looking elsewhere (vactive/vtotal off-by-one, VFP/VBP
+line-count vs LK's, or a fixed OVL/RDMA offset in vertical start position).
+
+**Full scatter-file recovery reflash + live stock-driver register read
+(2026-07-11).** User performed a full SP Flash Tool scatter-file restore
+(`Scatter_Gemini_x25_x27_A30GB_L26GB_Multi_Boot.txt` + 2019 stock images),
+which resets all partitions to factory state — this wipes the Debian 13
+rootfs (p29) and our custom Linux 6.6 `boot2` kernel, not just `boot2`
+alone; both will need to be re-established afterward per CLAUDE.md's
+"Root Filesystem" / "Flashing a Custom Kernel" sections. Goal: read live,
+steady-state DSI PHY/mipitx register values from the genuinely-working
+stock vendor driver, as a better reference than LK's one-shot boot-time
+splash dump or further blind mainline-formula tuning.
+
+Post-reflash observation: screen showed transient "ghostly white hue" /
+slow-fading image retention after the stock Kali boot came up, most
+likely residual LC relaxation from the prior session's full-frame
+white/black keepalive pattern being held static for a long period —
+cleared on its own after the panel ran normal (non-static) content for a
+while. Not judged to be physical damage. Possibly relevant data point for
+the fade-to-black investigation: this panel shows real, slow (multi-
+second-to-minutes) retention/relaxation behaviour, consistent with a
+liquid-crystal characteristic rather than a purely digital driver
+artifact.
+
+Access to the live stock system took several detours: UART was silent
+(device's left USB-C port muxes UART vs. direct-USB, and USB was likely
+connected during attempts); ADB was not exposed; the RNDIS/g_ether-style
+gadget on the 2019 image (if any) did not respond on our custom
+project's static IP/MAC (that config is ours, not the vendor's). Resolved
+via: device already had Wi-Fi connected (IP `192.168.100.126` obtained
+from the user reading the device's own screen/shell) with `sshd` running
+and reachable (port 22 open). Root SSH login was rejected even with the
+correct local password — root-caused to modern OpenSSH's default
+`PermitRootLogin prohibit-password` (no explicit entry in
+`/etc/ssh/sshd_config`, so the secure default applied, password auth
+blocked for root specifically). Workaround: created a new sudo-capable
+user (`useradd -m -s /bin/bash gemini`, `usermod -aG sudo gemini`) and
+SSH'd in as that user instead of continuing to fight root's SSH policy.
+
+**Register read technique note:** direct `dd`/`skip=`/`od` reads from
+`/dev/mem` failed with "Bad address" — likely `CONFIG_STRICT_DEVMEM`
+rejecting arbitrary-offset `read()` on `/dev/mem` (only mmap-based access
+to non-reserved physical ranges is typically permitted under strict
+devmem). Worked around with a small Python script using `mmap.mmap()` on
+`/dev/mem` opened `O_RDONLY|O_SYNC`, page-aligning the offset
+(`phys_addr & ~(4095)`) and unpacking a little-endian `uint32` at the
+sub-page offset via `struct.unpack_from("<I", ...)`. This technique is
+reusable for any future need to read arbitrary MMIO from userspace on a
+stock/unmodified image without `busybox devmem`.
+
+**Results — live stock Kali PHY_TIMCON0-3 (`0x1401c110/114/118/11c`) and
+mipitx0 PLL CON0 (`0x10215050`), read while real content was actively
+displayed:**
+
+| Register | Our build (mainline formula, 880Mbps) | LK one-shot boot dump (capture 244) | **Stock Kali live (new, 2026-07-11)** |
+|---|---|---|---|
+| TIMCON0 (0x110) | 0x0a0b0907 | 0x080f0708 | **0x0a12080a** |
+| TIMCON1 (0x114) | 0x0f1c091a | 0x10280c20 | **0x14320f28** |
+| TIMCON2 (0x118) | 0x071c0100 | 0x0a280100 | **0x0d320100** |
+| TIMCON3 (0x11c) | 0x000e0f07 | 0x00102406 | **0x00141208** |
+| mipitx0 PLL CON0 | 0xf0002001 | — | **0xf0002001 — exact match** |
+
+Analysis: the PLL/data-rate configuration is confirmed correct (mipitx0
+CON0 matches exactly between our build and the live stock driver — POSDIV
+and data-rate setup are not in question). All four PHY_TIMCON registers,
+however, are consistently and substantially *larger* (looser/more
+conservative D-PHY timing margins) in the stock live capture than either
+our mainline-formula-derived values or even LK's own one-shot boot dump —
+the stock driver runs with noticeably more timing headroom than mainline's
+formula computes for this data rate. This is now the strongest evidence
+yet for the leading hypothesis: mainline's `mtk_dsi.c` PHY_TIMCON formula
+produces margins too tight for this specific panel/board at this data
+rate, and the first several scanlines of every frame corrupt as a result
+(matching the photographed artifact confined to the top ~5-8% of the
+panel). LK's dump — itself different again from both — was likely a
+transient/splash-time value, not representative of steady-state operation,
+which explains why matching it exactly wasn't sufficient.
+
+Next step: add a debug patch overriding `mtk_dsi_phy_timconfig`'s
+computed TIMCON0-3 with (or close to) these live stock values, build,
+flash, and capture to test directly — this is a real, empirically-sourced
+value set, not a guess, so it's worth a dedicated flash/capture cycle.
+Once display is fully clean and stable, the current custom Linux 6.6
+`boot2` and Debian 13 rootfs baseline will need re-establishing per
+CLAUDE.md (both were wiped by this scatter reflash).
+
+**Debug patch written:** `patches/v6.6/zz-debug/0008-GEMINI-DEBUG-dsi-timcon-vendor-live-values.patch`
+— hardcodes TIMCON0-3 to `0x0a12080a / 0x14320f28 / 0x0d320100 /
+0x00141208` immediately after `mtk_dsi_phy_timconfig()`'s formula
+computation in `mtk_dsi.c`, overriding the computed values before the
+`writel()`s. Marked temporary/GEMINI-DEBUG per convention; not yet
+built/flashed/tested as of this entry.
+
+**Extended data harvest from the live stock image (2026-07-11,
+`logs/2026-07-11-stock-vendor-harvest/`)** — while root SSH access was
+being fought over PAM/`PermitRootLogin` defaults, a second `gemini` user
+was created (`useradd -m`, added to `sudo`) as a pragmatic workaround, and
+used to pull the following reference data via SSH (session logged in
+`logs/2026-07-11-196-stock-kali-live-register-read.log`, though the
+final data extraction happened over SSH, not serial, once Wi-Fi/SSH access
+was established):
+
+- **Kernel identity:** `Linux kali 3.18.41-kali+ #12 SMP PREEMPT Wed Apr 3
+  19:04:09 AEDT 2019 aarch64` — confirms this is the exact stock 2019
+  vendor build referenced elsewhere in the project (matches the
+  `dguidipc`/`gemian` vendor 3.18 source tree used as our driver-source
+  reference).
+- **Kernel cmdline:** `console=tty0 console=ttyMT0,921600n1 root=/dev/ram
+  vmalloc=496M slub_max_order=0 slub_debug=OFZPU
+  androidboot.hardware=mt6797 maxcpus=5 androidboot.verifiedbootstate=green
+  bootopt=64S3,32N2,64N2 log_buf_len=4M androidboot.veritymode=enforcing
+  printk.disable_uart=1 ...`. Two independent confirmations of
+  project-established facts: `console=ttyMT0,921600n1` matches our own
+  UART0/921600 finding exactly, and `printk.disable_uart=1` confirms the
+  long-standing conclusion that LK/vendor kernel dmesg is intentionally
+  silenced on UART (not a wiring/capture problem). **New data point:**
+  vendor stock also runs `maxcpus=5`, not all 10 cores — independent
+  confirmation that the vendor kernel doesn't fully solve the SMP-bringup
+  problem either (relevant context for our own B-13-linked
+  `maxcpus=8` workaround; the vendor's own answer is more conservative,
+  not more complete).
+- **debugfs technique note:** `/sys/kernel/debug/mtkfb`,
+  `/sys/kernel/debug/disp/dump`, and `/sys/kernel/debug/dispsys` are rich,
+  human-readable vendor debug interfaces (not present in mainline — MTK
+  vendor-only). Reading `/sys/kernel/debug/mtkfb` triggers
+  `mtkfb_release()` as a side effect, which suspends and power-offs the
+  display (`ddp_dsi_power_off`) — **reading this file is not side-effect
+  free**, note for any future harvesting session on a similar vendor
+  image. Display was successfully woken again with a physical screen tap,
+  which triggered a full, cleanly-logged resume sequence (see below).
+- **`mtkfb` static dump (pre-suspend), key facts:**
+  `LCM Driver=[aeon_ssd2092_fhd_dsi_solomon]`, `Resolution=1080x2160,
+  Interface:DSI, LCM Connected:Y`, `lcm_fps=5922` (actual measured/
+  configured refresh rate is **59.22 Hz**, not a round 60 Hz — worth
+  checking our own mode's computed refresh rate against this), `Current
+  display driver status=video mode + CMDQ Enabled`. Framebuffer:
+  `xres=1080, yres=2160, bpp=32, pages=3, linebytes=4352` (4352 = 1080*4
+  rounded up to 32-byte GPU line alignment, i.e. an 8-pixel pad — matches
+  the earlier-documented `1088`-pixel-stride convention seen in the
+  ion/graphics-buffer trace below).
+- **DSI clock (debugfs `clk` tree):** `mm_dsi0_mm clock` (engine clock) =
+  **325 MHz**, enable count 1. `mm_dsi0_interface_clock` reads 0 (likely a
+  derived/gated mux, not a primary source — not necessarily meaningful on
+  its own).
+- **Live PHY_TIMCON0-3 + mipitx0 PLL CON0**, read via a custom `mmap()`
+  -based Python script (see technique note below) while real content was
+  actively displaying: table already given above this entry. mipitx0 PLL
+  CON0 read as `0xf0002001`, an exact match to our own build's value,
+  confirming our PLL/data-rate setup is correct and isolating the
+  remaining discrepancy to the D-PHY timing margins specifically.
+- **Register-read technique (reusable):** `dd`+`skip=`+`od` against
+  `/dev/mem` failed with "Bad address" (`CONFIG_STRICT_DEVMEM` rejecting
+  arbitrary-offset `read()`). Worked around with a small Python script:
+  `os.open("/dev/mem", O_RDONLY|O_SYNC)`, `mmap.mmap(fd, 4096,
+  MAP_SHARED, PROT_READ, offset=phys_addr & ~4095)`, then
+  `struct.unpack_from("<I", m, phys_addr & 4095)`. Confirmed to work for
+  arbitrary MMIO reads from unprivileged-adjacent userspace (via `sudo`)
+  on a stock/unmodified image with no `busybox devmem` present. Kept as a
+  documented technique for any future need to read arbitrary registers
+  from userspace without kernel changes.
+- **Full DSI/LCM/touch resume trace captured** (`dmesg-full.log` in the
+  harvest dir, lines ~66588-66670) by enabling
+  `echo 2 > /sys/kernel/debug/dispsys` (max verbosity) and
+  `echo irq_log:1 > /sys/kernel/debug/dispsys`, then physically tapping
+  the screen to trigger a real resume-from-suspend cycle:
+  - `lcm_poweron` → bias/power-IC I2C writes (`lp3101---cmd=0/1--i2c write
+    success`, an LP3101 dual-rail DSI bias IC, TPS65132-equivalent role)
+  - Panel/touch controller identifies itself via SEEPROM reads:
+    `ds16_seeprom_fw_ds_read_version` returns four ASCII-decodable
+    version words that spell out `AUO` / `599` / `SSD` / `2092` /
+    firmware version `0x16` — confirms the panel is an **AUO-manufactured
+    module using a Solomon SSD2092 controller**, resolving the earlier
+    "SSD2092 = touch, not display" vs. "SSD2092 = display" confusion from
+    different vendor source trees: **this is a combined in-cell
+    touch+display controller**, so both attributions were partially right
+    (`solomon_read_points`/TMC-config log lines immediately after are the
+    same IC's touch function, not a separate chip).
+  - `lcm_resume==end` → backlight PWM set: `disp_pwm_set_backlight_cmdq(id
+    = 0x1, level_1024 = 827)` — a concrete, real-world backlight brightness
+    reference value (827/1024 ≈ 81%) for whatever ambient/default level
+    the vendor stack chooses.
+  - One **DEVAPC access violation** logged immediately before this
+    sequence: `[DEVAPC] Violation(R) - Process:Xorg, ... Vio
+    Addr:0x14015000 ... Access Violation Slave: DISP_AAL (index=151)` —
+    Xorg attempted a direct read of the DISP_AAL register range and was
+    blocked by the MT6797 security controller (DEVAPC). Not something we
+    caused; useful confirmation that DISP_AAL (and presumably other
+    DISP_* blocks) are DEVAPC-protected against unprivileged/unexpected
+    userspace access even under the vendor kernel — worth keeping in mind
+    if any future debug tooling on our own kernel tries similar direct
+    `/dev/mem` pokes at that range from a non-privileged path.
+- **Panel/tearing-adjacent observation:** immediately after the scatter
+  reflash and first stock boot, the panel showed a slow-fading "ghostly
+  white hue" (image retention) that cleared on its own after the panel
+  ran normal, non-static content for a while. Most likely explained by
+  the prior session's full-frame white/black keepalive pattern having
+  been held static on the panel for an extended period before the
+  reflash. Judged not to be physical damage, but is a real, physically-
+  confirmed data point that this specific panel exhibits slow (multi-
+  second-to-minute) LC relaxation/retention — potentially relevant
+  context for the still-unsolved fade-to-black investigation (a
+  liquid-crystal characteristic, not necessarily a purely digital driver
+  artifact).
+- **Not obtainable this session:** persistent/pre-wrap boot-time dmesg
+  (the running kernel's dmesg ring buffer had already wrapped past all
+  boot-time DSI/LCM init messages by the time SSH access was
+  established — none of the standard `/var/log/*` files had kernel
+  facility messages either, so this specific vendor rootfs apparently
+  doesn't route `kern.*` to persistent syslog by default);
+  `/sys/kernel/debug/regulator/regulator_summary` (not present on this
+  kernel — no regulator framework debugfs summary exposed, unlike
+  mainline). Both are gaps for any *future* similar harvesting session to
+  close early (e.g. redirect dmesg to a file within the first ~60s of
+  boot, before ~270s of runtime chatter has wrapped the 4 MB ring buffer)
+  rather than something to chase further on this now-superseded stock
+  image — this rootfs will be discarded once the project's own Linux 6.6
+  `boot2` + Debian 13 baseline is re-flashed.
+
+## BUILD #105 (banner #105) — vendor-live TIMCON experiment, 2026-07-11
+
+**Correction (same day, after re-check):** the write-up below originally
+described this result as "worse than the existing top-of-frame line
+corruption." That baseline claim was wrong and has been struck — boot.md
+has no prior entry documenting "thin top-of-frame corruption" anywhere
+before this session. The last actually-documented visual state (build
+#243/#245, CLAUDE.md Phase 5 status, boot.md ~"CAPTURE 248/250 result")
+was **backlight lit, image fully black** — no pixel content at all, not a
+corrupted-but-visible image. See the "BUILD #106 recheck" entry below for
+the follow-up once this was caught.
+
+**Motivation:** with the known-good baseline (build #71 kernel + Debian 13
+rootfs) restored and verified via SSH banner match, tested whether the
+live vendor `PHY_TIMCON0-3` register values harvested from the stock Kali
+image (see previous entry) would produce a visible image, given the panel
+had been black-with-backlight since #243/#245.
+
+**Patch:** `patches/v6.6/zz-debug/0008-GEMINI-DEBUG-dsi-timcon-vendor-live-values.patch`
+— hardcodes `timcon0..3` in `mtk_dsi_phy_timconfig()` to the vendor-harvested
+values (`0x0a12080a` / `0x14320f28` / `0x0d320100` / `0x00141208`),
+overriding the mainline formula output. Built with `ALLOW_DEBUG=1`
+(provenance `logs/2026-07-11-279-dsi-timcon-vendor-live-values/`, sha256
+`0c0371b950d8b34f9f1c62a98ca60d749fc3ba6473b53ee0f39cc174f372304b`, banner
+`#105 SMP PREEMPT Sat Jul 11 06:26:58 UTC 2026`).
+
+**Result:** flashed to `boot2`, capture
+`logs/2026-07-11-280-dsi-timcon-vendor-live-values-boot.log`. Kernel boot
+was clean end-to-end — reached `graphical.target` in ~20s, no
+`flip_done`/vblank timeouts, DSI component bound
+(`1401c000.dsi (ops mtk_dsi_component_ops)`), panel post-init DCS reads all
+succeeded (`0x1c`/`0x09`/`0x70`/`0x00`/`0x80`, unchanged from prior good
+builds), panel registered
+(`panel-solomon-ssd2092 1401c000.dsi.0: Solomon SSD2092 FHD DSI panel
+registered`). No kernel-level errors of any kind.
+
+**Visual result:** the physical panel showed thick, regularly-spaced
+horizontal bands (light-blue/black, ~12 bands across the top ~60% of the
+panel) — real pixel content, not black. Photo:
+`logs/2026-07-11-279-dsi-timcon-vendor-live-values/panel-thick-bars-result.jpg`.
+Screen then faded to black, consistent with the separate known
+fade-to-black bug (unrelated, workaround-only).
+
+**Action taken (before the baseline check below):** patch 0008 disabled
+(`0008-...-values.patch.disabled`) and reverted out of the build on the
+assumption the bars were a regression it had introduced. Rebuilt as
+`logs/2026-07-11-281-revert-timcon-back-to-baseline/`, sha256
+`f8888999d553cb3009a0c8c0aefed431655cccd82c7d262c461913f498772a5e`, banner
+`#106 SMP PREEMPT Sat Jul 11 06:32:18 UTC 2026`.
+
+## BUILD #106 recheck — same thick bars WITHOUT patch 0008; root cause is NOT the TIMCON override
+
+Flashed build #106 (banner confirmed via
+`logs/2026-07-11-282-revert-timcon-back-to-baseline-boot.log`: `Linux
+version 6.6.0-dirty ... #106 SMP PREEMPT Sat Jul 11 06:32:18 UTC 2026`,
+sha256-verified identical to what was built) — **pure mainline-formula
+TIMCON, patch 0008 not applied** (confirmed by reading
+`mtk_dsi_phy_timconfig()` directly from the VM's post-build tree: formula
+code only, no override). User confirmed on physical hardware: **"same
+horizontal lines as the previous build"** — identical thick
+red/black/white banding to build #105 (vendor TIMCON).
+
+**Conclusion:** patch 0008 is exonerated — visually indistinguishable
+result with or without it, so the banding is not a D-PHY bit-timing
+(`PHY_TIMCON0-3`) issue at all. Root cause lies elsewhere in the
+pipeline (OVL/DDP config, panel init sequence, or framebuffer/scanout
+format). Combined with the
+correction above (no genuine "black to thin corruption to thick
+corruption" regression chain exists; the last confirmed-documented prior
+state was plain black), the most defensible read is that **this may be
+the first time real pixel content has appeared on this panel under our
+own kernel**, not a regression from a better-documented previous state.
+Whether thick banding is new behavior since #243/#245 (something changed:
+TPS65132 went `m` to `y`, zz-debug 0002-0006 remained active,
+`gemini-nousb-debug.config` newly added — config diff checked, only the
+TPS65132 module-to-built-in change found) or was already the state at
+#243/#245 and simply never photographed/described in this file, is
+unresolved — no photographic or detailed textual record of #243/#245's
+actual screen exists to compare against.
+
+**Next step for B-13/top-of-frame investigation:** the D-PHY timing lead
+(`PHY_TIMCON0-3`) is closed off — 0008 vs. mainline formula is a
+user-confirmed visual non-difference, identical banding both ways. Do not
+re-attempt further TIMCON register tuning. Redirect investigation to
+non-D-PHY causes of the banding: (1) OVL/DDP layer config (mutex/routing,
+possible off-by-something in blend/output config given the band pattern
+is coarse and periodic — consistent with a scanline-count or line-stride
+mismatch); (2) panel init command sequence — check if a full
+column/page-address-set or memory-write command is missing/wrong,
+producing a repeating short pattern instead of a full frame; (3)
+framebuffer/scanout format — the earlier-documented 1088-px GPU-aligned
+stride vs. panel's native 1080 could be a factor if not matched exactly
+on this path. A deliberate baseline photo of the current build (#106) is
+still worth capturing for future comparison, but the immediate priority
+is a pipeline-config review rather than more TIMCON experiments.
+
+## BUILD #107 — exact LK DSI word counts (HSA/HBP/HFP_WC); same banding, lead #2 also closed off
+
+Second targeted experiment against the same artifact. Mainline's
+`mtk_dsi_config_vdo_timing()` derives `DSI_HSA_WC`/`DSI_HBP_WC`/`DSI_HFP_WC`
+from a pixel-clock formula further adjusted by a D-PHY cycle-budget
+correction (`drivers/gpu/drm/mediatek/mtk_dsi.c` lines ~475-519) — the
+panel patch's own comment admits this "lands within one byte" of LK's
+actually-proven-working register dump (capture 244), not an exact match.
+Debug patch `zz-debug/0009-GEMINI-DEBUG-dsi-exact-lk-word-counts.patch`
+overrides the three registers with LK's exact values (`HSA_WC=0x1c`,
+`HBP_WC=0x94`, `HFP_WC=0x74`) right after the formula/correction, bypassing
+mainline's derivation entirely for this test.
+
+Build #107 (`logs/2026-07-11-283-dsi-exact-lk-word-counts/`,
+`ALLOW_DEBUG=1`). Flashed to `boot2`, captured
+`logs/2026-07-11-284-dsi-exact-lk-word-counts-boot.log` with `--interactive`.
+Kernel-side DDP register dump (also captured via the existing debug
+instrumentation) confirms the override took effect exactly as intended:
+`DSI+0050 : 0x0000001c 0x00000094 0x00000074` — i.e. `HSA_WC/HBP_WC/HFP_WC`
+read back as `0x1c/0x94/0x74`, matching LK bit-for-bit. Vertical registers
+also confirmed matching LK's dump (`VSA_NL=3, VBP_NL=0xf, VFP_NL=0xa,
+VACT_NL=0x870`=2160). `DSI_PSCTRL` read back `0x30ca8`: `PS_WC` field =
+`0xca8` = 3240 = 1080×3 (RGB888, native 1080 width, not the 1088-aligned
+GPU stride) and `PS_SEL` = `PACKED_PS_24BIT_RGB888` — so the DSI-level
+packet width is exactly right for a native, un-padded 1080px line; the
+1088px-stride hypothesis is *not* what's happening at the DSI-packetization
+layer specifically (a stride mismatch could still exist further upstream,
+at the OVL/RDMA→GEM-buffer level — not ruled out by this test).
+
+Boot itself: clean, `graphical.target` reached in ~20s, ssh/getty started,
+no flip_done/vblank timeouts, no DSI/panel errors on serial.
+
+**Visual result (user, on physical hardware):** "same orange white black
+horizontal bars then fade to black" — visually indistinguishable from
+build #105 (vendor TIMCON) and #106 (mainline formula, no override).
+
+**Conclusion:** lead #2 (DSI horizontal word-count derivation) is also
+exonerated. Two independent D-PHY/DSI-line-timing hypotheses (TIMCON
+bit-timing margins, and now HSA/HBP/HFP word counts) have each been
+overridden with LK's own proven-correct hardware values and produced a
+byte-for-byte-verified-correct DSI configuration with **zero visible
+change** to the artifact. This is strong evidence the banding is not a
+DSI-protocol/timing issue at all — the DSI engine is receiving and
+transmitting a well-formed, correctly-timed video stream; whatever's wrong
+is upstream of the DSI packetizer, most likely in what the OVL/RDMA layer
+is actually reading out of memory (layer format/pitch/address, GEM buffer
+content, or CRTC blending) and handing to DSI to transmit.
+
+**Next step:** stop testing DSI-register-level values. Move investigation
+to the OVL/RDMA layer feeding DSI. The existing DDP debug dump
+(`zz-debug/0003`/`0006`) currently only captures a handful of OVL control/
+status registers (`+0x000/0x008/0x00c/0x024/0x02c/0x240/0x244`) — extend it
+to also dump the per-layer registers (`OVL_CON`, `OVL_ADDR`, `OVL_PITCH`/
+`HDR_PITCH` at the `0x30-0x50`-ish per-layer offsets in
+`drivers/gpu/drm/mediatek/mtk_disp_ovl.c`) so the actual format/pitch/
+address the kernel programs into the live OVL layer can be read back and
+compared against what fbcon/DRM *thinks* it configured (color format,
+stride, GEM buffer size) — a mismatch there (e.g. pitch not matching the
+allocated stride, or a color-format bit landing on the wrong panel-expected
+format) would directly produce a periodic, coarse banding pattern like the
+one seen, and unlike DSI timing this has not yet been directly instrumented
+or tested.
+
+## RUNS #110–#123 — OVL exoneration, command-mode detour, booster-off discovery (2026-07-11)
+
+Condensed sequence (each run has its provenance dir/log under `logs/2026-07-11-*`):
+
+- **Run 110/111 (ovl-fb-readback)** + **113/114 (plane/crtc commit trace)**:
+  extended DDP dump with per-layer OVL registers and CPU readback of the GEM
+  framebuffer. Result: OVL layer format/pitch/address all correct and the
+  framebuffer content is what fbcon drew — the memory-side pipeline was
+  exonerated, leaving the panel itself as the suspect for the banding/fade.
+- **Run 115–117 (panel-command-mode)**: noticing LK's golden dump has
+  `DSI_MODE_CON=0`, the panel was retried in command mode (zz-debug 0015).
+  Panel stayed dark; flip_done/vblank timeouts returned (mainline mtk_dsi has
+  no per-frame CMDQ push); boot slowed to ~90 s. In hindsight this was a
+  wrong turn — LK uses command mode only for its one-shot splash push; the
+  vendor *kernel* driver runs the panel in video mode (see run 132).
+- **Run 118/119 (all-pixels-on)** + **120/121 (live DCS debugfs)**: DCS
+  0x23 ACKed but glass never changed; live reads mostly failed (-62 timeouts,
+  0-byte returns, and DSI ACK+Error [type 0x02] responses). Key finding:
+  **RDDPM read 0x1c — booster (bit7) off** vs LK's working 0x9c.
+- **Run 122/123 (inherit-lk-state)**: skipping reset+init to inherit LK's
+  live panel state — no improvement, disabled again.
+- **Run 124/125 (bias55 + HS booster recheck)**: TPS65132 bias confirmed
+  programmed; booster still off. Suspicion moved to the init table itself.
+
+## BUILD #126 (banner #117, run 126/127) — packet-type root cause: mfr commands need GENERIC packets (2026-07-11)
+
+Vendor `DSI_set_cmdq_V2` sends commands ≥0xB0 as **generic** long/short
+packets and only <0xB0 as DCS. Our panel driver sent everything as DCS, so
+the entire manufacturer init table (all the 0xB0–0xE1 writes) was
+packet-type-corrupted from day one — the real root cause behind the banding
+era's "everything host-side verified correct, glass wrong" deadlock. Fix:
+`zz-debug/0020` dispatches ≥0xB0 via `mipi_dsi_generic_write`.
+
+Result (run 127 log): writes go out clean, but panel still dark, RDDPM
+still 0x1c — necessary but not sufficient. Also of note: the first boot of
+this image produced **zero kernel serial output** and a hardware WDT reset
+at ~14.3 s (`aee_wdt_dump` on cpu2, PC in kernel text) falling back into
+Android; not reproduced on any subsequent boot of the identical image, no
+mechanism found. The "flashing colors" seen on that crashed boot were a
+crash artifact, not scanout.
+
+## BUILD #129-run (banner #118) — LK D-PHY TIMCON fixes LP communication (2026-07-12)
+
+Register diff vs LK's golden dump showed every LP-relevant D-PHY parameter
+(LPX, TA_GO/SURE/GET, CLK_ZERO/TRAIL, HS_EXIT) ~40% shorter than LK's
+(`0x0a0b0907/0x0f1c091a/...` vs `0x0a12080a/0x14320f28/0x0d320100/0x00141208`),
+matching the panel's ACK+Error (protocol error) responses. Re-enabled
+`zz-debug/0008` (LK TIMCON values, previously exonerated *for banding* but
+never tried with command mode + generic writes).
+
+Result (`logs/2026-07-12-130-*-boot.log`): **LP reads work for the first
+time** — post-init DCS reads return coherent values (0x0a=0x1c, 0x0c=0x70
+= 24bpp, RDDSDR 0x0f=0x80 self-diagnostic OK). Booster still off (RDDPM
+0x1c after clean sleep-out + display-on).
+
+## LIVE SESSION (run 131) — bias rails verified; vendor kernel says VIDEO mode (2026-07-12)
+
+First scripted (non-interactive) serial session — new tooling
+`scripts/serial-session.py` + `/serial-login` skill; log
+`logs/2026-07-12-131-panel-live-dcs-session.log`. Findings:
+
+- TPS65132 @ i2c 1-003e: reg 0x00=0x0f, 0x01=0x0f (AVDD=AVEE=5.5 V),
+  0x03=0x33; ENP/ENN GPIOs high → panel power rails genuinely up.
+- Repeat sleep-out/display-on ACK cleanly; booster still refuses (0x1c).
+- **Decisive**: vendor kernel LCM driver
+  (`gemini-android-kernel-3.18-android8/.../aeon_ssd2092_fhd_dsi_solomon.c`)
+  has `LCM_DSI_CMD_MODE=0` → production Android drove this panel in
+  **SYNC_PULSE video mode** (4-lane, RGB888, PLL_CLOCK=502). Its init table
+  matches ours byte-for-byte. The command-mode pivot (run 115) was the
+  wrong fork; LK's command-mode splash is a special case.
+
+## BUILD #132 (banner #119, run 132/133) — ⭐ FIRST IMAGE ON THE PANEL (2026-07-12)
+
+Combination never built before: **video mode restored** (0015 and 0009
+disabled) + generic-write init (0020) + LK TIMCON (0008), white-fill test
+pattern (0011) still in.
+
+Result (`logs/2026-07-12-133-*-boot.log` + user observation): **panel lit
+solid bright white** — the 0011 test fill, scanned out end-to-end. Clean
+boot, **zero flip_done/vblank timeouts**, `graphical.target` in 21 s.
+Banding gone (it was the corrupted init table all along). B-13/Phase 5
+display pipeline is now functionally proven: OVL→…→DSI→D-PHY→panel.
+
+## BUILD #134 (banner #120) — fbcon console on glass (2026-07-12)
+
+0011 (white fill) and 0016 (all-pixels-on) disabled; otherwise identical to
+#132. Expect real fbcon text + login prompt on the panel.
+Provenance: `logs/2026-07-12-134-panel-fbcon-console/`. Result: pending flash.
+
+## BUILD #136 (banner #121, run 136/137) — RGB-thirds pattern: folding confirms row-length mismatch (2026-07-12)
+
+White fill displays perfectly but structured content banded → the fault is
+in buffer/line interpretation, not the link. RGB-thirds + left-edge white
+stripe pattern (zz-debug 0021) showed the white stripe folded into
+periodic thin lines (photo IMG_2670): each display line consumes fewer
+pixels than a buffer row → line-length/timing mismatch, then loss of sync
+(fade to black).
+
+## BUILD #138 (banner #122, run 138/139) — ⭐⭐ VENDOR KERNEL VIDEO TIMINGS: FIRST CORRECT IMAGE, THEN FIRST TEXT CONSOLE (2026-07-12)
+
+Replaced the LK-derived mode timings (LK is command-mode; its video porch
+registers are meaningless leftovers) with the vendor kernel LCM driver's
+values: HFP=26 HSA=4 HBP=20, VFP=76 VSA=1 VBP=43, pixclk 167333 kHz
+(= vendor PLL_CLOCK 502 → 1004 Mbps/lane). Result on glass: clean RGB
+thirds flash, then **a readable fbcon login prompt — first text on the
+panel under mainline Linux** (photos IMG_2672/2673). Stable, no fade.
+
+## BUILDS #140–#143 (banners #123–#125) — fbcon rotation + readable font (2026-07-12)
+
+`fbcon=rotate:` needs CONFIG_FRAMEBUFFER_CONSOLE_ROTATION (missed in #140);
+rotate:1 (CW) was the wrong direction for the clamshell; final: rotate:3
+(90° CCW) + CONFIG_FONT_TER16x32 + fbcon=font:TER16x32
+(gemini-display.config / gemini-cmdline.config). User-confirmed: landscape
+login prompt in a readable font. **Phase 5 display enablement: DONE.**
+
+## BUILD #145 (banner #126, run 145) — production display build (2026-07-12)
+
+Productization: generic-write dispatch + vendor video timings folded into
+`panel/0005`; LK D-PHY TIMCON promoted to `drm/0015-drm-mediatek-dsi-
+mt6797-vendor-dphy-timing.patch`; ALL zz-debug patches disabled (verified
+"debug instrumentation absent"); USB gadget config restored
+(gemini-usb.config), nousb-debug fragment deleted; `clk_ignore_unused`
+dropped from the cmdline (TEMPORARY flag from the 2026-07-10 scanout-crash
+diagnosis — this build revalidates without it). Result: pending flash.
+Validation checklist: fbcon on glass (rotated, big font), no
+flip_done/vblank timeouts, g_ether + SSH at 10.15.19.82, boot survives
+late clk cleanup (the old scanout-WDT suspect), serial console goes quiet
+at ~0.45s when the left-port mux switches to USB (expected, B-15).

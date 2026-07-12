@@ -1,0 +1,30 @@
+diff --git a/drivers/soc/mediatek/gemini-ddp-dump.c b/drivers/soc/mediatek/gemini-ddp-dump.c
+index 45cb60868..000000000 100644
+--- a/drivers/soc/mediatek/gemini-ddp-dump.c
++++ b/drivers/soc/mediatek/gemini-ddp-dump.c
+@@ -36,7 +36,24 @@
+ 	int noffs;
+ };
+ 
+-static const u16 ovl_offs[] = { 0x00, 0x08, 0x0c, 0x24, 0x2c, 0x240, 0x244 };
++/*
++ * GEMINI-DEBUG: per-layer registers (2026-07-11, banding-artifact hunt).
++ * DSI-level config (D-PHY TIMCON, HSA/HBP/HFP word counts) is now
++ * hardware-verified correct (builds #105-#107) with no effect on a thick,
++ * periodic horizontal-band artifact -- suspicion has moved upstream to
++ * what OVL actually reads from memory. Layer 0/1 CON (format bits),
++ * SRC_SIZE, OFFSET, PITCH/PITCH_MSB and ADDR/HDR_ADDR/HDR_PITCH
++ * (DISP_REG_OVL_* in mtk_disp_ovl.c, .addr = DISP_REG_OVL_ADDR_MT8173 =
++ * 0x0f40 for mt6797) let us cross-check the live pitch/format/address
++ * against what DRM/fbcon actually allocated.
++ */
++static const u16 ovl_offs[] = {
++	0x00, 0x08, 0x0c, 0x24, 0x2c, 0x240, 0x244,
++	/* layer 0 */
++	0x30, 0x38, 0x3c, 0x40, 0x44, 0xf40, 0xf44, 0xf48,
++	/* layer 1 */
++	0x50, 0x58, 0x5c, 0x60, 0x64, 0xf60, 0xf64, 0xf68,
++};
+ static const u16 color_offs[] = { 0x400, 0xc00, 0xc08, 0xc50, 0xc54 };
+ static const u16 pq_offs[] = { 0x00, 0x0c, 0x20, 0x24, 0x28, 0x30 };
+ static const u16 rdma0_offs[] = { 0x00, 0x04, 0x10, 0x14, 0x18, 0x40 };

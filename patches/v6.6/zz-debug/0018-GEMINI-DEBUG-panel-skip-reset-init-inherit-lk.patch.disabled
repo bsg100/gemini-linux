@@ -1,0 +1,68 @@
+diff --git a/drivers/gpu/drm/panel/panel-solomon-ssd2092.c b/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
+--- a/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
++++ b/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
+@@ -443,9 +443,19 @@
+ 
+ 	ssd2092_read_state(priv, "pre-reset (LK state)");
+ 
+-	/* Vendor lcm_poweron(): reset asserted while bias comes up. */
+-	gpiod_set_value_cansleep(priv->reset_gpio, 1);
+-
++	/*
++	 * GEMINI-DEBUG (2026-07-11): inherit LK's live panel state — skip
++	 * the reset pulse and the whole init table.  LK's splash proves the
++	 * panel+bias+booster come up perfectly on every boot; our reset+init
++	 * transition is what leaves it dark (init table extracted from
++	 * lk_s.img is byte-identical to ours, bias path verified, yet RDDPM
++	 * booster bit reads 0 after our init).  If the splash persists
++	 * through Linux boot with this build, the kill is isolated to the
++	 * reset/init transition and can be bisected; a live DCS
++	 * all-pixels-on (0x23) into the inherited state should then prove
++	 * host->panel control on a working panel.  Regulators are still
++	 * taken (already on — keeps use counts sane); reset GPIO untouched.
++	 */
+ 	ret = regulator_enable(priv->avdd);
+ 	if (ret < 0) {
+ 		dev_err(panel->dev, "failed to enable avdd: %d\n", ret);
+@@ -455,37 +465,15 @@
+ 	ret = regulator_enable(priv->avee);
+ 	if (ret < 0) {
+ 		dev_err(panel->dev, "failed to enable avee: %d\n", ret);
+-		goto disable_avdd;
+-	}
+-
+-	msleep(20);
+-
+-	/* Vendor reset dance: release 10 ms, assert 10 ms, release 20 ms. */
+-	gpiod_set_value_cansleep(priv->reset_gpio, 0);
+-	msleep(10);
+-	gpiod_set_value_cansleep(priv->reset_gpio, 1);
+-	msleep(10);
+-	gpiod_set_value_cansleep(priv->reset_gpio, 0);
+-	msleep(20);
+-
+-	ret = ssd2092_init_sequence(priv);
+-	if (ret < 0) {
+-		dev_err(panel->dev, "init sequence failed: %d\n", ret);
+-		goto disable_avee;
++		regulator_disable(priv->avdd);
++		return ret;
+ 	}
+ 
+-	ssd2092_read_state(priv, "post-init");
++	dev_info(panel->dev,
++		 "GEMINI-PANEL prepare: SKIPPING reset+init (inherit LK state)\n");
+ 
+ 	priv->prepared = true;
+ 	return 0;
+-
+-disable_avee:
+-	/* Leave reset asserted so a retry starts from a known state. */
+-	gpiod_set_value_cansleep(priv->reset_gpio, 1);
+-	regulator_disable(priv->avee);
+-disable_avdd:
+-	regulator_disable(priv->avdd);
+-	return ret;
+ }
+ 
+ static int ssd2092_enable(struct drm_panel *panel)

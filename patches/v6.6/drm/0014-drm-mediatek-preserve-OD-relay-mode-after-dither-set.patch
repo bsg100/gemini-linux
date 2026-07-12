@@ -1,0 +1,23 @@
+diff --git a/drivers/gpu/drm/mediatek/mtk_drm_ddp_comp.c b/drivers/gpu/drm/mediatek/mtk_drm_ddp_comp.c
+index 771f4e173..eb026650e 100644
+--- a/drivers/gpu/drm/mediatek/mtk_drm_ddp_comp.c
++++ b/drivers/gpu/drm/mediatek/mtk_drm_ddp_comp.c
+@@ -226,6 +226,18 @@ static void mtk_od_config(struct device *dev, unsigned int w,
+ 	mtk_ddp_write(cmdq_pkt, w << 16 | h, &priv->cmdq_reg, priv->regs, DISP_REG_OD_SIZE);
+ 	mtk_ddp_write(cmdq_pkt, OD_RELAYMODE, &priv->cmdq_reg, priv->regs, DISP_REG_OD_CFG);
+ 	mtk_dither_set(dev, bpc, DISP_REG_OD_CFG, cmdq_pkt);
++	/*
++	 * mtk_dither_set() may have overwritten OD_CFG with the dithering
++	 * bit alone, losing the relay-mode bit written above.  OD_CFG[1:0]
++	 * is the OD mode field (0x1 relay/bypass, 0x2 core enable — MTK
++	 * vendor od10/ddp_od.c); an OD left with neither bit set blocks
++	 * its input side while free-running its output, stalling every
++	 * upstream engine (observed on MT6797: OVL frame-done never fires,
++	 * flip_done/vblank waits time out).  Re-assert relay mode without
++	 * disturbing the dithering configuration.
++	 */
++	mtk_ddp_write_mask(cmdq_pkt, OD_RELAYMODE, &priv->cmdq_reg,
++			   priv->regs, DISP_REG_OD_CFG, OD_RELAYMODE);
+ }
+ 
+ static void mtk_od_start(struct device *dev)

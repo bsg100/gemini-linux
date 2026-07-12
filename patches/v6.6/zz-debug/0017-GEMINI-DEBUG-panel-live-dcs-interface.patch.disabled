@@ -1,0 +1,100 @@
+diff --git a/drivers/gpu/drm/panel/panel-solomon-ssd2092.c b/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
+--- a/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
++++ b/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
+@@ -33,6 +33,7 @@
+ #include <linux/module.h>
+ #include <linux/of.h>
+ #include <linux/regulator/consumer.h>
++#include <linux/uaccess.h>
+ 
+ #include <video/mipi_display.h>
+ 
+@@ -356,6 +357,79 @@
+ static const struct file_operations ssd2092_poke_fops = {
+ 	.owner = THIS_MODULE,
+ 	.write = ssd2092_poke_write,
++	.open  = simple_open,
++};
++
++/*
++ * GEMINI-DEBUG (2026-07-11): generic live DCS interface for the
++ * booster-off hunt.  Panel logic responds (status reads good, accepts
++ * all-pixels-on) but RDDPM 0x0a reads 0x1c -- booster bit (D7) clear,
++ * where LK's working state is 0x9c -- so the glass stays dark with the
++ * backlight lit.  Bias path is verified (right GPIOs high, TPS65132
++ * ACKs and takes voltage writes), init table is the vendor's 1:1.
++ * This lets us experiment from the shell without a rebuild per try:
++ *   echo "11" > /sys/kernel/debug/gemini_panel_dcs        (DCS write)
++ *   echo "b9 0e 44" > /sys/kernel/debug/gemini_panel_dcs  (write+params)
++ *   echo "r 0a" > /sys/kernel/debug/gemini_panel_dcs      (1-byte read)
++ * Results go to dmesg.
++ */
++static ssize_t ssd2092_dcs_debugfs_write(struct file *file,
++					  const char __user *ubuf,
++					  size_t count, loff_t *ppos)
++{
++	struct ssd2092 *priv = file->private_data;
++	struct mipi_dsi_device *dsi = priv->dsi;
++	char kbuf[192];
++	u8 bytes[64];
++	unsigned int nbytes = 0;
++	bool is_read = false;
++	char *p, *tok;
++	int ret;
++
++	if (count >= sizeof(kbuf))
++		return -EINVAL;
++	if (copy_from_user(kbuf, ubuf, count))
++		return -EFAULT;
++	kbuf[count] = '\0';
++
++	p = kbuf;
++	while ((tok = strsep(&p, " \t\n")) != NULL) {
++		if (!*tok)
++			continue;
++		if (!nbytes && !is_read && (tok[0] == 'r' || tok[0] == 'R') &&
++		    !tok[1]) {
++			is_read = true;
++			continue;
++		}
++		if (nbytes >= ARRAY_SIZE(bytes))
++			return -E2BIG;
++		if (kstrtou8(tok, 16, &bytes[nbytes]))
++			return -EINVAL;
++		nbytes++;
++	}
++	if (!nbytes)
++		return -EINVAL;
++
++	if (is_read) {
++		u8 val = 0;
++
++		ret = mipi_dsi_dcs_read(dsi, bytes[0], &val, 1);
++		dev_info(&dsi->dev,
++			 "GEMINI-PANEL dcs read 0x%02x ret=%d val=0x%02x\n",
++			 bytes[0], ret, val);
++	} else {
++		ret = mipi_dsi_dcs_write_buffer(dsi, bytes, nbytes);
++		dev_info(&dsi->dev,
++			 "GEMINI-PANEL dcs write 0x%02x len=%u ret=%d\n",
++			 bytes[0], nbytes, ret);
++	}
++
++	return count;
++}
++
++static const struct file_operations ssd2092_dcs_fops = {
++	.owner = THIS_MODULE,
++	.write = ssd2092_dcs_debugfs_write,
+ 	.open  = simple_open,
+ };
+ 
+@@ -607,6 +681,8 @@
+ 	 */
+ 	debugfs_create_file("gemini_panel_poke", 0200, NULL, priv,
+ 			     &ssd2092_poke_fops);
++	debugfs_create_file("gemini_panel_dcs", 0200, NULL, priv,
++			     &ssd2092_dcs_fops);
+ 
+ 	return 0;
+ }

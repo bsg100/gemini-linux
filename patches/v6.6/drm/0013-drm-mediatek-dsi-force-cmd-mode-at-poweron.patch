@@ -1,0 +1,23 @@
+diff --git a/drivers/gpu/drm/mediatek/mtk_dsi.c b/drivers/gpu/drm/mediatek/mtk_dsi.c
+index 1e421d91c..d9e03260b 100644
+--- a/drivers/gpu/drm/mediatek/mtk_dsi.c
++++ b/drivers/gpu/drm/mediatek/mtk_dsi.c
+@@ -670,6 +670,18 @@ static int mtk_dsi_poweron(struct mtk_dsi *dsi)
+ 		       dsi->regs + DSI_SHADOW_DEBUG);
+ 
+ 	mtk_dsi_reset_engine(dsi);
++
++	/*
++	 * The bootloader may leave the DSI controller in video mode from a
++	 * boot splash; the engine soft reset above does not clear
++	 * DSI_MODE_CTRL. A stale video-mode setting makes
++	 * mtk_dsi_host_transfer() try to stop a video stream that is not
++	 * actually running and wait for a VM_DONE interrupt that never
++	 * comes, so every panel init command times out. Force command mode
++	 * so the first host transfer starts from a known state.
++	 */
++	mtk_dsi_set_cmd_mode(dsi);
++
+ 	mtk_dsi_phy_timconfig(dsi);
+ 
+ 	mtk_dsi_ps_control_vact(dsi);

@@ -1,0 +1,41 @@
+diff --git a/drivers/gpu/drm/mediatek/mtk_drm_crtc.c b/drivers/gpu/drm/mediatek/mtk_drm_crtc.c
+index 43ce1871e..a0a19d05a 100644
+--- a/drivers/gpu/drm/mediatek/mtk_drm_crtc.c
++++ b/drivers/gpu/drm/mediatek/mtk_drm_crtc.c
+@@ -576,6 +576,22 @@ static void mtk_drm_crtc_update_config(struct mtk_drm_crtc *mtk_crtc,
+ 	if (pending_async_planes)
+ 		mtk_crtc->pending_async_planes = true;
+ 
++	/*
++	 * GEMINI-DEBUG: which commit path actually runs (2026-07-11,
++	 * banding-artifact hunt, follow-up to mtk_plane_update_new_state
++	 * print in mtk_drm_plane.c). shadow_register=direct-write-here,
++	 * cmdq_client.chan=deferred-to-GCE-packet, neither=deferred to
++	 * mtk_crtc_ddp_irq() on next vblank.
++	 */
++	pr_info("GEMINI-DEBUG crtc_update_config pending_planes=0x%x shadow_register=%d cmdq_chan=%p\n",
++		pending_planes, priv->data->shadow_register,
++#if IS_REACHABLE(CONFIG_MTK_CMDQ)
++		mtk_crtc->cmdq_client.chan
++#else
++		(void *)NULL
++#endif
++		);
++
+ 	if (priv->data->shadow_register) {
+ 		mtk_mutex_acquire(mtk_crtc->mutex);
+ 		mtk_crtc_ddp_config(crtc, NULL);
+@@ -625,6 +641,13 @@ static void mtk_crtc_ddp_irq(void *data)
+ 	if (!crtc->state)
+ 		return;
+ 
++	/*
++	 * GEMINI-DEBUG: confirm the vblank-IRQ-deferred direct-write path
++	 * runs (2026-07-11, banding-artifact hunt).
++	 */
++	pr_info_ratelimited("GEMINI-DEBUG crtc_ddp_irq pending_planes=%d\n",
++			     mtk_crtc->pending_planes);
++
+ #if IS_REACHABLE(CONFIG_MTK_CMDQ)
+ 	if (!priv->data->shadow_register && !mtk_crtc->cmdq_client.chan)
+ 		mtk_crtc_ddp_config(crtc, NULL);

@@ -1,0 +1,56 @@
+diff --git a/drivers/gpu/drm/panel/panel-solomon-ssd2092.c b/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
+index bb3ac9de8..758590b81 100644
+--- a/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
++++ b/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
+@@ -270,6 +270,33 @@ static int ssd2092_init_sequence(struct ssd2092 *priv)
+ 	return 0;
+ }
+ 
++/*
++ * GEMINI-DEBUG: differential panel-state read-back (backlit-black hunt).
++ * The user sees LK's Planet logo, then black at kernel takeover — panel
++ * hardware and LK init are proven good.  Read DCS status registers
++ * (0x0a power mode, 0x0b address mode, 0x0c pixel format, 0x0d display
++ * mode, 0x0e signal mode) twice: before our reset pulse (panel still in
++ * LK's working state — expect 0x0a=0x9c; also proves the read path),
++ * and after our init sequence.  Whichever read degrades names the
++ * killer: no response pre-reset = read plumbing; good pre / dead post =
++ * our reset/init breaks the panel; good both but black = format issue.
++ */
++static void ssd2092_read_state(struct ssd2092 *priv, const char *when)
++{
++	struct mipi_dsi_device *dsi = priv->dsi;
++	static const u8 regs[] = { 0x0a, 0x0b, 0x0c, 0x0d, 0x0e };
++	unsigned int i;
++
++	for (i = 0; i < ARRAY_SIZE(regs); i++) {
++		u8 val = 0;
++		int ret = mipi_dsi_dcs_read(dsi, regs[i], &val, 1);
++
++		dev_info(&dsi->dev,
++			 "GEMINI-PANEL %s: DCS read 0x%02x ret=%d val=0x%02x\n",
++			 when, regs[i], ret, val);
++	}
++}
++
+ static int ssd2092_prepare(struct drm_panel *panel)
+ {
+ 	struct ssd2092 *priv = panel_to_ssd2092(panel);
+@@ -278,6 +305,8 @@ static int ssd2092_prepare(struct drm_panel *panel)
+ 	if (priv->prepared)
+ 		return 0;
+ 
++	ssd2092_read_state(priv, "pre-reset (LK state)");
++
+ 	/* Vendor lcm_poweron(): reset asserted while bias comes up. */
+ 	gpiod_set_value_cansleep(priv->reset_gpio, 1);
+ 
+@@ -309,6 +338,8 @@ static int ssd2092_prepare(struct drm_panel *panel)
+ 		goto disable_avee;
+ 	}
+ 
++	ssd2092_read_state(priv, "post-init");
++
+ 	priv->prepared = true;
+ 	return 0;
+ 

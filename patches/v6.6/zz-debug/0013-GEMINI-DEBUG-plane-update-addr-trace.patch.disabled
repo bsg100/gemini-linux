@@ -1,0 +1,23 @@
+diff --git a/drivers/gpu/drm/mediatek/mtk_drm_plane.c b/drivers/gpu/drm/mediatek/mtk_drm_plane.c
+index db2f70ae0..685b816de 100644
+--- a/drivers/gpu/drm/mediatek/mtk_drm_plane.c
++++ b/drivers/gpu/drm/mediatek/mtk_drm_plane.c
+@@ -176,6 +176,18 @@ static void mtk_plane_update_new_state(struct drm_plane_state *new_state,
+ 		       fb->format->cpp[0] * (x_offset_in_blocks + 1);
+ 	}
+ 
++	/*
++	 * GEMINI-DEBUG: confirm the atomic-update path runs at all and what
++	 * address it computes for OVL layer 0, to compare against the
++	 * ADDR(0) register readback (2026-07-11, banding-artifact hunt).
++	 * builds #109/#110 showed OVL's ADDR(0) stuck at LK's leftover
++	 * splash buffer (0x7dfb0000) instead of any Linux-allocated GEM
++	 * buffer -- unknown whether this function ever computes the right
++	 * address, or whether it runs at all.
++	 */
++	pr_info("GEMINI-DEBUG plane_update_new_state addr=%pad pitch=%u fmt=0x%x\n",
++		&addr, pitch, format);
++
+ 	mtk_plane_state->pending.enable = true;
+ 	mtk_plane_state->pending.pitch = pitch;
+ 	mtk_plane_state->pending.hdr_pitch = hdr_pitch;

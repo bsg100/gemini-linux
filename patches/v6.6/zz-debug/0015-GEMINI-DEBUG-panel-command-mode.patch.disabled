@@ -1,0 +1,26 @@
+diff --git a/drivers/gpu/drm/panel/panel-solomon-ssd2092.c b/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
+--- a/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
++++ b/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
+@@ -558,8 +558,20 @@
+ 	 * EOT on the wire, and CLOCK_NON_CONTINUOUS sets HSTX_CKLP_EN,
+ 	 * making the register bit-identical to LK's.
+ 	 */
+-	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_SYNC_PULSE |
+-			  MIPI_DSI_MODE_LPM | MIPI_DSI_MODE_NO_EOT_PACKET |
++	/*
++	 * GEMINI-DEBUG (2026-07-11, banding-artifact root cause): LK's golden
++	 * register dump (capture 244) shows DSI_MODE_CTRL = 0 -- the vendor
++	 * drives this panel in COMMAND mode, not video mode.  The SSD2092 has
++	 * its own GRAM; a video-mode stream is never displayed, which matches
++	 * every symptom (bands = decaying GRAM garbage, fade to black = no
++	 * refreshes, all host-side registers verified correct with zero
++	 * visual effect, builds #105-#111).  Drop the VIDEO flags so mtk_dsi
++	 * runs the link in command mode.  Mainline mtk_dsi only pushes one
++	 * frame at enable (no per-frame retrigger), but a GRAM panel
++	 * self-refreshes, so a single stable frame proves the theory; frame
++	 * updates come next.
++	 */
++	dsi->mode_flags = MIPI_DSI_MODE_LPM | MIPI_DSI_MODE_NO_EOT_PACKET |
+ 			  MIPI_DSI_CLOCK_NON_CONTINUOUS;
+ 
+ 	ret = mipi_dsi_attach(dsi);

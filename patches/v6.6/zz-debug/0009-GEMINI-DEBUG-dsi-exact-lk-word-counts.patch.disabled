@@ -1,0 +1,25 @@
+diff --git a/drivers/gpu/drm/mediatek/mtk_dsi.c b/drivers/gpu/drm/mediatek/mtk_dsi.c
+index d8bfc2cce..523e0044a 100644
+--- a/drivers/gpu/drm/mediatek/mtk_dsi.c
++++ b/drivers/gpu/drm/mediatek/mtk_dsi.c
+@@ -514,6 +514,20 @@ static void mtk_dsi_config_vdo_timing(struct mtk_dsi *dsi)
+ 			(vm->hactive * dsi_tmp_buf_bpp + 2) % dsi->lanes;
+ 	}
+ 
++	/*
++	 * GEMINI-DEBUG: mainline's formula (further adjusted by the D-PHY
++	 * cycle-budget correction above) lands only "within one byte" of
++	 * LK's actually-proven-working word counts for this panel (golden
++	 * register dump, boot.md capture 244: HSA_WC=0x1c HBP_WC=0x94
++	 * HFP_WC=0x74). Testing whether the residual off-by-a-few-bytes
++	 * error is the cause of the thick periodic horizontal banding seen
++	 * on real hardware (2026-07-11) — override with LK's exact values.
++	 * Temporary — revert once confirmed either way.
++	 */
++	horizontal_sync_active_byte = 0x1c;
++	horizontal_backporch_byte = 0x94;
++	horizontal_frontporch_byte = 0x74;
++
+ 	writel(horizontal_sync_active_byte, dsi->regs + DSI_HSA_WC);
+ 	writel(horizontal_backporch_byte, dsi->regs + DSI_HBP_WC);
+ 	writel(horizontal_frontporch_byte, dsi->regs + DSI_HFP_WC);

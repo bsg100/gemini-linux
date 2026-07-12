@@ -1,0 +1,6 @@
+[sudo] password for gemini: ===CLK_DSI0_MM===
+cat: '/sys/kernel/debug/clk/mm_dsi0_mm clock': Is a directory
+===CLK_DSI0_IF===
+cat: /sys/kernel/debug/clk/mm_dsi0_interface_clock: Is a directory
+===CLK_SUMMARY_GREP===
+sh: 8: Syntax error: Unterminated quoted string

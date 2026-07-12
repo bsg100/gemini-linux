@@ -1,0 +1,25 @@
+diff --git a/drivers/gpu/drm/mediatek/mtk_dsi.c b/drivers/gpu/drm/mediatek/mtk_dsi.c
+index d8bfc2cce..929915b09 100644
+--- a/drivers/gpu/drm/mediatek/mtk_dsi.c
++++ b/drivers/gpu/drm/mediatek/mtk_dsi.c
+@@ -259,6 +259,20 @@ static void mtk_dsi_phy_timconfig(struct mtk_dsi *dsi)
+ 	timcon3 = timing->clk_hs_prepare | timing->clk_hs_post << 8 |
+ 		  timing->clk_hs_exit << 16;
+ 
++	/*
++	 * GEMINI-DEBUG: override mainline's formula-derived D-PHY timing
++	 * with values read live off the stock vendor kernel's steady-state
++	 * PHY_TIMCON0-3 registers on real hardware (2026-07-11, boot.md).
++	 * Vendor margins are substantially looser than the formula above
++	 * produces at this data rate; testing whether that closes the
++	 * top-of-frame line corruption. Temporary — revert once confirmed
++	 * either way.
++	 */
++	timcon0 = 0x0a12080a;
++	timcon1 = 0x14320f28;
++	timcon2 = 0x0d320100;
++	timcon3 = 0x00141208;
++
+ 	writel(timcon0, dsi->regs + DSI_PHY_TIMECON0);
+ 	writel(timcon1, dsi->regs + DSI_PHY_TIMECON1);
+ 	writel(timcon2, dsi->regs + DSI_PHY_TIMECON2);

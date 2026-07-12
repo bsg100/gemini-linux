@@ -1,0 +1,32 @@
+diff --git a/drivers/gpu/drm/panel/panel-solomon-ssd2092.c b/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
+index 8c1447b6b..210a85e58 100644
+--- a/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
++++ b/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
+@@ -268,6 +268,27 @@ static int ssd2092_init_sequence(struct ssd2092 *priv)
+ 	msleep(120);
+ 	ssd2092_dcs(dsi, 0x29, 0x00);
+ 	msleep(50);
++
++	/*
++	 * GEMINI-WORKAROUND -> now attempted as a real fix (2026-07-10):
++	 * a static image reliably fades to black over a few seconds;
++	 * continuous framebuffer writes keep it lit and even get brighter
++	 * with update rate.  Neither the vendor init table nor ours sends
++	 * any CABC (Content-Adaptive Backlight Control) command — on many
++	 * mobile panels CABC defaults to *enabled* at power-on unless
++	 * explicitly turned off, dimming static/low-motion content to save
++	 * power.  Android's compositor redraws continuously (status bar
++	 * clock, animations) even on a "static" screen, which would mask
++	 * this by keeping CABC's brightness estimate high — explaining why
++	 * stock Android never shows this and our idle mainline console
++	 * does.  Explicitly disable CABC and force max manual brightness
++	 * via the standard MIPI DCS commands (0x51/0x53/0x55), which
++	 * neither vendor driver sends.
++	 */
++	ssd2092_dcs(dsi, 0x51, 0xff);	/* Write Display Brightness: max */
++	ssd2092_dcs(dsi, 0x53, 0x24);	/* Write CTRL Display: BCTRL+BL on, DD off */
++	ssd2092_dcs(dsi, 0x55, 0x00);	/* Write CABC: off */
++
+ 	return 0;
+ }
+ 

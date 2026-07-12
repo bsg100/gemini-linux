@@ -1,0 +1,66 @@
+diff --git a/drivers/gpu/drm/mediatek/mtk_dsi.c b/drivers/gpu/drm/mediatek/mtk_dsi.c
+--- a/drivers/gpu/drm/mediatek/mtk_dsi.c
++++ b/drivers/gpu/drm/mediatek/mtk_dsi.c
+@@ -587,18 +587,28 @@
+ 	struct mtk_dsi *dsi = dev_id;
+ 	u32 status, tmp;
+ 	u32 flag = LPRX_RD_RDY_INT_FLAG | CMD_DONE_INT_FLAG | VM_DONE_INT_FLAG;
++
++	static int gemini_irq_seq;
++	int seq = ++gemini_irq_seq;
++	int spins = 0;
+ 
+ 	status = readl(dsi->regs + DSI_INTSTA) & flag;
++	pr_info("GEMINI-DEBUG dsi_irq[%d] enter status=0x%08x\n", seq, status);
+ 
+ 	if (status) {
+ 		do {
+ 			mtk_dsi_mask(dsi, DSI_RACK, RACK, RACK);
+ 			tmp = readl(dsi->regs + DSI_INTSTA);
++			spins++;
++			if (spins % 100000 == 0)
++				pr_info("GEMINI-DEBUG dsi_irq[%d] still spinning, spins=%d tmp=0x%08x\n",
++					seq, spins, tmp);
+ 		} while (tmp & DSI_BUSY);
+ 
+ 		mtk_dsi_mask(dsi, DSI_INTSTA, status, 0);
+ 		mtk_dsi_irq_data_set(dsi, status);
+ 		wake_up_interruptible(&dsi->irq_wait_queue);
++		pr_info("GEMINI-DEBUG dsi_irq[%d] exit spins=%d\n", seq, spins);
+ 	}
+ 
+ 	return IRQ_HANDLED;
+@@ -623,6 +633,8 @@
+ 	int ret;
+ 	u32 bit_per_pixel;
+ 
++	pr_info("GEMINI-DEBUG dsi_poweron enter refcount=%d\n", dsi->refcount);
++
+ 	if (++dsi->refcount != 1)
+ 		return 0;
+ 
+@@ -687,6 +699,7 @@
+ 	 */
+ 	enable_irq(dsi->irq_num);
+ 
++	pr_info("GEMINI-DEBUG dsi_poweron exit ok\n");
+ 	return 0;
+ err_disable_engine_clk:
+ 	clk_disable_unprepare(dsi->engine_clk);
+@@ -699,6 +712,8 @@
+ 
+ static void mtk_dsi_poweroff(struct mtk_dsi *dsi)
+ {
++	pr_info("GEMINI-DEBUG dsi_poweroff enter refcount=%d\n", dsi->refcount);
++
+ 	if (WARN_ON(dsi->refcount == 0))
+ 		return;
+ 
+@@ -731,6 +746,7 @@
+ 	phy_power_off(dsi->phy);
+ 
+ 	dsi->lanes_ready = false;
++	pr_info("GEMINI-DEBUG dsi_poweroff exit\n");
+ }
+ 
+ static void mtk_dsi_lane_ready(struct mtk_dsi *dsi)

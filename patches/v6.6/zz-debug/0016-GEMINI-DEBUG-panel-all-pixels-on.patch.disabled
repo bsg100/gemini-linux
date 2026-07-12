@@ -1,0 +1,22 @@
+diff --git a/drivers/gpu/drm/panel/panel-solomon-ssd2092.c b/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
+--- a/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
++++ b/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
+@@ -288,6 +288,18 @@
+ 	ssd2092_dcs(dsi, 0x51, 0xff);	/* Write Display Brightness: max */
+ 	ssd2092_dcs(dsi, 0x53, 0x24);	/* Write CTRL Display: BCTRL+BL on, DD off */
+ 	ssd2092_dcs(dsi, 0x55, 0x00);	/* Write CABC: off */
++
++	/*
++	 * GEMINI-DEBUG (2026-07-11): DCS all-pixels-on (0x23).  Command-mode
++	 * root cause confirmed to the point that the panel now initializes
++	 * (DCS status reads work) but stays black -- its GRAM is empty and
++	 * mainline mtk_dsi never pushes a frame in command mode.  0x23
++	 * forces every pixel white regardless of GRAM content: if the panel
++	 * lights up solid white, panel init + DSI link are fully proven
++	 * end-to-end and only the frame-push path remains to be built.
++	 * Temporary -- remove once confirmed.
++	 */
++	ssd2092_dcs(dsi, 0x23);
+ 
+ 	return 0;
+ }

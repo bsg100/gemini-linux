@@ -1,0 +1,698 @@
+[3703] [PROFILE] ::: lvl(1) decompress_kernel takes 622 ms
+[3704] [PART_LK][get_part] odmdtbo
+[3704] (L212) Fail to get partition odmdtbo!
+[3704] load overlay dtbo failed !
+[3705] model=MT6797X
+[3705] cluster-0: 4 core
+[3705] cluster-1: 4 core
+[3706] cluster-2: 2 core
+[3706] [LK_ENV]get_env scp from area 0
+[3707] [SCP] current setting is 1.
+[3707] mblock[0].start: 0x40000000, sz: 0x200000, limit: 0xbfffffff, max_addr: 0x0, target: -1, reserved_addr: 0x40000000,reserved_size: 0x200000
+[3709] mblock_reserve dbg[0]: 1, 1, 1, 1
+[3709] mblock[1].start: 0x43400000, sz: 0xc00000, limit: 0xbfffffff, max_addr: 0x40200000, target: 0, reserved_addr: 0x43e00000,reserved_size: 0x200000
+[3711] mblock_reserve dbg[1]: 1, 1, 1, 1
+[3711] mblock[2].start: 0x44080000, sz: 0xf80000, limit: 0xbfffffff, max_addr: 0x44000000, target: 1, reserved_addr: 0x44e00000,reserved_size: 0x200000
+[3713] mblock_reserve dbg[2]: 1, 1, 1, 1
+[3713] mblock[3].start: 0x450d5000, sz: 0x38edb000, limit: 0xbfffffff, max_addr: 0x45000000, target: 2, reserved_addr: 0x7ddb0000,reserved_size: 0x200000
+[3715] mblock_reserve dbg[3]: 1, 1, 1, 1
+[3715] mblock[4].start: 0x80000000, sz: 0x80000000, limit: 0xbfffffff, max_addr: 0x7dfb0000, target: 3, reserved_addr: 0xbfdf0000,reserved_size: 0x200000
+[3717] mblock_reserve dbg[4]: 1, 1, 1, 1
+[3717] mblock[5].start: 0x100000000, sz: 0x40000000, limit: 0xbfffffff, max_addr: 0x100000000, target: 4, reserved_addr: 0xbfdf0000,reserved_size: 0x200000
+[3719] mblock_reserve dbg[5]: 1, 0, 1, 1
+[3720] mblock[4]: 80000000, 3fdf0000 from mblock
+mblock[5]: bfff0000, 40010000 from mblock
+[3721] mblock_reserve: bfdf0000 - bfff0000 from mblock 4
+[3721] mblock_reserve [0].start: 0x40000000, sz: 0x200000
+[3722] mblock_reserve [1].start: 0x43400000, sz: 0xc00000
+[3723] mblock_reserve [2].start: 0x44080000, sz: 0xf80000
+[3723] mblock_reserve [3].start: 0x450d5000, sz: 0x38edb000
+[3724] mblock_reserve [4].start: 0x80000000, sz: 0x3fdf0000
+[3725] mblock_reserve [5].start: 0xbfff0000, sz: 0x40010000
+[3725] mblock_reserve [6].start: 0x100000000, sz: 0x40000000
+[3726] mblock_reserve-R[0].start: 0x7ff80000, sz: 0x80000 map:1 name:log-store
+[3727] mblock_reserve-R[1].start: 0x7ff40000, sz: 0x40000 map:0 name:atf-log-reserved
+[3728] mblock_reserve-R[2].start: 0x44000000, sz: 0x80000 map:0 name:dtb_kernel_addr_mb
+[3729] mblock_reserve-R[3].start: 0x40200000, sz: 0x3200000 map:0 name:kernel_addr_mb
+[3730] mblock_reserve-R[4].start: 0x45000000, sz: 0xd5000 map:0 name:ramdisk_addr_mb
+[3731] mblock_reserve-R[5].start: 0x7dfb0000, sz: 0x1f90000 map:0 name:framebuffer
+[3732] mblock_reserve-R[6].start: 0xbfdf0000, sz: 0x200000 map:0 name:SCP-reserved
+[3733] [PART_LK][get_part] scp1
+[3733] [PART_LK][get_part] scp2
+[3733] no scp partition with active bit marked, load scp1
+[SBC] NS-CHIP
+[3734] [SEC_POLICY] sboot_state = 0x0
+[3735] [SEC_POLICY] lock_state(default) = 0x4
+[3735] [PART_LK][get_part] scp1
+[3735] [PART_LK][get_part] scp1
+[3739] 
+=========================================
+[3740] [LK_BOOT] scp1 magic number : 0x58881688
+[3740] [LK_BOOT] scp1 name         : tinysys-loader-CM4_A
+[3741] [LK_BOOT] scp1 size         : 1024
+[3742] =========================================
+[SBC] NS-CHIP
+[3744] [SEC_POLICY] sboot_state = 0x0
+[3745] [SEC_POLICY] lock_state(default) = 0x4
+[3745] [PART_LK][get_part] scp1
+[3746] [PART_LK][get_part] scp1
+[3747] 
+=========================================
+[3748] [LK_BOOT] scp1 magic number : 0x58881688
+[3748] [LK_BOOT] scp1 name         : tinysys-loader-CM4_A
+[3749] [LK_BOOT] scp1 size         : 1024
+[3750] =========================================
+[3751] 
+=========================================
+[3752] [LK_BOOT] scp1 magic number : 0x58881688
+[3752] [LK_BOOT] scp1 name         : tinysys-scp-CM4_A
+[3753] [LK_BOOT] scp1 size         : 37444
+[3754] =========================================
+[3758] LK set emi mpu region protection start:bfdf0000 end=bffeffff region=2 access_permission=b6d169 
+[3760] [PROFILE] ::: lvl(1) load scp takes 54 ms
+[3760] free_in_kernel = 1
+[3760] Enter load_modem_image v2.0
+[3761] ccci_request_mem: ret:8000000, smem_limit:90000000, align:2000000
+[3762] mblock[0].start: 0x40000000, sz: 0x200000, limit: 0x90000000, max_addr: 0x0, target: -1, reserved_addr: 0x38000000,reserved_size: 0x8000000
+[3763] mblock_reserve dbg[0]: 1, 0, 1, 1
+[3764] mblock[1].start: 0x43400000, sz: 0xc00000, limit: 0x90000000, max_addr: 0x0, target: -1, reserved_addr: 0x3c000000,reserved_size: 0x8000000
+[3765] mblock_reserve dbg[1]: 1, 0, 1, 1
+[3766] mblock[2].start: 0x44080000, sz: 0xf80000, limit: 0x90000000, max_addr: 0x0, target: -1, reserved_addr: 0x3c000000,reserved_size: 0x8000000
+[3767] mblock_reserve dbg[2]: 1, 0, 1, 1
+[3768] mblock[3].start: 0x450d5000, sz: 0x38edb000, limit: 0x90000000, max_addr: 0x0, target: -1, reserved_addr: 0x74000000,reserved_size: 0x8000000
+[3769] mblock_reserve dbg[3]: 1, 1, 1, 1
+[3770] mblock[4].start: 0x80000000, sz: 0x3fdf0000, limit: 0x90000000, max_addr: 0x7dfb0000, target: 3, reserved_addr: 0x88000000,reserved_size: 0x8000000
+[3772] mblock_reserve dbg[4]: 1, 1, 1, 1
+[3772] mblock[5].start: 0xbfff0000, sz: 0x40010000, limit: 0x90000000, max_addr: 0xbfdf0000, target: 4, reserved_addr: 0x88000000,reserved_size: 0x8000000
+[3774] mblock_reserve dbg[5]: 1, 0, 1, 1
+[3774] mblock[6].start: 0x100000000, sz: 0x40000000, limit: 0x90000000, max_addr: 0xbfdf0000, target: 4, reserved_addr: 0x88000000,reserved_size: 0x8000000
+[3776] mblock_reserve dbg[6]: 1, 0, 1, 1
+[3776] mblock[4]: 80000000, 8000000 from mblock
+mblock[5]: 90000000, 2fdf0000 from mblock
+[3777] mblock_reserve: 88000000 - 90000000 from mblock 4
+[3778] mblock_reserve [0].start: 0x40000000, sz: 0x200000
+[3779] mblock_reserve [1].start: 0x43400000, sz: 0xc00000
+[3779] mblock_reserve [2].start: 0x44080000, sz: 0xf80000
+[3780] mblock_reserve [3].start: 0x450d5000, sz: 0x38edb000
+[3781] mblock_reserve [4].start: 0x80000000, sz: 0x8000000
+[3781] mblock_reserve [5].start: 0x90000000, sz: 0x2fdf0000
+[3782] mblock_reserve [6].start: 0xbfff0000, sz: 0x40010000
+[3783] mblock_reserve [7].start: 0x100000000, sz: 0x40000000
+[3783] mblock_reserve-R[0].start: 0x7ff80000, sz: 0x80000 map:1 name:log-store
+[3784] mblock_reserve-R[1].start: 0x7ff40000, sz: 0x40000 map:0 name:atf-log-reserved
+[3785] mblock_reserve-R[2].start: 0x44000000, sz: 0x80000 map:0 name:dtb_kernel_addr_mb
+[3786] mblock_reserve-R[3].start: 0x40200000, sz: 0x3200000 map:0 name:kernel_addr_mb
+[3787] mblock_reserve-R[4].start: 0x45000000, sz: 0xd5000 map:0 name:ramdisk_addr_mb
+[3788] mblock_reserve-R[5].start: 0x7dfb0000, sz: 0x1f90000 map:0 name:framebuffer
+[3789] mblock_reserve-R[6].start: 0xbfdf0000, sz: 0x200000 map:0 name:SCP-reserved
+[3790] mblock_reserve-R[7].start: 0x88000000, sz: 0x8000000 map:0 name:ccci
+[3791] request size: 0x08000000, get start address: 0x88000000
+[3791] [LK_ENV]get_env opt_ps1_rat from area 1
+[3792] [LK_ENV]get_env opt_md1_support from area 1
+[3792] don't support RAT all in one
+[3793] bypass MD RAT mode all in one!!
+[3793] [LK_ENV]get_env opt_md3_support from area 1
+[3794] don't support RAT all in one
+[3794] bypass MD RAT mode all in one!!
+[3795] [LK_ENV]get_env opt_c2k_lte_mode from area 1
+[3795] don't support RAT all in one
+[3796] bypass MD RAT mode all in one!!
+[3796] [LK_ENV]get_env opt_irat_support from area 1
+[3797] don't support RAT all in one
+[3797] bypass MD RAT mode all in one!!
+[3798] [LK_ENV]get_env opt_lte_support from area 1
+[3798] don't support RAT all in one
+[3799] bypass MD RAT mode all in one!!
+[3799] [LK_ENV]get_env opt_c2k_support from area 1
+[3800] don't support RAT all in one
+[3800] bypass MD RAT mode all in one!!
+[3800] using default option setting
+[3801] default rat:C_LF_LT_W_T_G[0x3f][0x0]
+[3801] -- MD1 --
+[3802] mblock[0].start: 0x40000000, sz: 0x200000, limit: 0xc0000000, max_addr: 0x0, target: -1, reserved_addr: 0x36000000,reserved_size: 0xa000000
+[3803] mblock_reserve dbg[0]: 1, 0, 1, 1
+[3804] mblock[1].start: 0x43400000, sz: 0xc00000, limit: 0xc0000000, max_addr: 0x0, target: -1, reserved_addr: 0x3a000000,reserved_size: 0xa000000
+[3805] mblock_reserve dbg[1]: 1, 0, 1, 1
+[3806] mblock[2].start: 0x44080000, sz: 0xf80000, limit: 0xc0000000, max_addr: 0x0, target: -1, reserved_addr: 0x3a000000,reserved_size: 0xa000000
+[3807] mblock_reserve dbg[2]: 1, 0, 1, 1
+[3808] mblock[3].start: 0x450d5000, sz: 0x38edb000, limit: 0xc0000000, max_addr: 0x0, target: -1, reserved_addr: 0x72000000,reserved_size: 0xa000000
+[3809] mblock_reserve dbg[3]: 1, 1, 1, 1
+[3810] mblock[4].start: 0x80000000, sz: 0x8000000, limit: 0xc0000000, max_addr: 0x7dfb0000, target: 3, reserved_addr: 0x7e000000,reserved_size: 0xa000000
+[3811] mblock_reserve dbg[4]: 1, 0, 1, 1
+[3812] mblock[5].start: 0x90000000, sz: 0x2fdf0000, limit: 0xc0000000, max_addr: 0x7dfb0000, target: 3, reserved_addr: 0xb4000000,reserved_size: 0xa000000
+[3814] mblock_reserve dbg[5]: 1, 1, 1, 1
+[3814] mblock[6].start: 0xbfff0000, sz: 0x40010000, limit: 0xc0000000, max_addr: 0xbfdf0000, target: 5, reserved_addr: 0xb6000000,reserved_size: 0xa000000
+[3816] mblock_reserve dbg[6]: 1, 0, 1, 1
+[3816] mblock[7].start: 0x100000000, sz: 0x40000000, limit: 0xc0000000, max_addr: 0xbfdf0000, target: 5, reserved_addr: 0xb6000000,reserved_size: 0xa000000
+[3818] mblock_reserve dbg[7]: 1, 0, 1, 1
+[3818] mblock[5]: 90000000, 24000000 from mblock
+mblock[6]: be000000, 1df0000 from mblock
+[3819] mblock_reserve: b4000000 - be000000 from mblock 5
+[3820] mblock_reserve [0].start: 0x40000000, sz: 0x200000
+[3821] mblock_reserve [1].start: 0x43400000, sz: 0xc00000
+[3821] mblock_reserve [2].start: 0x44080000, sz: 0xf80000
+[3822] mblock_reserve [3].start: 0x450d5000, sz: 0x38edb000
+[3823] mblock_reserve [4].start: 0x80000000, sz: 0x8000000
+[3823] mblock_reserve [5].start: 0x90000000, sz: 0x24000000
+[3824] mblock_reserve [6].start: 0xbe000000, sz: 0x1df0000
+[3825] mblock_reserve [7].start: 0xbfff0000, sz: 0x40010000
+[3825] mblock_reserve [8].start: 0x100000000, sz: 0x40000000
+[3826] mblock_reserve-R[0].start: 0x7ff80000, sz: 0x80000 map:1 name:log-store
+[3827] mblock_reserve-R[1].start: 0x7ff40000, sz: 0x40000 map:0 name:atf-log-reserved
+[3828] mblock_reserve-R[2].start: 0x44000000, sz: 0x80000 map:0 name:dtb_kernel_addr_mb
+[3829] mblock_reserve-R[3].start: 0x40200000, sz: 0x3200000 map:0 name:kernel_addr_mb
+[3830] mblock_reserve-R[4].start: 0x45000000, sz: 0xd5000 map:0 name:ramdisk_addr_mb
+[3831] mblock_reserve-R[5].start: 0x7dfb0000, sz: 0x1f90000 map:0 name:framebuffer
+[3832] mblock_reserve-R[6].start: 0xbfdf0000, sz: 0x200000 map:0 name:SCP-reserved
+[3833] mblock_reserve-R[7].start: 0x88000000, sz: 0x8000000 map:0 name:ccci
+[3833] mblock_reserve-R[8].start: 0xb4000000, sz: 0xa000000 map:1 name:ccci
+[3834] request size: 0x0a000000, get start address: 0xb4000000
+[3835] [PART_LK][get_part] md1img
+[3839] ptr hdr verify:partition[md1img], image_name[md1rom]
+[3839] policy_entry_idx = 12 
+[SBC] NS-CHIP
+[3840] [SEC_POLICY] sboot_state = 0x0
+[3840] [SEC_POLICY] lock_state(default) = 0x4
+[3841] img_auth_required = 0 
+[sec] set LTE MD pubk_hash...
+[sec] set LTE MD pubk_hash...done
+[sec] set C2K MD pubk_hash...
+[sec] set C2K MD pubk_hash...done
+[3843] [PART_LK][get_part] md1img
+[4060] image verify:partition[md1img], image_name[md1rom], addr[0xb4000000], size[0x1161380]
+[4061] ddr_enable_4gb() status=1
+[4062] ddr_enable_4GB sta:1
+[4062] ---> Map 0x00000000 to 0xb4000000 for MD1(4G)
+[4063] BANK0_MAP0 value:0xBBB9B7B5
+[4063] BANK0_MAP1 value:0xC3C1BFBD
+[4063] [PART_LK][get_part] md1img
+[4065] [PART_LK][get_part] md1img
+[4068] invalid magic(0):(58881688)ref
+[4068] [PART_LK][get_part] md1dsp
+[4070] ptr hdr verify:partition[md1dsp], image_name[md1dsp]
+[4071] policy_entry_idx = 13 
+[SBC] NS-CHIP
+[4071] [SEC_POLICY] sboot_state = 0x0
+[4072] [SEC_POLICY] lock_state(default) = 0x4
+[4072] img_auth_required = 0 
+[4072] [PART_LK][get_part] md1dsp
+[4088] image verify:partition[md1dsp], image_name[md1dsp], addr[0xb5400000], size[0xf83b0]
+[4089] [PART_LK][get_part] md1img
+[4091] [PART_LK][get_part] md1img
+[4093] invalid magic(0):(58881688)ref
+[4094] [PART_LK][get_part] md1arm7
+[4096] ptr hdr verify:partition[md1arm7], image_name[md1arm7]
+[4096] policy_entry_idx = 14 
+[SBC] NS-CHIP
+[4097] [SEC_POLICY] sboot_state = 0x0
+[4097] [SEC_POLICY] lock_state(default) = 0x4
+[4098] img_auth_required = 0 
+[4098] [PART_LK][get_part] md1arm7
+[4100] image verify:partition[md1arm7], image_name[md1arm7], addr[0xb8530000], size[0x10]
+[4115] md memory require:0x8000000, reserved:0xa000000
+[4116]   0x2000000B retrieved by AP
+[4116] -- MD3 --
+[4117] mblock[0].start: 0x40000000, sz: 0x200000, limit: 0xc0000000, max_addr: 0x0, target: -1, reserved_addr: 0x3e000000,reserved_size: 0xc00000
+[4118] mblock_reserve dbg[0]: 1, 0, 1, 1
+[4119] mblock[1].start: 0x43400000, sz: 0xc00000, limit: 0xc0000000, max_addr: 0x0, target: -1, reserved_addr: 0x42000000,reserved_size: 0xc00000
+[4120] mblock_reserve dbg[1]: 1, 0, 1, 1
+[4121] mblock[2].start: 0x44080000, sz: 0xf80000, limit: 0xc0000000, max_addr: 0x0, target: -1, reserved_addr: 0x44000000,reserved_size: 0xc00000
+[4122] mblock_reserve dbg[2]: 1, 0, 1, 1
+[4123] mblock[3].start: 0x450d5000, sz: 0x38edb000, limit: 0xc0000000, max_addr: 0x0, target: -1, reserved_addr: 0x7c000000,reserved_size: 0xc00000
+[4124] mblock_reserve dbg[3]: 1, 1, 1, 1
+[4125] mblock[4].start: 0x80000000, sz: 0x8000000, limit: 0xc0000000, max_addr: 0x7dfb0000, target: 3, reserved_addr: 0x86000000,reserved_size: 0xc00000
+[4126] mblock_reserve dbg[4]: 1, 1, 1, 1
+[4127] mblock[5].start: 0x90000000, sz: 0x24000000, limit: 0xc0000000, max_addr: 0x88000000, target: 4, reserved_addr: 0xb2000000,reserved_size: 0xc00000
+[4129] mblock_reserve dbg[5]: 1, 1, 1, 1
+[4129] mblock[6].start: 0xbe000000, sz: 0x1df0000, limit: 0xc0000000, max_addr: 0xb4000000, target: 5, reserved_addr: 0xbe000000,reserved_size: 0xc00000
+[4131] mblock_reserve dbg[6]: 1, 1, 1, 1
+[4131] mblock[7].start: 0xbfff0000, sz: 0x40010000, limit: 0xc0000000, max_addr: 0xbfdf0000, target: 6, reserved_addr: 0xbe000000,reserved_size: 0xc00000
+[4133] mblock_reserve dbg[7]: 1, 0, 1, 1
+[4133] mblock[8].start: 0x100000000, sz: 0x40000000, limit: 0xc0000000, max_addr: 0xbfdf0000, target: 6, reserved_addr: 0xbe000000,reserved_size: 0xc00000
+[4135] mblock_reserve dbg[8]: 1, 0, 1, 1
+[4136] mblock_reserve: be000000 - bec00000 from mblock 6
+[4136] mblock_reserve [0].start: 0x40000000, sz: 0x200000
+[4137] mblock_reserve [1].start: 0x43400000, sz: 0xc00000
+[4137] mblock_reserve [2].start: 0x44080000, sz: 0xf80000
+[4138] mblock_reserve [3].start: 0x450d5000, sz: 0x38edb000
+[4139] mblock_reserve [4].start: 0x80000000, sz: 0x8000000
+[4139] mblock_reserve [5].start: 0x90000000, sz: 0x24000000
+[4140] mblock_reserve [6].start: 0xbec00000, sz: 0x11f0000
+[4141] mblock_reserve [7].start: 0xbfff0000, sz: 0x40010000
+[4141] mblock_reserve [8].start: 0x100000000, sz: 0x40000000
+[4142] mblock_reserve-R[0].start: 0x7ff80000, sz: 0x80000 map:1 name:log-store
+[4143] mblock_reserve-R[1].start: 0x7ff40000, sz: 0x40000 map:0 name:atf-log-reserved
+[4144] mblock_reserve-R[2].start: 0x44000000, sz: 0x80000 map:0 name:dtb_kernel_addr_mb
+[4145] mblock_reserve-R[3].start: 0x40200000, sz: 0x3200000 map:0 name:kernel_addr_mb
+[4146] mblock_reserve-R[4].start: 0x45000000, sz: 0xd5000 map:0 name:ramdisk_addr_mb
+[4147] mblock_reserve-R[5].start: 0x7dfb0000, sz: 0x1f90000 map:0 name:framebuffer
+[4148] mblock_reserve-R[6].start: 0xbfdf0000, sz: 0x200000 map:0 name:SCP-reserved
+[4149] mblock_reserve-R[7].start: 0x88000000, sz: 0x8000000 map:0 name:ccci
+[4149] mblock_reserve-R[8].start: 0xb4000000, sz: 0xa000000 map:1 name:ccci
+[4150] mblock_reserve-R[9].start: 0xbe000000, sz: 0xc00000 map:1 name:ccci
+[4151] request size: 0x00c00000, get start address: 0xbe000000
+[4152] [PART_LK][get_part] md3img
+[4156] ptr hdr verify:partition[md3img], image_name[md3rom]
+[4156] policy_entry_idx = 15 
+[SBC] NS-CHIP
+[4157] [SEC_POLICY] sboot_state = 0x0
+[4157] [SEC_POLICY] lock_state(default) = 0x4
+[4158] img_auth_required = 0 
+[4158] [PART_LK][get_part] md3img
+[4212] image verify:partition[md3img], image_name[md3rom], addr[0xbe000000], size[0x40f730]
+[4213] ddr_enable_4gb() status=1
+[4213] ddr_enable_4GB sta:1
+[4213] ---> Map 0x00000000 to 0xbe000000 for MD3(4G)
+[4214] BANK0_MAP0 value:0xC5C3C1BF
+[4214] BANK0_MAP1 value:0xCDCBC9C7
+[4216] [LK_ENV]get_env apmd1_smem from area 0
+[4216] [LK_ENV]get_env md1md3_smem from area 0
+[4217] [LK_ENV]get_env apmd3_smem from area 0
+[4217] env[apmd1_smem]0.
+[4218] env[md1md3_smem]0.
+[4218] env[apmd3_smem]0.
+[4218] smem_info.base_addr: 88000000
+[4219] smem_info.ap_md1_smem_offset: 0
+[4219] smem_info.ap_md1_smem_size: 200000
+[4220] smem_info.ap_md3_smem_offset: 400000
+[4220] smem_info.ap_md3_smem_size: 200000
+[4221] smem_info.md1_md3_smem_offset: 200000
+[4221] smem_info.md1_md3_smem_size: 200000
+[4222] smem_info.total_smem_size: 600000
+[4222] ap md1 share mem MPU need configure
+[4223] md1 md3 share mem MPU need configure
+[4223] ap md3 share mem MPU need configure
+[4224] LK set emi mpu region protection start:b4000000 end=b560ffff region=11 access_permission=496db64 
+[4225] Set MPU:S:0xb4000000 E:0xb560ffff A:<11>[0~7]4-4-5-5-5-5-5-4(U)
+[4225] LK set emi mpu region protection start:b5610000 end=b745ffff region=12 access_permission=496db44 
+[4227] Set MPU:S:0xb5610000 E:0xb745ffff A:<12>[0~7]4-0-5-5-5-5-5-4(U)
+[4227] LK set emi mpu region protection start:b7460000 end=b882ffff region=13 access_permission=16db44 
+[4229] Set MPU:S:0xb7460000 E:0xb882ffff A:<13>[0~7]4-0-5-5-5-5-5-0(U)
+[4229] LK set emi mpu region protection start:b8830000 end=b9ffffff region=10 access_permission=416db44 
+[4230] Set MPU:S:0xb8830000 E:0xb9ffffff A:<10>[0~7]4-0-5-5-5-5-5-0(U)
+[4231] LK set emi mpu region protection start:ba000000 end=bbffffff region=14 access_permission=496db44 
+[4232] Set MPU:S:0xba000000 E:0xbbffffff A:<14>[0~7]4-0-5-5-5-5-5-4(U)
+[4233] LK set emi mpu region protection start:be000000 end=be40ffff region=16 access_permission=4b45b6c 
+[4234] Set MPU:S:0xbe000000 E:0xbe40ffff A:<16>[0~7]4-5-5-5-5-0-5-5(U)
+[4235] LK set emi mpu region protection start:be410000 end=bebfffff region=17 access_permission=4b45b6c 
+[4236] Set MPU:S:0xbe410000 E:0xbebfffff A:<17>[0~7]4-5-5-5-5-0-5-5(U)
+[4237] LK set emi mpu region protection start:88000000 end=881fffff region=7 access_permission=b6db40 
+[4238] Set MPU:S:0x88000000 E:0x881fffff A:<7>[0~7]0-0-5-5-5-5-5-5(U)
+[4239] LK set emi mpu region protection start:88200000 end=883fffff region=9 access_permission=b45b40 
+[4240] Set MPU:S:0x88200000 E:0x883fffff A:<9>[0~7]0-0-5-5-5-0-5-5(U)
+[4241] LK set emi mpu region protection start:88400000 end=885fffff region=8 access_permission=b45b68 
+[4242] Set MPU:S:0x88400000 E:0x885fffff A:<8>[0~7]0-5-5-5-5-0-5-5(U)
+[4243] ddr_enable_4gb() status=1
+[4243] ddr_enable_4GB sta:1
+[4244] ---> Map 0x40000000 to 0x88000000 for MD1(4G)
+[4244] BANK4_MAP0 value:0x8F8D8B89
+[4244] BANK4_MAP1 value:0x97959391
+[4245] before hw remap lock: MD1[0], MD3[0]
+[4245] before hw remap lock: MD1[1], MD3[0]
+[4246] ddr_enable_4gb() status=1
+[4246] ddr_enable_4GB sta:1
+[4247] ---> Map 0x40000000 to 0x88200000 for MD3(4G)
+[4247] BANK4_MAP0 value:0x8F8D8B89
+[4248] BANK4_MAP1 value:0x97959391
+[4248] before hw remap lock: MD1[1], MD3[0]
+[4248] before hw remap lock: MD1[1], MD3[1]
+[4249] re-size share memory form 8000000 to 600000
+[4250] mblock_resize  start: 7ff80000, size: 80000 addr = 88000000 oldsize = 8000000
+[4250] mblock_resize  start: 7ff40000, size: 40000 addr = 88000000 oldsize = 8000000
+[4251] mblock_resize  start: 44000000, size: 80000 addr = 88000000 oldsize = 8000000
+[4252] mblock_resize  start: 40200000, size: 3200000 addr = 88000000 oldsize = 8000000
+[4253] mblock_resize  start: 45000000, size: d5000 addr = 88000000 oldsize = 8000000
+[4254] mblock_resize  start: 7dfb0000, size: 1f90000 addr = 88000000 oldsize = 8000000
+[4255] mblock_resize  start: bfdf0000, size: 200000 addr = 88000000 oldsize = 8000000
+[4256] mblock_resize  start: 88000000, size: 8000000 addr = 88000000 oldsize = 8000000
+[4257] mblock_resize  start: b4000000, size: a000000 addr = 88000000 oldsize = 8000000
+[4258] mblock_resize  start: be000000, size: c00000 addr = 88000000 oldsize = 8000000
+[4259] mblock_resize putback mblock 88600000 size: 7a00000
+[4260] lk info.lk_info_base_addr: 0x88000000
+[4260] lk info.lk_info_size:      0xa20
+[4261] lk info.lk_info_tag_num:   0x16
+[4261] [PROFILE] ------- load_modem_image init cost 501 ms ----
+[4262] [ccci-off] later power down not needed or not ready!
+[4262] [PROFILE] ::: lvl(1) load modem image takes 502 ms
+[4263] j:0, mblock[0].rank: 0, size: 0x200000
+[4264] j:0, mblock[1].rank: 0, size: 0xc00000
+[4264] j:0, mblock[2].rank: 0, size: 0xf80000
+[4265] j:0, mblock[3].rank: 0, size: 0x38edb000
+[4266] j:1, mblock[0].rank: 0, size: 0x200000
+[4266] j:1, mblock[1].rank: 0, size: 0xc00000
+[4267] j:1, mblock[2].rank: 0, size: 0xf80000
+[4267] j:1, mblock[3].rank: 0, size: 0x38edb000
+[4268] j:1, mblock[4].rank: 1, size: 0x8000000
+[4269] PASS memory DTS node
+[4269] platform_fdt_scp()
+[4270] status=okay
+[4273] target_atag_imix_r:266
+[4273] fg_swocv_v buf [0], [0x4608d420:0x4608d421:1]
+[4274] fg_swocv_i buf [0], [0x4608d420:0x4608d421:1]
+[4275] shutdown_time buf [0], [0x4608d420:0x4608d421:1]
+[4276] boot_voltage buf [0], [0x4608d420:0x4608d421:1]
+[4276] boot_voltage buf [0], [0x4608d420:0x4608d421:1]
+[4277] Not Support VCORE DVFS
+[4278] DDP/RDMA:RDMA0 polling interrupt ret=9999
+[4280] DDP/RDMA:RDMA0 polling interrupt ret=9979
+[4297] DDP/RDMA:RDMA0 polling interrupt ret=9836
+[4314] DDP/RDMA:RDMA0 polling interrupt ret=9837
+[4314] mt_disp_get_lcd_time, fps=5922
+[4315] videolfb - fb_base    = 0x7dfb0000
+[4315] videolfb - islcmfound = 1
+[4316] videolfb - fps        = 5922
+[4316] videolfb - vram       = 33095680
+[4317] videolfb - lcmname    = aeon_ssd2092_fhd_dsi_solomon
+[4317] [ccci] modem mem info not support
+[4319] [ccci] create modem arguments info DT OK
+[4319] Create PTP DT OK
+start dump lk masp atag 
+dump sw sbc:22, sw sdl:22 , hw sbc: 0
+dump lock_state, 1
+dump rid, 75e37cd9, 6b973b86, 11fb5e07, 9d74c5df
+[4321] create masp atag OK
+[4321] tee_reserved_mem not supported
+[4322] [LK] non_secure_sram (0x12a000, 0x6000)
+[4323] [PROFILE] ::: lvl(0) 1st logo time 0 ms
+[4323] [PROFILE] ::: lvl(0) boot_time takes 4323 ms
+[4324] [LK_ENV]get_env usb2jtag from area 0
+[4324] [USB2JTAG] current setting is 0.
+[4325] [LK_ENV]get_env hibboot from area 0
+[4325] [LK_ENV]get_env resume from area 0
+[4330] mblock_create mblock start 44000000 size: 80000
+[4330] mblock_candidate_right->size = f80000 				mblock_candidate_left->size = c00000 
+[4331] mblock_create mblock start 40200000 size: 3200000
+[4332] mblock_candidate_right->size = c00000 				mblock_candidate_left->size = 200000 
+[4333] mblock_create mblock start 45000000 size: d5000
+[4334] mblock_candidate_right->size = 38edb000 				mblock_candidate_left->size = 1000000 
+[4335] mblock-reserved-memory is appended (0x7ff80000, 0x80000)
+[4336] mblock-reserved-memory is appended (0x7ff40000, 0x40000)
+[4337] mblock-reserved-memory is appended (0x7dfb0000, 0x1f90000)
+[4338] mblock-reserved-memory is appended (0xbfdf0000, 0x200000)
+[4339] mblock-reserved-memory is appended (0x88000000, 0x600000)
+[4340] mblock-reserved-memory is appended (0xb4000000, 0xa000000)
+[4341] mblock-reserved-memory is appended (0xbe000000, 0xc00000)
+[4341] booting linux @ 0x40200000, ramdisk @ 0x45000000 (872380)
+[4342] [LEDS]LK: leds_deinit: LEDS off 
+[4343] [LEDS]LK:Cannot find LED node from dts
+[4344] [LEDS]LK:Cannot find LED node from dts
+[4345] [LEDS]LK:Cannot find LED node from dts
+[4346] [LEDS]LK:Cannot find LED node from dts
+[4347] [LEDS]LK:Cannot find LED node from dts
+[4348] [LEDS]LK:Cannot find LED node from dts
+[4349] [LEDS]LK:Cannot find LED node from dts
+[4349] Cannot not get the LED info from device tree. 
+[4350] [LEDS]LK: red level is 0 
+[4351] [LEDS]LK:Cannot find LED node from dts
+[4352] [LEDS]LK:Cannot find LED node from dts
+[4353] [LEDS]LK:Cannot find LED node from dts
+[4354] [LEDS]LK:Cannot find LED node from dts
+[4355] [LEDS]LK:Cannot find LED node from dts
+[4356] [LEDS]LK:Cannot find LED node from dts
+[4356] [LEDS]LK:Cannot find LED node from dts
+[4357] Cannot not get the LED info from device tree. 
+[4358] [LEDS]LK: green level is 0 
+[4358] [LEDS]LK:Cannot find LED node from dts
+[4359] [LEDS]LK:Cannot find LED node from dts
+[4360] [LEDS]LK:Cannot find LED node from dts
+[4361] [LEDS]LK:Cannot find LED node from dts
+[4362] [LEDS]LK:Cannot find LED node from dts
+[4363] [LEDS]LK:Cannot find LED node from dts
+[4364] [LEDS]LK:Cannot find LED node from dts
+[4365] Cannot not get the LED info from device tree. 
+[4365] [LEDS]LK: blue level is 0 
+[4366] [DEVAPC] sec_post_init
+[4366] [DEVAPC] platform_sec_post_init - SMC call to ATF from LK
+[4369] DRAM Rank :2
+[4370] DRAM Rank[0] Start = 0x40000000, Size = 0x3ff40000
+[4370] DRAM Rank[1] Start = 0x80000000, Size = 0x80000000
+[4371] mblock_magic:0x99999999 mblock_version:0x2
+[4372] mblock[0].start: 0x40000000, size: 0x200000
+[4373] mblock[1].start: 0x40200000, size: 0x3e00000
+[4373] mblock[2].start: 0x44000000, size: 0x1000000
+[4374] mblock[3].start: 0x45000000, size: 0x38fb0000
+[4375] mblock[4].start: 0x80000000, size: 0x8000000
+[4376] mblock[5].start: 0x88600000, size: 0x7a00000
+[4376] mblock[6].start: 0x90000000, size: 0x24000000
+[4377] mblock[7].start: 0xbec00000, size: 0x11f0000
+[4378] mblock[8].start: 0xbfff0000, size: 0x40010000
+[4379] mblock[9].start: 0x100000000, size: 0x40000000
+[4379] mblock[0].start: 0x7ff80000, size: 0x80000 map:1 name:log-store
+[4380] mblock[1].start: 0x7ff40000, size: 0x40000 map:0 name:atf-log-reserved
+[4381] mblock[2].start: 0x7dfb0000, size: 0x1f90000 map:0 name:framebuffer
+[4382] mblock[3].start: 0xbfdf0000, size: 0x200000 map:0 name:SCP-reserved
+[4383] mblock[4].start: 0x88000000, size: 0x600000 map:0 name:ccci
+[4384] mblock[5].start: 0xb4000000, size: 0xa000000 map:1 name:ccci
+[4385] mblock[6].start: 0xbe000000, size: 0xc00000 map:1 name:ccci
+[4386] cmdline: console=tty0 console=ttyMT0,921600n1 root=/dev/ram vmalloc=496M slub_max_order=0 slub_debug=OFZPU androidboot.hardware=mt6797 maxcpus=5 androidboot.verifiedbootstate=green bootopt=64S3,32N2,64N2 log_buf_len=4M androidboot.veritymode=enforcing printk.disable_uart=1 bootprof.pl_t=1401 bootprof.lk_t=4323 boot_reason=4 androidboot.serialno=0123456789ABCDEF androidboot.bootreason=wdt_by_pass_pwk gpt=1 usb2jtag_mode=0 mrdump_ddrsv=yes mrdump_rsvmem=0x46000000,0x400000,0x44800000,0xa0e80,0x44000000,0x80000,0x448a0e40,0x1671
+[4392] lk boot time = 4323 ms
+[4393] lk boot mode = 0
+[4393] lk boot reason = wdt_by_pass_pwk
+[4394] lk finished --> jump to linux kernel 64Bit
+
+[4395] 
+[LK]jump to K64 0x40200000
+[ATF](0)[4.448265]save kernel info
+[ATF](0)[4.448646]K64
+[ATF](0)[4.448893]pc=0x40200000, r0=0x44000000, r1=0x0
+INFO:    BL3-1: Preparing for EL3 exit to normal world, Kernel
+INFO:    BL3-1: Next image address = 0x40200000
+INFO:    BL3-1: Next image spsr = 0x3c9
+[ATF](0)[4.451160]el3_exit
+[    0.000000] Booting Linux on physical CPU 0x0000000000 [0x410fd034]
+[    0.000000] Linux version 6.6.0-dirty (root@gemini-build) (gcc (Debian 14.2.0-19) 14.2.0, GNU ld (GNU Binutils for Debian) 2.44) #5 SMP PREEMPT Mon Jul  6 06:22:43 UTC 2026
+[    0.000000] KASLR disabled on command line
+[    0.000000] Machine model: MT6797X
+[    0.000000] efi: UEFI not found.
+[    0.000000] OF: reserved mem: 0x0000000087fff000..0x0000000087ffffff (4 KiB) map non-reusable reserve-memory-dram_r1_dummy_read
+[    0.000000] OF: reserved mem: 0x000000007dfaf000..0x000000007dfaffff (4 KiB) map non-reusable reserve-memory-dram_r0_dummy_read
+[    0.000000] OF: reserved mem: 0x0000000043000000..0x0000000043ffffff (16384 KiB) nomap non-reusable scp-share
+[    0.000000] OF: reserved mem: 0x0000000040000000..0x0000000040000fff (4 KiB) nomap non-reusable spm-dummy@40000000
+[    0.000000] OF: reserved mem: 0x0000000044400000..0x000000004440ffff (64 KiB) nomap non-reusable ramconsole@44400000
+[    0.000000] OF: reserved mem: 0x0000000044410000..0x00000000444effff (896 KiB) map non-reusable ramoops@44410000
+[    0.000000] OF: reserved mem: 0x00000000444f0000..0x00000000444fffff (64 KiB) nomap non-reusable minirdump@444f0000
+[    0.000000] OF: reserved mem: 0x0000000044600000..0x000000004460ffff (64 KiB) nomap non-reusable atf-reserved-memory@44600000
+[    0.000000] OF: reserved mem: 0x0000000044610000..0x000000004463ffff (192 KiB) nomap non-reusable atf-ramdump-memory@44610000
+[    0.000000] OF: reserved mem: 0x0000000044640000..0x000000004466ffff (192 KiB) nomap non-reusable cache-dump-memory@44640000
+[    0.000000] OF: reserved mem: 0x0000000044800000..0x00000000448fffff (1024 KiB) nomap non-reusable preloader@44800000
+[    0.000000] OF: reserved mem: 0x0000000046000000..0x00000000463fffff (4096 KiB) nomap non-reusable lk@46000000
+[    0.000000] OF: reserved mem: 0x000000007dfb0000..0x000000007ff3ffff (32320 KiB) nomap non-reusable mblock-3-framebuffer
+[    0.000000] OF: reserved mem: 0x000000007ff40000..0x000000007ff7ffff (256 KiB) nomap non-reusable mblock-2-atf-log-reserved
+[    0.000000] OF: reserved mem: 0x000000007ff80000..0x000000007fffffff (512 KiB) map non-reusable mblock-1-log-store
+[    0.000000] OF: reserved mem: 0x0000000088000000..0x00000000885fffff (6144 KiB) nomap non-reusable mblock-5-ccci
+[    0.000000] OF: reserved mem: 0x00000000b4000000..0x00000000bdffffff (163840 KiB) map non-reusable mblock-6-ccci
+[    0.000000] OF: reserved mem: 0x00000000be000000..0x00000000bebfffff (12288 KiB) map non-reusable mblock-7-ccci
+[    0.000000] OF: reserved mem: 0x00000000bfdf0000..0x00000000bffeffff (2048 KiB) nomap non-reusable mblock-4-SCP-reserved
+[    0.000000] earlycon: mtk8250 at MMIO32 0x0000000011002000 (options '921600n8')
+[    0.000000] printk: bootconsole [mtk8250] enabled
+[    0.000000] NUMA: No NUMA configuration found
+[    0.000000] NUMA: Faking a node at [mem 0x0000000040000000-0x000000013fffffff]
+[    0.000000] NUMA: NODE_DATA [mem 0x13f7fb9c0-0x13f7fdfff]
+[    0.000000] Zone ranges:
+[    0.000000]   DMA      [mem 0x0000000040000000-0x00000000ffffffff]
+[    0.000000]   DMA32    empty
+[    0.000000]   Normal   [mem 0x0000000100000000-0x000000013fffffff]
+[    0.000000] Movable zone start for each node
+[    0.000000] Early memory node ranges
+[    0.000000]   node   0: [mem 0x0000000040000000-0x0000000040000fff]
+[    0.000000]   node   0: [mem 0x0000000040001000-0x0000000042ffffff]
+[    0.000000]   node   0: [mem 0x0000000043000000-0x0000000043ffffff]
+[    0.000000]   node   0: [mem 0x0000000044000000-0x00000000443fffff]
+[    0.000000]   node   0: [mem 0x0000000044400000-0x000000004440ffff]
+[    0.000000]   node   0: [mem 0x0000000044410000-0x00000000444effff]
+[    0.000000]   node   0: [mem 0x00000000444f0000-0x00000000444fffff]
+[    0.000000]   node   0: [mem 0x0000000044500000-0x00000000445fffff]
+[    0.000000]   node   0: [mem 0x0000000044600000-0x000000004466ffff]
+[    0.000000]   node   0: [mem 0x0000000044670000-0x00000000447fffff]
+[    0.000000]   node   0: [mem 0x0000000044800000-0x00000000448fffff]
+[    0.000000]   node   0: [mem 0x0000000044900000-0x0000000045ffffff]
+[    0.000000]   node   0: [mem 0x0000000046000000-0x00000000463fffff]
+[    0.000000]   node   0: [mem 0x0000000046400000-0x000000007dfaffff]
+[    0.000000]   node   0: [mem 0x000000007dfb0000-0x000000007ff7ffff]
+[    0.000000]   node   0: [mem 0x000000007ff80000-0x0000000087ffffff]
+[    0.000000]   node   0: [mem 0x0000000088000000-0x00000000885fffff]
+[    0.000000]   node   0: [mem 0x0000000088600000-0x00000000bfdeffff]
+[    0.000000]   node   0: [mem 0x00000000bfdf0000-0x00000000bffeffff]
+[    0.000000]   node   0: [mem 0x00000000bfff0000-0x000000013fffffff]
+[    0.000000] Initmem setup node 0 [mem 0x0000000040000000-0x000000013fffffff]
+[    0.000000] cma: Reserved 32 MiB at 0x00000000fe000000 on node -1
+[    0.000000] psci: probing for conduit method from DT.
+[    0.000000] psci: PSCIv0.2 detected in firmware.
+[    0.000000] psci: Using standard PSCI v0.2 function IDs
+[    0.000000] psci: Trusted OS migration not required
+[    0.000000] percpu: Embedded 22 pages/cpu s50728 r8192 d31192 u90112
+[    0.000000] Detected VIPT I-cache on CPU0
+[    0.000000] CPU features: detected: GIC system register CPU interface
+[    0.000000] CPU features: detected: ARM erratum 845719
+[    0.000000] alternatives: applying boot alternatives
+[    0.000000] Kernel command line: console=ttyS0,921600n1 earlycon maxcpus=1 nokaslr
+[    0.000000] Dentry cache hash table entries: 524288 (order: 10, 4194304 bytes, linear)
+[    0.000000] Inode-cache hash table entries: 262144 (order: 9, 2097152 bytes, linear)
+[    0.000000] Fallback order for Node 0: 0 
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 1032192
+[    0.000000] Policy zone: Normal
+[    0.000000] mem auto-init: stack:all(zero), heap alloc:off, heap free:off
+[    0.000000] software IO TLB: area num 16.
+[    0.000000] software IO TLB: mapped [mem 0x00000000fa000000-0x00000000fe000000] (64MB)
+[    0.000000] Memory: 3738160K/4194304K available (16704K kernel code, 4270K rwdata, 10572K rodata, 2624K init, 605K bss, 423376K reserved, 32768K cma-reserved)
+[    0.000000] SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=10, Nodes=1
+[    0.000000] rcu: Preemptible hierarchical RCU implementation.
+[    0.000000] rcu: 	RCU event tracing is enabled.
+[    0.000000] rcu: 	RCU restricting CPUs from NR_CPUS=256 to nr_cpu_ids=10.
+[    0.000000] 	Trampoline variant of Tasks RCU enabled.
+[    0.000000] 	Tracing variant of Tasks RCU enabled.
+[    0.000000] rcu: RCU calculated value of scheduler-enlistment delay is 25 jiffies.
+[    0.000000] rcu: Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=10
+[    0.000000] NR_IRQS: 64, nr_irqs: 64, preallocated irqs: 0
+[    0.000000] GICv3: GIC: Using split EOI/Deactivate mode
+[    0.000000] GICv3: 352 SPIs implemented
+[    0.000000] GICv3: 0 Extended SPIs implemented
+[    0.000000] Root IRQ handler: gic_handle_irq
+[    0.000000] GICv3: GICv3 features: 16 PPIs
+[    0.000000] GICv3: CPU0: found redistributor 0 region 0:0x0000000019200000
+[    0.000000] rcu: srcu_init: Setting srcu_struct sizes based on contention.
+[    0.000000] arch_timer: cp15 timer(s) running at 13.00MHz (phys).
+[    0.000000] clocksource: arch_sys_counter: mask: 0xffffffffffffff max_cycles: 0x2ff89eacb, max_idle_ns: 440795202429 ns
+[    0.000001] sched_clock: 56 bits at 13MHz, resolution 76ns, wraps every 4398046511101ns
+[    0.002075] Console: colour dummy device 80x25
+[    0.002766] Calibrating delay loop (skipped), value calculated using timer frequency.. 26.00 BogoMIPS (lpj=52000)
+[    0.004127] pid_max: default: 32768 minimum: 301
+[    0.004840] LSM: initializing lsm=capability,integrity
+[    0.005649] Mount-cache hash table entries: 8192 (order: 4, 65536 bytes, linear)
+[    0.006658] Mountpoint-cache hash table entries: 8192 (order: 4, 65536 bytes, linear)
+[    0.008886] cacheinfo: Unable to detect cache hierarchy for CPU 0
+[    0.010588] RCU Tasks: Setting shift to 4 and lim to 1 rcu_task_cb_adjust=1.
+[    0.011635] RCU Tasks Trace: Setting shift to 4 and lim to 1 rcu_task_cb_adjust=1.
+[    0.012859] rcu: Hierarchical SRCU implementation.
+[    0.013493] rcu: 	Max phase no-delay instances is 1000.
+[    0.015995] EFI services will not be available.
+[    0.017120] smp: Bringing up secondary CPUs ...
+[    0.017749] smp: Brought up 1 node, 1 CPU
+[    0.018283] SMP: Total of 1 processors activated.
+[    0.018908] CPU features: detected: 32-bit EL0 Support
+[    0.019585] CPU features: detected: 32-bit EL1 Support
+[    0.020321] CPU features: detected: CRC32 instructions
+[    0.021092] CPU: All CPU(s) started at EL2
+[    0.021657] alternatives: applying system-wide alternatives
+[    0.025618] devtmpfs: initialized
+[    0.032474] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645041785100000 ns
+[    0.033791] futex hash table entries: 4096 (order: 6, 262144 bytes, linear)
+[    0.036033] pinctrl core: initialized pinctrl subsystem
+[    0.038742] DMI not present or invalid.
+[    0.040131] NET: Registered PF_NETLINK/PF_ROUTE protocol family
+[    0.042190] DMA: preallocated 512 KiB GFP_KERNEL pool for atomic allocations
+[    0.043259] DMA: preallocated 512 KiB GFP_KERNEL|GFP_DMA pool for atomic allocations
+[    0.044485] DMA: preallocated 512 KiB GFP_KERNEL|GFP_DMA32 pool for atomic allocations
+[    0.045612] audit: initializing netlink subsys (disabled)
+[    0.046518] audit: type=2000 audit(0.044:1): state=initialized audit_enabled=0 res=1
+[    0.048882] thermal_sys: Registered thermal governor 'step_wise'
+[    0.048890] thermal_sys: Registered thermal governor 'power_allocator'
+[    0.049782] cpuidle: using governor menu
+[    0.051432] hw-breakpoint: found 6 breakpoint and 4 watchpoint registers.
+[    0.052367] ASID allocator initialised with 65536 entries
+[    0.055484] Serial: AMBA PL011 UART driver
+[    0.087659] Trying to register duplicate clock ID: 84
+[    0.089716] mt6797-pinctrl 10005000.pinctrl: Failed to add EINT, but pinctrl still can work
+[    0.101380] platform 1401c000.dsi: Fixed dependency cycle(s) with /dsi@1401c000/panel@0/port/endpoint
+[    0.108900] Modules: 24016 pages in range for non-PLT usage
+[    0.108916] Modules: 515536 pages in range for PLT usage
+[    0.110639] HugeTLB: registered 1.00 GiB page size, pre-allocated 0 pages
+[    0.112277] HugeTLB: 0 KiB vmemmap can be freed for a 1.00 GiB page
+[    0.113106] HugeTLB: registered 32.0 MiB page size, pre-allocated 0 pages
+[    0.114001] HugeTLB: 0 KiB vmemmap can be freed for a 32.0 MiB page
+[    0.114829] HugeTLB: registered 2.00 MiB page size, pre-allocated 0 pages
+[    0.115731] HugeTLB: 0 KiB vmemmap can be freed for a 2.00 MiB page
+[    0.116560] HugeTLB: registered 64.0 KiB page size, pre-allocated 0 pages
+[    0.117454] HugeTLB: 0 KiB vmemmap can be freed for a 64.0 KiB page
+[    0.120206] ACPI: Interpreter disabled.
+[    0.124786] iommu: Default domain type: Translated
+[    0.125433] iommu: DMA domain TLB invalidation policy: strict mode
+[    0.126599] SCSI subsystem initialized
+[    0.127533] usbcore: registered new interface driver usbfs
+[    0.128326] usbcore: registered new interface driver hub
+[    0.129071] usbcore: registered new device driver usb
+[    0.130728] pps_core: LinuxPPS API ver. 1 registered
+[    0.131385] pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+[    0.132616] PTP clock support registered
+[    0.133277] EDAC MC: Ver: 3.0.0
+[    0.134371] scmi_core: SCMI protocol bus registered
+[    0.135840] FPGA manager framework
+[    0.136391] Advanced Linux Sound Architecture Driver Initialized.
+[    0.138398] vgaarb: loaded
+[    0.139586] clocksource: Switched to clocksource arch_sys_counter
+[    0.140696] VFS: Disk quotas dquot_6.6.0
+[    0.141334] VFS: Dquot-cache hash table entries: 512 (order 0, 4096 bytes)
+[    0.142456] pnp: PnP ACPI: disabled
+[    0.150555] NET: Registered PF_INET protocol family
+[    0.151463] IP idents hash table entries: 65536 (order: 7, 524288 bytes, linear)
+[    0.156401] tcp_listen_portaddr_hash hash table entries: 2048 (order: 3, 32768 bytes, linear)
+[    0.157570] Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+[    0.158603] TCP established hash table entries: 32768 (order: 6, 262144 bytes, linear)
+[    0.159939] TCP bind hash table entries: 32768 (order: 8, 1048576 bytes, linear)
+[    0.161952] TCP: Hash tables configured (established 32768 bind 32768)
+[    0.162998] UDP hash table entries: 2048 (order: 4, 65536 bytes, linear)
+[    0.164058] UDP-Lite hash table entries: 2048 (order: 4, 65536 bytes, linear)
+[    0.165300] NET: Registered PF_UNIX/PF_LOCAL protocol family
+[    0.166625] RPC: Registered named UNIX socket transport module.
+[    0.167411] RPC: Registered udp transport module.
+[    0.168065] RPC: Registered tcp transport module.
+[    0.168687] RPC: Registered tcp-with-tls transport module.
+[    0.169411] RPC: Registered tcp NFSv4.1 backchannel transport module.
+[    0.170273] PCI: CLS 0 bytes, default 64
+[    0.171061] Unpacking initramfs...
+[    0.171846] kvm [1]: IPA Size Limit: 40 bits
+[    0.175234] kvm [1]: GICv3: no GICV resource entry
+[    0.179634] kvm [1]: disabling GICv2 emulation
+[    0.180252] kvm [1]: GIC system register CPU interface enabled
+[    0.181055] kvm [1]: vgic interrupt IRQ9
+[    0.181599] kvm [1]: Hyp mode initialized successfully
+[    0.189302] Initialise system trusted keyrings
+[    0.191663] workingset: timestamp_bits=42 max_order=20 bucket_order=0
+[    0.192907] squashfs: version 4.0 (2009/01/31) Phillip Lougher
+[    0.195766] NFS: Registering the id_resolver key type
+[    0.196476] Key type id_resolver registered
+[    0.197031] Key type id_legacy registered
+[    0.197584] nfs4filelayout_init: NFSv4 File Layout Driver Registering...
+[    0.198470] nfs4flexfilelayout_init: NFSv4 Flexfile Layout Driver Registering...
+[    0.203740] 9p: Installing v9fs 9p2000 file system support
+[    0.257190] Freeing initrd memory: 848K
+[    0.277567] Key type asymmetric registered
+[    0.278114] Asymmetric key parser 'x509' registered
+[    0.278870] Block layer SCSI generic (bsg) driver version 0.4 loaded (major 245)
+[    0.279861] io scheduler mq-deadline registered
+[    0.280463] io scheduler kyber registered
+[    0.281043] io scheduler bfq registered
+[    0.295909] EINJ: ACPI disabled.
+[    0.327849] Serial: 8250/16550 driver, 4 ports, IRQ sharing enabled
+[    0.332526] printk: console [ttyS0] disabled
+[    0.353646] 11002000.serial: ttyS0 at MMIO 0x11002000 (irq = 14, base_baud = 1625000) is a ST16650V2
+[    0.354912] printk: console [ttyS0] enabled
+[    0.354912] printk: console [ttyS0] enabled
+[    0.356022] printk: bootconsole [mtk8250] disabled
+[    0.356022] printk: bootconsole [mtk8250] disabled
+[    0.360942] SuperH (H)SCI(F) driver initialized
+[    0.362100] msm_serial: driver initialized
+[    0.363426] STM32 USART driver initialized
+[    0.374122] loop: module loaded
+[    0.376113] megasas: 07.725.01.00-rc1
+[    0.384960] tun: Universal TUN/TAP device driver, 1.6
+[    0.386798] thunder_xcv, ver 1.0
+[    0.387247] thunder_bgx, ver 1.0
+[    0.387770] nicpf, ver 1.0
+[    0.389555] hns3: Hisilicon Ethernet Network Driver for Hip08 Family - version
+[    0.390469] hns3: Copyright (c) 2017 Huawei Corporation.
+[    0.391202] hclge is initializing
+[    0.391740] e1000: Intel(R) PRO/1000 Network Driver
+[    0.392359] e1000: Copyright (c) 1999-2006 Intel Corporation.
+[    0.393116] e1000e: Intel(R) PRO/1000 Network Driver
+[    0.393744] e1000e: Copyright(c) 1999 - 2015 Intel Corporation.
+[    0.394524] igb: Intel(R) Gigabit Ethernet Network Driver
+[    0.395208] igb: Copyright (c) 2007-2014 Intel Corporation.
+[    0.395966] igbvf: Intel(R) Gigabit Virtual Function Network Driver
+[    0.396759] igbvf: Copyright (c) 2009 - 2012 Intel Corporation.
+[    0.397901] sky2: driver version 1.30
+[    0.399983] VFIO - User Level meta-driver version: 0.3
+[    0.402739] mtu3 11271000.usb: supply vusb33 not found, using dummy regulator
+[    0.404043] mtu3 11271000.usb: dr_mode: 2, drd: auto
+[    0.404680] mtu3 11271000.usb: u2p_dis_msk: 0, u3p_dis_msk: 0
+ 

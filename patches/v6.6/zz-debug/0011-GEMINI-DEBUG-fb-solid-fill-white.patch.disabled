@@ -1,0 +1,41 @@
+diff --git a/drivers/gpu/drm/mediatek/mtk_drm_gem.c b/drivers/gpu/drm/mediatek/mtk_drm_gem.c
+index 0e0a41b2f..024284626 100644
+--- a/drivers/gpu/drm/mediatek/mtk_drm_gem.c
++++ b/drivers/gpu/drm/mediatek/mtk_drm_gem.c
+@@ -123,10 +123,35 @@ int mtk_drm_gem_dumb_create(struct drm_file *file_priv, struct drm_device *dev,
+ 	args->pitch = DIV_ROUND_UP(args->width * args->bpp, 8);
+ 	args->size = args->pitch * args->height;
+ 
+-	mtk_gem = mtk_drm_gem_create(dev, args->size, false);
++	/*
++	 * GEMINI-DEBUG: force a kernel mapping and fill the buffer with a
++	 * known solid color (2026-07-11, banding-artifact hunt). DSI PHY
++	 * timing, DSI word counts, OVL layer config and the whole
++	 * COLOR/CCORR/AAL/GAMMA/OD/DITHER chain have all been register-
++	 * verified correct (builds #105-#108) with the thick periodic
++	 * horizontal banding still present -- next question is whether the
++	 * signal path itself is clean and the corruption is in *what* gets
++	 * written to the framebuffer (garbage/uninitialized memory, fbcon
++	 * draw bug) rather than in any hardware block tested so far. If the
++	 * panel shows solid white after this, the pipeline is exonerated
++	 * entirely. Temporary -- revert once confirmed either way.
++	 */
++	mtk_gem = mtk_drm_gem_create(dev, args->size, true);
+ 	if (IS_ERR(mtk_gem))
+ 		return PTR_ERR(mtk_gem);
+ 
++	if (mtk_gem->kvaddr) {
++		memset(mtk_gem->kvaddr, 0xff, args->size);
++		/*
++		 * GEMINI-DEBUG: confirm the fill actually landed and record
++		 * where (dma_addr) so gemini-ddp-dump.c's periodic OVL ADDR(0)
++		 * readout can be cross-checked against this value by hand.
++		 */
++		pr_info("GEMINI-DEBUG fb_fill kvaddr=%p dma_addr=%pad size=%zu first16=%*ph\n",
++			mtk_gem->kvaddr, &mtk_gem->dma_addr, args->size,
++			16, mtk_gem->kvaddr);
++	}
++
+ 	/*
+ 	 * allocate a id of idr table where the obj is registered
+ 	 * and handle has the id what user can see.

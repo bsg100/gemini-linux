@@ -1,0 +1,31 @@
+diff --git a/drivers/gpu/drm/panel/panel-solomon-ssd2092.c b/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
+--- a/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
++++ b/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
+@@ -611,13 +611,20 @@
+ static const struct drm_display_mode ssd2092_mode = {
+-	.clock		= 146667,
++	/*
++	 * GEMINI-DEBUG (2026-07-12): vendor KERNEL video-mode timings
++	 * (aeon_ssd2092_fhd_dsi_solomon.c: hfp26/hsa4/hbp20, vfp76/vsa1/
++	 * vbp43, PLL_CLOCK=502 -> 1004 Mbps -> pixclk 1004e6*4/24).
++	 * The previous values were reverse-engineered from LK's dump, but
++	 * LK drives the panel in COMMAND mode - its porches don't apply.
++	 */
++	.clock		= 167333,
+ 	.hdisplay	= 1080,
+-	.hsync_start	= 1080 + 42,
+-	.hsync_end	= 1080 + 42 + 13,
+-	.htotal		= 1080 + 42 + 13 + 53,
++	.hsync_start	= 1080 + 26,
++	.hsync_end	= 1080 + 26 + 4,
++	.htotal		= 1080 + 26 + 4 + 20,
+ 	.vdisplay	= 2160,
+-	.vsync_start	= 2160 + 10,
+-	.vsync_end	= 2160 + 10 + 3,
+-	.vtotal		= 2160 + 10 + 3 + 15,
++	.vsync_start	= 2160 + 76,
++	.vsync_end	= 2160 + 76 + 1,
++	.vtotal		= 2160 + 76 + 1 + 43,
+ 	.width_mm	= 68,
+ 	.height_mm	= 136,
+ };

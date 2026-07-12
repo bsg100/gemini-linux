@@ -1,0 +1,102 @@
+diff --git a/drivers/gpu/drm/panel/panel-solomon-ssd2092.c b/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
+index 8c1447b6b..5b78de1bf 100644
+--- a/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
++++ b/drivers/gpu/drm/panel/panel-solomon-ssd2092.c
+@@ -33,6 +33,7 @@
+ #include <linux/module.h>
+ #include <linux/of.h>
+ #include <linux/regulator/consumer.h>
++#include <linux/workqueue.h>
+ 
+ #include <video/mipi_display.h>
+ 
+@@ -52,6 +53,8 @@ struct ssd2092 {
+ 
+ 	bool prepared;
+ 	bool enabled;
++
++	struct delayed_work keepalive_work;
+ };
+ 
+ static inline struct ssd2092 *panel_to_ssd2092(struct drm_panel *panel)
+@@ -381,6 +384,46 @@ static int ssd2092_prepare(struct drm_panel *panel)
+ 	return ret;
+ }
+ 
++/*
++ * GEMINI-WORKAROUND: periodic keepalive (2026-07-10 fade hunt).
++ *
++ * A static image reliably fades to black after a few seconds; continuous
++ * framebuffer writes keep it lit indefinitely and even get brighter with
++ * the update rate (proven live over serial, boot.md captures 269-271,
++ * IMG_2627). DDP register dumps show the OVL/OD/DSI pipeline scanning out
++ * frames continuously throughout the fade with no observable
++ * register-level fault, and stock Android (whose compositor pushes
++ * frames continuously at 60 Hz) never exhibits this — so a static
++ * mainline console is landing in a code path Android's continuous
++ * present loop never takes.  Root cause not yet identified.
++ *
++ * Interim mitigation: periodically re-send the same sleep-out/display-on
++ * pair the vendor init table already ends with (proven to revive the
++ * picture when done manually via the gemini_panel_poke debugfs trigger).
++ * Interval is HZ/4 (250 ms): HZ (1 s) kept the panel lit but visibly
++ * dimmer than the ~4x/s test loop that inspired this fix (user report,
++ * 2026-07-10) — matching the update rate gets full brightness back. This
++ * is a workaround, not a fix — remove once the actual trigger is found.
++ * Candidates for the real cause: something in the DRM fbdev/fbcon idle
++ * or damage-tracking path that behaves differently for a static vs.
++ * changing image, or a content-adaptive brightness/idle feature inside
++ * the SSD2092 itself distinct from sleep mode (ESD-check is confirmed
++ * disabled in the vendor 3.18 driver, ruling that specific mechanism
++ * out).
++ */
++static void ssd2092_keepalive_work_fn(struct work_struct *work)
++{
++	struct ssd2092 *priv = container_of(to_delayed_work(work),
++					     struct ssd2092, keepalive_work);
++	struct mipi_dsi_device *dsi = priv->dsi;
++
++	mipi_dsi_dcs_write_buffer(dsi, (const u8[]){ 0x11 }, 1);
++	mipi_dsi_dcs_write_buffer(dsi, (const u8[]){ 0x29 }, 1);
++
++	if (priv->enabled)
++		schedule_delayed_work(&priv->keepalive_work, HZ / 4);
++}
++
+ static int ssd2092_enable(struct drm_panel *panel)
+ {
+ 	struct ssd2092 *priv = panel_to_ssd2092(panel);
+@@ -393,6 +436,7 @@ static int ssd2092_enable(struct drm_panel *panel)
+ 		backlight_enable(priv->backlight);
+ 
+ 	priv->enabled = true;
++	schedule_delayed_work(&priv->keepalive_work, HZ / 4);
+ 	return 0;
+ }
+ 
+@@ -404,6 +448,9 @@ static int ssd2092_disable(struct drm_panel *panel)
+ 	if (!priv->enabled)
+ 		return 0;
+ 
++	priv->enabled = false;
++	cancel_delayed_work_sync(&priv->keepalive_work);
++
+ 	if (priv->backlight)
+ 		backlight_disable(priv->backlight);
+ 
+@@ -413,7 +460,6 @@ static int ssd2092_disable(struct drm_panel *panel)
+ 	mipi_dsi_dcs_enter_sleep_mode(dsi);
+ 	msleep(120);
+ 
+-	priv->enabled = false;
+ 	return 0;
+ }
+ 
+@@ -504,6 +550,7 @@ static int ssd2092_probe(struct mipi_dsi_device *dsi)
+ 
+ 	priv->dsi = dsi;
+ 	mipi_dsi_set_drvdata(dsi, priv);
++	INIT_DELAYED_WORK(&priv->keepalive_work, ssd2092_keepalive_work_fn);
+ 
+ 	priv->avdd = devm_regulator_get(dev, "avdd");
+ 	if (IS_ERR(priv->avdd))

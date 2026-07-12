@@ -1,0 +1,188 @@
+
+Password: 
+>>> SENT: 'toor'
+
+Login incorrect
+
+gemini login: 
+>>> SENT: 'echo SHELL_OK $(uname -r)'
+echo SHELL_OK $(uname -r)
+Password: 
+>>> SENT: 'echo "r 0f" > /sys/kernel/debug/gemini_panel_dcs'
+
+
+>>> SENT: 'echo "r 45" > /sys/kernel/debug/gemini_panel_dcs'
+echo "r 45" > /sys/kernel/debug/gemini_panel_dcs
+Login incorrect
+
+gemini login: 
+>>> SENT: 'echo "11" > /sys/kernel/debug/gemini_panel_dcs'
+echo "11" > /sys/kernel/debug/gemini_panel_dcs
+Password: 
+>>> SENT: 'echo "29" > /sys/kernel/debug/gemini_panel_dcs'
+
+
+>>> SENT: 'echo "r 0a" > /sys/kernel/debug/gemini_panel_dcs'
+echo "r 0a" > /sys/kernel/debug/gemini_panel_dcs
+Login incorrect
+
+gemini login: 
+>>> SENT: 'echo "23" > /sys/kernel/debug/gemini_panel_dcs'
+echo "23" > /sys/kernel/debug/gemini_panel_dcs
+Password: 
+>>> SENT: 'dmesg | tail -25'
+
+
+login: timed out after 60 seconds[  352.573278] systemd[1]: serial-getty@ttyS0.service: Deactivated successfully.
+[  352.575570] systemd[1]: serial-getty@ttyS0.service: Consumed 1.365s CPU time, 19M memory peak.
+[!p]104[?7h[6n[32766;32766H[6n[  352.919053] systemd[1]: serial-getty@ttyS0.service: Scheduled restart job, restart counter is at 1.
+[  352.928030] systemd[1]: Started serial-getty@ttyS0.service - Serial Getty on ttyS0.
+[!p]104[?7h[6n[32766;32766H[6n[!p]104[?7h[6n[32766;32766H[6n
+>>> SENT: 'root'
+
+Debian GNU/Linux 13 gemini ttyS0
+
+gemini login: 
+>>> SENT: 'root'
+root
+Password: 
+>>> SENT: 'toor'
+
+Linux gemini 6.6.0-dirty #118 SMP PREEMPT Sun Jul 12 06:47:30 UTC 2026 aarch64
+
+The programs included with the Debian GNU/Linux system are free software;
+the exact distribution terms for each program are described in the
+individual files in /usr/share/doc/*/copyright.
+
+Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+permitted by applicable law.
+[?2004hroot@gemini:~# 
+>>> SENT: "PS1='GPROMPT# '"
+PS1='GPROMPT# '
+[?2004l[?2004hGPROMPT# 
+>>> SENT: 'echo "r 0f" > /sys/kernel/debug/gemini_panel_dcs; dmesg | tail -3'
+echo "r 0f" > /sys/kernel/debug/gemini_panel_dcs; dmesg | tail -3
+[?2004l[  355.990630] GEMINI-DEBUG dsi_irq[209] enter status=0x00000001
+[  355.991405] GEMINI-DEBUG dsi_irq[209] exit spins=1
+[  355.991422] [drm] dsi get 1 byte data from the panel address(0xf)
+[  355.992029] GEMINI-DEBUG dsi_irq[210] enter status=0x00000002
+[  355.992790] panel-solomon-ssd2092 1401c000.dsi.0: GEMINI-PANEL dcs read 0x0f ret=1 val=0x80
+[  355.993507] GEMINI-DEBUG dsi_irq[210] exit spins=1
+[  355.992029] GEMINI-DEBUG dsi_irq[210] enter status=0x00000002
+[  355.992790] panel-solomon-ssd2092 1401c000.dsi.0: GEMINI-PANEL dcs read 0x0f ret=1 val=0x80
+[  355.993507] GEMINI-DEBUG dsi_irq[210] exit spins=1
+[?2004hGPROMPT# 
+>>> SENT: 'echo "r 45" > /sys/kernel/debug/gemini_panel_dcs; dmesg | tail -3'
+echo "r 45" > /sys/kernel/debug/gemini_panel_dcs; dmesg | tail -3
+[?2004l[  357.922711] GEMINI-DEBUG dsi_irq[211] enter status=0x00000001
+[  357.923483] GEMINI-DEBUG dsi_irq[211] exit spins=1
+[  357.923500] [drm] dsi get 1 byte data from the panel address(0x45)
+[  357.924113] GEMINI-DEBUG dsi_irq[212] enter status=0x00000002
+[  357.924878] panel-solomon-ssd2092 1401c000.dsi.0: GEMINI-PANEL dcs read 0x45 ret=1 val=0x00
+[  357.925596] GEMINI-DEBUG dsi_irq[212] exit spins=1
+[  357.924113] GEMINI-DEBUG dsi_irq[212] enter status=0x00000002
+[  357.924878] panel-solomon-ssd2092 1401c000.dsi.0: GEMINI-PANEL dcs read 0x45 ret=1 val=0x00
+[  357.925596] GEMINI-DEBUG dsi_irq[212] exit spins=1
+[?2004hGPROMPT# 
+>>> SENT: 'echo "11" > /sys/kernel/debug/gemini_panel_dcs; sleep 1; echo "29" > /sys/kernel/debug/gemini_panel_dcs; dmesg | tail -6'
+echo "11" > /sys/kernel/debug/gemini_panel_dcs; sleep 1; echo "29" > /syys/kernel/debug/gemini_panel_dcs; dmesg | tail -6
+[?2004l[  359.858713] GEMINI-DEBUG dsi_irq[213] enter status=0x00000002
+[  359.859486] GEMINI-DEBUG dsi_irq[213] exit spins=1
+[  359.859504] panel-solomon-ssd2092 1401c000.dsi.0: GEMINI-PANEL dcs write 0x11 len=1 ret=0
+[  360.870152] GEMINI-DEBUG dsi_irq[214] enter status=0x00000002
+[  360.870932] GEMINI-DEBUG dsi_irq[214] exit spins=1
+[  360.870948] panel-solomon-ssd2092 1401c000.dsi.0: GEMINI-PANEL dcs write 0x29 len=1 ret=0
+[  359.858713] GEMINI-DEBUG dsi_irq[213] enter status=0x00000002
+[  359.859486] GEMINI-DEBUG dsi_irq[213] exit spins=1
+[  359.859504] panel-solomon-ssd2092 1401c000.dsi.0: GEMINI-PANEL dcs write 0x11 len=1 ret=0
+[  360.870152] GEMINI-DEBUG dsi_irq[214] enter status=0x00000002
+[  360.870932] GEMINI-DEBUG dsi_irq[214] exit spins=1
+[  360.870948] panel-solomon-ssd2092 1401c000.dsi.0: GEMINI-PANEL dcs write 0x29 len=1 ret=0
+[?2004hGPROMPT# 
+>>> SENT: 'echo "r 0a" > /sys/kernel/debug/gemini_panel_dcs; dmesg | tail -3'
+echo "r 0a" > /sys/kernel/debug/gemini_panel_dcs; dmesg | tail -3
+[?2004l[  362.602645] GEMINI-DEBUG dsi_irq[215] enter status=0x00000001
+[  362.603419] GEMINI-DEBUG dsi_irq[215] exit spins=1
+[  362.603434] [drm] dsi get 1 byte data from the panel address(0xa)
+[  362.604043] GEMINI-DEBUG dsi_irq[216] enter status=0x00000002
+[  362.604802] panel-solomon-ssd2092 1401c000.dsi.0: GEMINI-PANEL dcs read 0x0a ret=1 val=0x1c
+[  362.605520] GEMINI-DEBUG dsi_irq[216] exit spins=1
+[  362.604043] GEMINI-DEBUG dsi_irq[216] enter status=0x00000002
+[  362.604802] panel-solomon-ssd2092 1401c000.dsi.0: GEMINI-PANEL dcs read 0x0a ret=1 val=0x1c
+[  362.605520] GEMINI-DEBUG dsi_irq[216] exit spins=1
+[?2004hGPROMPT# 
+>>> SENT: 'echo "23" > /sys/kernel/debug/gemini_panel_dcs; dmesg | tail -3'
+echo "23" > /sys/kernel/debug/gemini_panel_dcs; dmesg | tail -3
+[?2004l[  364.530719] GEMINI-DEBUG dsi_irq[217] enter status=0x00000002
+[  364.531497] GEMINI-DEBUG dsi_irq[217] exit spins=1
+[  364.531516] panel-solomon-ssd2092 1401c000.dsi.0: GEMINI-PANEL dcs write 0x23 len=1 ret=0
+[  364.530719] GEMINI-DEBUG dsi_irq[217] enter status=0x00000002
+[  364.531497] GEMINI-DEBUG dsi_irq[217] exit spins=1
+[  364.531516] panel-solomon-ssd2092 1401c000.dsi.0: GEMINI-PANEL dcs write 0x23 len=1 ret=0
+[?2004hGPROMPT# 
+[?2004l[?2004hGPROMPT# 
+[?2004l[?2004hGPROMPT# 
+[?2004l[?2004hGPROMPT# 
+[?2004l[?2004hGPROMPT# 
+[?2004l[?2004hGPROMPT# 
+[?2004l[?2004hGPROMPT# 
+[?2004l[?2004hGPROMPT# 
+>>> SENT: "PS1='GPROMPT# '"
+PS1='GPROMPT# '
+[?2004l[?2004hGPROMPT# 
+>>> SENT: 'cat /sys/kernel/debug/gpio'
+cat /sys/kernel/debug/gpio
+[?2004lgpiochip0: GPIOs 512-773, parent: platform/10005000.pinctrl, pinctrl_paris:
+ gpio-572 (                    |enable              ) out hi 
+ gpio-692 (                    |reset               ) out hi ACTIVE LOW
+ gpio-763 (                    |enable              ) out hi 
+[?2004hGPROMPT# 
+>>> SENT: 'grep -r . /sys/kernel/debug/regulator/regulator_summary 2>/dev/null | head -60'
+grep -r . /sys/kernel/debug/regulator/regulator_summary 2>/dev/null | heead -60
+[?2004l regulator                      use open bypass  opmode voltage current     min     max
+---------------------------------------------------------------------------------------
+ regulator-dummy                  3    2      0 unknown     0mV     0mA     0mV     0mV 
+    lcd_avdd                      1    1      0 unknown  5500mV     0mA  5500mV  5500mV 
+       1401c000.dsi.0-avdd        1                                 0mA     0mV     0mV
+    lcd_avee                      1    1      0 unknown  5500mV     0mA  5500mV  5500mV 
+       1401c000.dsi.0-avee        1                                 0mA     0mV     0mV
+ vdd_1v8                          2    1      0 unknown  1800mV     0mA  1800mV  1800mV 
+    11230000.mmc-vqmmc            1                                 0mA     0mV     0mV
+ vemc                             2    1      0 unknown  3000mV     0mA  3000mV  3000mV 
+    11230000.mmc-vmmc             1                                 0mA  3000mV  3100mV
+ vproc                            1    0      0 unknown  1000mV     0mA  1000mV  1000mV 
+[?2004hGPROMPT# 
+>>> SENT: 'ls /sys/bus/i2c/devices/'
+ls /sys/bus/i2c/devices/
+[?2004l1-003e	i2c-0  i2c-1  i2c-2  i2c-3
+[?2004hGPROMPT# 
+>>> SENT: 'for d in /sys/bus/i2c/devices/*/name; do echo $d: $(cat $d); done'
+for d in /sys/bus/i2c/devices/*/name; do echo $d: $(cat $d); done
+[?2004l/sys/bus/i2c/devices/1-003e/name: tps65132
+/sys/bus/i2c/devices/i2c-0/name: i2c-mt65xx
+/sys/bus/i2c/devices/i2c-1/name: i2c-mt65xx
+/sys/bus/i2c/devices/i2c-2/name: i2c-mt65xx
+/sys/bus/i2c/devices/i2c-3/name: i2c-mt65xx
+[?2004hGPROMPT# 
+[?2004l[?2004hGPROMPT# 
+[?2004l[?2004hGPROMPT# 
+[?2004l[?2004hGPROMPT# 
+[?2004l[?2004hGPROMPT# 
+[?2004l[?2004hGPROMPT# 
+[?2004l[?2004hGPROMPT# 
+[?2004l[?2004hGPROMPT# 
+>>> SENT: "PS1='GPROMPT# '"
+PS1='GPROMPT# '
+[?2004l[?2004hGPROMPT# 
+>>> SENT: 'which i2cget i2cdetect; modprobe i2c-dev; ls /dev/i2c-*'
+which i2cget i2cdetect; modprobe i2c-dev; ls /dev/i2c-*
+[?2004l/usr/sbin/i2cget
+/usr/sbin/i2cdetect
+/dev/i2c-0  /dev/i2c-1	/dev/i2c-2  /dev/i2c-3
+[?2004hGPROMPT# 
+>>> SENT: 'i2cget -y -f 1 0x3e 0x00; i2cget -y -f 1 0x3e 0x01; i2cget -y -f 1 0x3e 0x03'
+i2cget -y -f 1 0x3e 0x00; i2cget -y -f 1 0x3e 0x01; i2cget -y -f 1 0x3e  0x03
+[?2004l0x0f
+0x0f
+0x33
+[?2004hGPROMPT# 

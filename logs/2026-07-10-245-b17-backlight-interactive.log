@@ -1,0 +1,126 @@
+
+gemini login: 
+gemini login: root
+Password: 
+Linux gemini 6.6.0-dirty #88 SMP PREEMPT Fri Jul 10 07:26:07 UTC 2026 aarch64
+
+The programs included with the Debian GNU/Linux system are free software;
+the exact distribution terms for each program are described in the
+individual files in /usr/share/doc/*/copyright.
+
+Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+permitted by applicable law.
+[?2004hroot@gemini:~# [7m  ls /sys/class/backlight/[27m
+[7m  cat /sys/class/backlight/*/brightness /sys/class/backlight/*/max_brightness /s[27m[7my[27m[7mys/class/backlight/*/bl_power[27m
+[7m  cat /sys/class/backlight/*/max_brightness > /sys/class/backlight/*/brightness[27m[A[A[Aroot@gemini:~#   ls /sys/class/backlight/
+  cat /sys/class/backlight/*/brightness /sys/class/backlight/*/max_brightness /sys/class/backlight/*/bl_power
+  cat /sys/class/backlight/*/max_brightness > /sys/class/backlight/*/brightness
+[?2004lbacklight
+200
+255
+0
+[?2004hroot@gemini:~# [7m  cat /sys/kernel/debug/pwm[27m
+[7m  dmesg | grep -iE "pwm|backlight"[27m[Aroot@gemini:~#   cat /sys/kernel/debug/pwm
+  dmesg | grep -iE "pwm|backlight"
+[?2004lplatform/1100f000.pwm, 1 PWM device
+ pwm-0   (backlight           ): requested enabled period: 39385 ns duty: 39385 ns polarity: normal
+[    9.330343] systemd[1]: Created slice system-systemd\x2dbacklight.slice - Slice /system/systemd-backlight.
+[    9.386195] systemd[1]: Starting systemd-backlight@backlight:backlight.service - Load/Save Screen Backlight Brightness of backlight:backlight...
+[    9.483107] systemd[1]: Finished systemd-backlight@backlight:backlight.service - Load/Save Screen Backlight Brightness of backlight:backlight.
+[?2004hroot@gemini:~# [7m  for off in 000 004 010 014 018 01c 020 024 028 02c 030 038 050 [27m[7m0[27m[7m054 058 05c 100 104 108 110 114 118 11c 130 148 150 158 168; do[27m
+[7m    printf "K-DSI+%s: " $off[27m
+[7m    busybox devmem $((0x1401c000 + 0x$off))[27m
+[7m  done[27m[A[A[A[Aemini:~#   for off in 000 004 010 014 018 01c 020 024 028 02c 030 038 050 054 058 05c 100 104 108 110 114 118 11c 130 148 150 158 168; do
+    printf "K-DSI+%s: " $off
+    busybox devmem $((0x1401c000 + 0x$off))
+  done
+[?2004lK-DSI+000: -bash: busybox: command not found
+K-DSI+004: -bash: busybox: command not found
+K-DSI+010: -bash: busybox: command not found
+K-DSI+014: -bash: busybox: command not found
+K-DSI+018: -bash: busybox: command not found
+K-DSI+01c: -bash: busybox: command not found
+K-DSI+020: -bash: busybox: command not found
+K-DSI+024: -bash: busybox: command not found
+K-DSI+028: -bash: busybox: command not found
+K-DSI+02c: -bash: busybox: command not found
+K-DSI+030: -bash: busybox: command not found
+K-DSI+038: -bash: busybox: command not found
+K-DSI+050: -bash: busybox: command not found
+K-DSI+054: -bash: busybox: command not found
+K-DSI+058: -bash: busybox: command not found
+K-DSI+05c: -bash: busybox: command not found
+K-DSI+100: -bash: busybox: command not found
+K-DSI+104: -bash: busybox: command not found
+K-DSI+108: -bash: busybox: command not found
+K-DSI+110: -bash: busybox: command not found
+K-DSI+114: -bash: busybox: command not found
+K-DSI+118: -bash: busybox: command not found
+K-DSI+11c: -bash: busybox: command not found
+K-DSI+130: -bash: busybox: command not found
+K-DSI+148: -bash: busybox: command not found
+K-DSI+150: -bash: busybox: command not found
+K-DSI+158: -bash: busybox: command not found
+K-DSI+168: -bash: busybox: command not found
+[?2004hroot@gemini:~# [7m  for off in 000 004 010 014 018 01c 020 024 028 02c 030 038 050 [27m[7m0[27m[7m054 058 05c 100 104 108 110 114 118 11c 130 148 150 158 168; do[27m
+[7m    printf "K-DSI+%s: " $off[27m
+[7m    busybox devmem $((0x1401c000 + 0x$off))[27m
+[7m  done[27m[A[A[A[Aemini:~#   for off in 000 004 010 014 018 01c 020 024 028 02c 030 038 050 054 058 05c 100 104 108 110 114 118 11c 130 148 150 158 168; do
+    printf "K-DSI+%s: " $off
+    busybox devmem $((0x1401c000 + 0x$off))
+  done
+[?2004lK-DSI+000: -bash: busybox: command not found
+K-DSI+004: -bash: busybox: command not found
+K-DSI+010: -bash: busybox: command not found
+K-DSI+014: -bash: busybox: command not found
+K-DSI+018: -bash: busybox: command not found
+K-DSI+01c: -bash: busybox: command not found
+K-DSI+020: -bash: busybox: command not found
+K-DSI+024: -bash: busybox: command not found
+K-DSI+028: -bash: busybox: command not found
+K-DSI+02c: -bash: busybox: command not found
+K-DSI+030: -bash: busybox: command not found
+K-DSI+038: -bash: busybox: command not found
+K-DSI+050: -bash: busybox: command not found
+K-DSI+054: -bash: busybox: command not found
+K-DSI+058: -bash: busybox: command not found
+K-DSI+05c: -bash: busybox: command not found
+K-DSI+100: -bash: busybox: command not found
+K-DSI+104: -bash: busybox: command not found
+K-DSI+108: -bash: busybox: command not found
+K-DSI+110: -bash: busybox: command not found
+K-DSI+114: -bash: busybox: command not found
+K-DSI+118: -bash: busybox: command not found
+K-DSI+11c: -bash: busybox: command not found
+K-DSI+130: -bash: busybox: command not found
+K-DSI+148: -bash: busybox: command not found
+K-DSI+150: -bash: busybox: command not found
+K-DSI+158: -bash: busybox: command not found
+K-DSI+168: -bash: busybox: command not found
+[?2004hroot@gemini:~# busy[7m  dd if=/dev/mem bs=16 skip=20978688 count=27 2>/dev/null | o[27m[7md[27m[7md -A x -t x4[27m[A~# busy  dd if=/dev/mem bs=16 skip=20978688 count=27 2>/dev/null | od -A x -t x4
+[?2004l000000
+[?2004hroot@gemini:~# [7m  dd if=/dev/mem bs=16 skip=20978688 count=27 2>/dev/null | od -A[27m[7m [27m[7m x -t x4[27m[Aini:~#   dd if=/dev/mem bs=16 skip=20978688 count=27 2>/dev/null | od -A x -t x4
+[?2004l000000
+[?2004hroot@gemini:~# [?2004l[?2004h[?2004l
+[?2004hroot@gemini:~# 
+[?2004l[?2004hroot@gemini:~# 
+[?2004l[?2004hroot@gemini:~# [7m dd if=/dev/mem bs=16 skip=20978688 count=27 2>/dev/null | od -A [27m[7mx[27m[7mx -t x4[27m[Amini:~#  dd if=/dev/mem bs=16 skip=20978688 count=27 2>/dev/null | od -A x -t x4
+[?2004l000000
+[?2004hroot@gemini:~# 
+[?2004l[?2004hroot@gemini:~# 
+[?2004l[?2004hroot@gemini:~#  dd if=/dev/mem bs=16 skip=20978688 count=27 2>/dev/null | od -A xx -t x4
+[?2004l000000
+[?2004hroot@gemini:~# [?2004l[?2004h[?2004l
+[?2004hroot@gemini:~# [?2004l[?2004h[?2004l
+[?2004hroot@gemini:~# [?2004l[?2004h[?2004l
+[?2004hroot@gemini:~# quit
+[?2004l-bash: quit: command not found
+[?2004hroot@gemini:~# exit
+[?2004llogout
+[  807.851250] systemd[1]: serial-getty@ttyS0.service: Deactivated successfully.
+[!p]104[?7h[6n[32766;32766H[6n[76;1H[  808.116189] systemd[1]: serial-getty@ttyS0.service: Scheduled restart job, restart counter is at 1.
+[  808.125291] systemd[1]: Started serial-getty@ttyS0.service - Serial Getty on ttyS0.
+[!p]104[?7h[6n[32766;32766H[6n[76;1H[!p]104[?7h[6n[32766;32766H[6n[76;1H
+Debian GNU/Linux 13 gemini ttyS0
+
+gemini login: 

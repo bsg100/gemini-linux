@@ -1,0 +1,60 @@
+diff --git a/drivers/soc/mediatek/gemini-ddp-dump.c b/drivers/soc/mediatek/gemini-ddp-dump.c
+index 000000..000000 100644
+@@ -86,6 +86,49 @@
+ 	{ "mipitx0", 0x10215000, mipitx_offs,  ARRAY_SIZE(mipitx_offs) },
+ };
+ 
++/*
++ * GEMINI-DEBUG: read back the actual scanout buffer content at OVL's
++ * live ADDR(0) (2026-07-11, banding-artifact hunt, follow-up to the
++ * fb-solid-fill-white test). mtk_drm_gem.c's dumb_create memsets the
++ * buffer to 0xff and logs the dma_addr + first 16 bytes at fill time;
++ * this reads the *same physical address OVL is currently programmed
++ * with* well into steady-state scanout, to catch either (a) the fill
++ * never having reached memory the display DMA reads (cache/write-combine
++ * visibility) or (b) something overwriting/corrupting it after the fact.
++ */
++static void gemini_ovl_fb_readback(void)
++{
++	void __iomem *ovl_va = ioremap(0x1400b000, 0x1000);
++	void __iomem *fb_va;
++	u32 addr;
++	u8 buf[16];
++	int i;
++
++	if (!ovl_va) {
++		pr_info("GEMINI-DDP fb readback: ovl0 ioremap failed\n");
++		return;
++	}
++	addr = readl(ovl_va + 0xf40);
++	iounmap(ovl_va);
++
++	if (!addr) {
++		pr_info("GEMINI-DDP fb readback: ADDR(0)=0, skipping\n");
++		return;
++	}
++
++	fb_va = ioremap(addr, 16);
++	if (!fb_va) {
++		pr_info("GEMINI-DDP fb readback: fb ioremap of 0x%08x failed\n", addr);
++		return;
++	}
++	for (i = 0; i < 16; i++)
++		buf[i] = readb(fb_va + i);
++	iounmap(fb_va);
++
++	pr_info("GEMINI-DDP fb readback: ADDR(0)=0x%08x first16=%*ph\n",
++		addr, 16, buf);
++}
++
+ static void gemini_ddp_dump(int pass)
+ {
+ 	int i, j;
+@@ -106,6 +149,7 @@
+ 				readl(va + b->offs[j]));
+ 		iounmap(va);
+ 	}
++	gemini_ovl_fb_readback();
+ 	pr_info("GEMINI-DDP dump pass %d end\n", pass);
+ }
+ 

@@ -1,0 +1,20 @@
+diff --git a/drivers/i2c/busses/i2c-mt65xx.c b/drivers/i2c/busses/i2c-mt65xx.c
+index 1a9b5a068..80e3b719f 100644
+--- a/drivers/i2c/busses/i2c-mt65xx.c
++++ b/drivers/i2c/busses/i2c-mt65xx.c
+@@ -525,6 +525,15 @@ static const struct of_device_id mtk_i2c_of_match[] = {
+ 	{ .compatible = "mediatek,mt2712-i2c", .data = &mt2712_compat },
+ 	{ .compatible = "mediatek,mt6577-i2c", .data = &mt6577_compat },
+ 	{ .compatible = "mediatek,mt6589-i2c", .data = &mt6589_compat },
++	/*
++	 * MT6797's I2C block is the same generation as MT8173's: v1 register
++	 * layout with auto-restart, WRRD combined transfers via DIR_CHANGE +
++	 * TRANSFER_LEN_AUX, and 33-bit DMA (MTK vendor 3.18 mt6797 mt_i2c
++	 * driver uses all of these).  Without this entry the node's
++	 * "mediatek,mt6577-i2c" fallback matches instead and combined
++	 * write-then-read transfers (e.g. any regmap-i2c read) time out.
++	 */
++	{ .compatible = "mediatek,mt6797-i2c", .data = &mt8173_compat },
+ 	{ .compatible = "mediatek,mt7622-i2c", .data = &mt7622_compat },
+ 	{ .compatible = "mediatek,mt7981-i2c", .data = &mt7981_compat },
+ 	{ .compatible = "mediatek,mt7986-i2c", .data = &mt7986_compat },

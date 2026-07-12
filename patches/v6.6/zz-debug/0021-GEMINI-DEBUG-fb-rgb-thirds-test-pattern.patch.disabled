@@ -1,0 +1,51 @@
+diff --git a/drivers/gpu/drm/mediatek/mtk_drm_gem.c b/drivers/gpu/drm/mediatek/mtk_drm_gem.c
+index 0e0a41b2f..347f92369 100644
+--- a/drivers/gpu/drm/mediatek/mtk_drm_gem.c
++++ b/drivers/gpu/drm/mediatek/mtk_drm_gem.c
+@@ -123,10 +123,45 @@ int mtk_drm_gem_dumb_create(struct drm_file *file_priv, struct drm_device *dev,
+ 	args->pitch = DIV_ROUND_UP(args->width * args->bpp, 8);
+ 	args->size = args->pitch * args->height;
+ 
+-	mtk_gem = mtk_drm_gem_create(dev, args->size, false);
++	/*
++	 * GEMINI-DEBUG (2026-07-12, post-first-light): build #132 proved a
++	 * solid 0xff fill displays perfectly, but real fbcon content shows
++	 * the horizontal-band corruption again. An all-0xff buffer is
++	 * invariant under pixel-format, channel-order and pitch errors, so
++	 * the link/panel are fine and the fault is in how OVL interprets
++	 * the buffer layout. Structured pattern to discriminate:
++	 *   - R/G/B horizontal thirds (XRGB8888 as fbcon allocates)
++	 *   - a 64-pixel white stripe down the left edge of every row
++	 * Reading the glass: wrong band colors = channel order; stripe
++	 * shearing diagonally = pitch mismatch; scrambled fine noise =
++	 * bpp/format-width mismatch; correct pattern = buffer
++	 * interpretation fine (suspect fbcon damage/update path instead).
++	 * Temporary -- revert once read.
++	 */
++	mtk_gem = mtk_drm_gem_create(dev, args->size, true);
+ 	if (IS_ERR(mtk_gem))
+ 		return PTR_ERR(mtk_gem);
+ 
++	if (mtk_gem->kvaddr && args->bpp == 32) {
++		u32 *px = mtk_gem->kvaddr;
++		u32 x, y, c;
++
++		for (y = 0; y < args->height; y++) {
++			if (y < args->height / 3)
++				c = 0x00ff0000;	/* red */
++			else if (y < 2 * args->height / 3)
++				c = 0x0000ff00;	/* green */
++			else
++				c = 0x000000ff;	/* blue */
++			for (x = 0; x < args->pitch / 4; x++)
++				px[y * (args->pitch / 4) + x] =
++					(x < 64) ? 0x00ffffff : c;
++		}
++		pr_info("GEMINI-DEBUG fb_pattern kvaddr=%p dma_addr=%pad size=%zu pitch=%u bpp=%u %ux%u\n",
++			mtk_gem->kvaddr, &mtk_gem->dma_addr, args->size,
++			args->pitch, args->bpp, args->width, args->height);
++	}
++
+ 	/*
+ 	 * allocate a id of idr table where the obj is registered
+ 	 * and handle has the id what user can see.

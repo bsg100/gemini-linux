@@ -12,10 +12,10 @@ index c99c3372a..ffe1ab530 100644
  dtb-$(CONFIG_ARCH_MEDIATEK) += mt7622-bananapi-bpi-r64.dtb
 diff --git a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
 new file mode 100644
-index 000000000..f745a662e
+index 000000000..e1cf85b91
 --- /dev/null
 +++ b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
-@@ -0,0 +1,893 @@
+@@ -0,0 +1,900 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Device tree for Planet Computers Gemini PDA
@@ -340,30 +340,6 @@ index 000000000..f745a662e
 +		status = "disabled";
 +	};
 +
-+	/*
-+	 * GPIO-controlled fixed regulators for TPS65132 LCD bias (±5 V).
-+	 * ENP (AVDD +5V): GPIO60, active-high.
-+	 * ENN (AVEE -5V): GPIO251, active-high.
-+	 * TPS65132 at I2C1 (0x11008000) address 0x3E is configured to +/-5V
-+	 * by the panel driver writing 0x0E to registers 0x00 and 0x01.
-+	 */
-+	lcd_avdd: lcd-avdd-regulator {
-+		compatible = "regulator-fixed";
-+		regulator-name = "lcd_avdd";
-+		regulator-min-microvolt = <5000000>;
-+		regulator-max-microvolt = <5000000>;
-+		gpio = <&pio 60 GPIO_ACTIVE_HIGH>;
-+		enable-active-high;
-+	};
-+
-+	lcd_avee: lcd-avee-regulator {
-+		compatible = "regulator-fixed";
-+		regulator-name = "lcd_avee";
-+		regulator-min-microvolt = <5000000>;
-+		regulator-max-microvolt = <5000000>;
-+		gpio = <&pio 251 GPIO_ACTIVE_HIGH>;
-+		enable-active-high;
-+	};
 +};
 +
 +/*
@@ -470,6 +446,37 @@ index 000000000..f745a662e
 +		compatible = "novatek,nt11205-ts";
 +		reg = <0x5d>;
 +		status = "disabled";
++	};
++
++	/*
++	 * TI TPS65132 LCD bias (±5.4 V AVDD/AVEE for the SSD2092 panel).
++	 * VPOS/VNEG output registers are volatile — LK reprograms them over
++	 * I2C on every boot ("SSD2092-----cmd=0/1--i2c write success" in its
++	 * serial log; 0x0E = 5.4 V), so GPIO-only fixed regulators are NOT
++	 * enough: after an EN power-cycle the chip comes back unprogrammed
++	 * and the panel booster stays off (proven by DCS read-back,
++	 * boot.md capture 250 — backlit-black root cause).  min==max makes
++	 * the regulator core apply the voltage via the driver's I2C write
++	 * when the panel enables the supplies.
++	 * ENP (AVDD): GPIO60, ENN (AVEE): GPIO251, both active-high.
++	 */
++	bias@3e {
++		compatible = "ti,tps65132";
++		reg = <0x3e>;
++
++		lcd_avdd: outp {
++			regulator-name = "lcd_avdd";
++			regulator-min-microvolt = <5500000>;
++			regulator-max-microvolt = <5500000>;
++			enable-gpios = <&pio 60 GPIO_ACTIVE_HIGH>;
++		};
++
++		lcd_avee: outn {
++			regulator-name = "lcd_avee";
++			regulator-min-microvolt = <5500000>;
++			regulator-max-microvolt = <5500000>;
++			enable-gpios = <&pio 251 GPIO_ACTIVE_HIGH>;
++		};
 +	};
 +};
 +

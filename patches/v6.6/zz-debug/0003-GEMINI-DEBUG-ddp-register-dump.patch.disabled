@@ -1,0 +1,143 @@
+diff --git a/drivers/soc/mediatek/Makefile b/drivers/soc/mediatek/Makefile
+index 9d3ce7878..4b57d52d5 100644
+--- a/drivers/soc/mediatek/Makefile
++++ b/drivers/soc/mediatek/Makefile
+@@ -7,3 +7,4 @@ obj-$(CONFIG_MTK_REGULATOR_COUPLER) += mtk-regulator-coupler.o
+ obj-$(CONFIG_MTK_MMSYS) += mtk-mmsys.o
+ obj-$(CONFIG_MTK_MMSYS) += mtk-mutex.o
+ obj-$(CONFIG_MTK_SVS) += mtk-svs.o
++obj-y += gemini-ddp-dump.o
+diff --git a/drivers/soc/mediatek/gemini-ddp-dump.c b/drivers/soc/mediatek/gemini-ddp-dump.c
+new file mode 100644
+index 000000000..941155fcf
+--- /dev/null
++++ b/drivers/soc/mediatek/gemini-ddp-dump.c
+@@ -0,0 +1,128 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * GEMINI-DEBUG: display mid-chain backpressure hunt.
++ *
++ * Capture 238 decoded OVL0/OVL_2L0 FLOW_CTRL_DBG (+0x240) with the vendor
++ * decoder (ddp_ovl.c ovl_printf_status): both OVLs are in eng_act with
++ * out_valid=1 / out_ready=0 — the pipeline head is stalled on backpressure
++ * from downstream, not failing internally (soft reset didn't help,
++ * capture 238).  The blocker must be in the never-dumped mid-chain:
++ * COLOR0 -> CCORR -> AAL0 -> GAMMA -> OD0 -> DITHER0.  Each of those has
++ * IN_CNT/OUT_CNT pixel counters (+0x24/+0x28, vendor ddp_reg.h); the last
++ * engine whose IN_CNT advances while its OUT_CNT stays 0 (or the first
++ * whose IN_CNT stays 0 while the upstream OUT advances) is the blocker.
++ *
++ * Capture 240 answered it: OD0's IN_CNT is frozen while its OUT_CNT
++ * free-runs — OD blocks its input and self-generates output.  Cause: OD
++ * needs OD_CFG[1:0] = relay (0x1) or core-en (0x2) (vendor
++ * common/od10/ddp_od.c; init default 0x1), but mainline mtk_od_config's
++ * relay write is clobbered by mtk_dither_set, leaving OD_CFG = 0x4
++ * (dither only, mode undefined).
++ *
++ * This build: after pass 1, poke OD0_CFG = 0x5 (relay + dithering), then
++ * passes 2/3 at +500 ms to watch upstream counters unfreeze and OVL0
++ * FME_CPL latch.
++ */
++#include <linux/init.h>
++#include <linux/io.h>
++#include <linux/kernel.h>
++#include <linux/workqueue.h>
++
++struct gemini_dump_block {
++	const char *name;
++	phys_addr_t base;
++	const u16 *offs;
++	int noffs;
++};
++
++static const u16 ovl_offs[] = { 0x00, 0x08, 0x0c, 0x24, 0x2c, 0x240, 0x244 };
++static const u16 color_offs[] = { 0x400, 0xc00, 0xc08, 0xc50, 0xc54 };
++static const u16 pq_offs[] = { 0x00, 0x0c, 0x20, 0x24, 0x28, 0x30 };
++static const u16 rdma0_offs[] = { 0x00, 0x04, 0x10, 0x14, 0x18, 0x40 };
++static const u16 dsi0_offs[] = {
++	0x0, 0x4, 0x8, 0xc, 0x10, 0x14, 0x18, 0x1c, 0x20, 0x24, 0x28, 0x2c, 0x30, 0x34, 0x38, 0x3c, 0x40, 0x44, 0x48, 0x4c, 0x50, 0x54, 0x58, 0x5c, 0x60, 0x64, 0x68, 0x6c, 0x70, 0x74, 0x78, 0x7c, 0x80, 0x84, 0x88, 0x8c, 0x90, 0x94, 0x98, 0x9c, 0xa0, 0xa4, 0xa8, 0xac, 0xb0, 0xb4, 0xb8, 0xbc, 0xc0, 0xc4, 0xc8, 0xcc, 0xd0, 0xd4, 0xd8, 0xdc, 0xe0, 0xe4, 0xe8, 0xec, 0xf0, 0xf4, 0xf8, 0xfc, 0x100, 0x104, 0x108, 0x10c, 0x110, 0x114, 0x118, 0x11c, 0x120, 0x124, 0x128, 0x12c, 0x130, 0x134, 0x138, 0x13c, 0x140, 0x144, 0x148, 0x14c, 0x150, 0x154, 0x158, 0x15c, 0x160, 0x164, 0x168, 0x16c, 0x170, 0x174, 0x178, 0x17c, 0x180, 0x184, 0x188, 0x18c, 0x190, 0x194, 0x198, 0x19c, 0x1a0, 0x1a4, 0x1a8, 0x1ac,
++};
++
++static const u16 mipitx_offs[] = {
++	0x0, 0x4, 0x8, 0xc, 0x10, 0x14, 0x18, 0x1c, 0x20, 0x24, 0x28, 0x2c, 0x30, 0x34, 0x38, 0x3c, 0x40, 0x44, 0x48, 0x4c, 0x50, 0x54, 0x58, 0x5c, 0x60, 0x64, 0x68, 0x6c, 0x70, 0x74, 0x78, 0x7c, 0x80, 0x84, 0x88, 0x8c, 0x90, 0x94, 0x98, 0x9c, 0xa0, 0xa4, 0xa8, 0xac,
++};
++
++static const struct gemini_dump_block gemini_blocks[] = {
++	{ "ovl0",    0x1400b000, ovl_offs,     ARRAY_SIZE(ovl_offs) },
++	{ "ovl2l0",  0x1400d000, ovl_offs,     ARRAY_SIZE(ovl_offs) },
++	{ "color0",  0x14013000, color_offs,   ARRAY_SIZE(color_offs) },
++	{ "ccorr0",  0x14014000, pq_offs,      ARRAY_SIZE(pq_offs) },
++	{ "aal0",    0x14015000, pq_offs,      ARRAY_SIZE(pq_offs) },
++	{ "gamma0",  0x14016000, pq_offs,      ARRAY_SIZE(pq_offs) },
++	{ "od0",     0x14017000, pq_offs,      ARRAY_SIZE(pq_offs) },
++	{ "dither0", 0x14018000, pq_offs,      ARRAY_SIZE(pq_offs) },
++	{ "rdma0",   0x1400f000, rdma0_offs,   ARRAY_SIZE(rdma0_offs) },
++	{ "dsi0",    0x1401c000, dsi0_offs,    ARRAY_SIZE(dsi0_offs) },
++	/*
++	 * MIPI TX D-PHY (mipi_tx0).  LK dumps its working PHY as
++	 * "DSI_PHY+0000..0090" in every capture; this is our side of that
++	 * diff.  Prime suspect after capture 257 acquitted the init table:
++	 * mainline derives the lane rate from the pixel clock (~936 Mbps)
++	 * while the vendor LCM ran a fixed 502 MHz PLL (1004 Mbps).
++	 */
++	{ "mipitx0", 0x10215000, mipitx_offs,  ARRAY_SIZE(mipitx_offs) },
++};
++
++static void gemini_ddp_dump(int pass)
++{
++	int i, j;
++
++	pr_info("GEMINI-DDP dump pass %d begin\n", pass);
++	for (i = 0; i < ARRAY_SIZE(gemini_blocks); i++) {
++		const struct gemini_dump_block *b = &gemini_blocks[i];
++		void __iomem *va = ioremap(b->base, 0x1000);
++
++		if (!va) {
++			pr_info("GEMINI-DDP %s ioremap failed\n", b->name);
++			continue;
++		}
++		pr_info("GEMINI-DDP block %s @%pa\n", b->name, &b->base);
++		for (j = 0; j < b->noffs; j++)
++			pr_info("GEMINI-DDP %s+0x%03x = 0x%08x\n",
++				b->name, b->offs[j],
++				readl(va + b->offs[j]));
++		iounmap(va);
++	}
++	pr_info("GEMINI-DDP dump pass %d end\n", pass);
++}
++
++static void gemini_ddp_dump_work_fn(struct work_struct *work);
++static DECLARE_DELAYED_WORK(gemini_ddp_dump_work, gemini_ddp_dump_work_fn);
++static int gemini_dump_pass;
++
++static void gemini_od0_relay_poke(void)
++{
++	void __iomem *va = ioremap(0x14017000, 0x1000);
++
++	if (!va) {
++		pr_info("GEMINI-DDP od0 poke ioremap failed\n");
++		return;
++	}
++	pr_info("GEMINI-DDP od0 poke: pre CFG=0x%08x\n", readl(va + 0x20));
++	writel(0x5, va + 0x20);	/* relay mode + dithering */
++	pr_info("GEMINI-DDP od0 poke: post CFG=0x%08x\n", readl(va + 0x20));
++	iounmap(va);
++}
++
++static void gemini_ddp_dump_work_fn(struct work_struct *work)
++{
++	gemini_ddp_dump(++gemini_dump_pass);
++	if (gemini_dump_pass == 1)
++		gemini_od0_relay_poke();
++	if (gemini_dump_pass < 3)
++		schedule_delayed_work(&gemini_ddp_dump_work,
++				      msecs_to_jiffies(500));
++}
++
++static int __init gemini_ddp_dump_init(void)
++{
++	schedule_delayed_work(&gemini_ddp_dump_work,
++			      msecs_to_jiffies(8000));
++	return 0;
++}
++late_initcall(gemini_ddp_dump_init);

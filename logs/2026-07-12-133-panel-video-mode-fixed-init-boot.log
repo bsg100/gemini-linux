@@ -1,0 +1,683 @@
+52] enter status=0x00000002
+[   10.758244EBUG dsi_irq[54] enter status=0x00000002
+[   10.758329] GEMINI-DEBUG dsi_irq[5���[   10.758367] GEMINI-DEBUG dsi_irq[55] exit spins=1
+[   10.758398] GEMINI-DEBUG dsi_irq[56] enter status=0x00000002
+[   10.758407] GEMINI-DEBUG dsi_irq[56] exit spins=1
+[   10.758438] GEMINI-DEBUG dsi_irq[57] enter status=0x00000002
+[   10.758446] GEMINI-DEBUG dsi_irq[57] exit spins=1
+[   10.758477] GEMINI-DEBUG dsi_irq[58] enter status=0x00000002
+[   10.758486] GEMINI-DEBUG dsi_irq[58] exit spins=1
+[   10.758517] GEMINI-DEBUG dsi_irq[59] enter status=0x00000002
+[   10.758526] GEMINI-DEBUG dsi_irq[59] exit spins=1
+[   10.758556] GEMINI-DEBUG dsi_irq[60] enter status=0x00000002
+[   10.758565] GEMINI-DEBUG dsi_irq[60] exit spins=1
+[   10.758596] GEMINI-DEBUG dsi_irq[61] enter status=0x00000002
+[   10.758605] GEMINI-DEBUG dsi_irq[61] exit spins=1
+[   10.758636] GEMINI-DEBUG dsi_irq[62] enter status=0x00000002
+[   10.758644] GEMINI-DEBUG dsi_irq[62] exit spins=1
+[   10.758676] GEMINI-DEBUG dsi_irq[63] enter status=0x00000002
+[   10.758684] GEMINI-DEBUG dsi_irq[63] exit spins=1
+[   10.758715] GEMINI-DEBUG dsi_irq[64] enter status=0x00000002
+[   10.758724] GEMINI-DEBUG dsi_irq[64] exit spins=1
+[   10.758754] GEMINI-DEBUG dsi_irq[65] enter status=0x00000002
+[   10.758763] GEMINI-DEBUG dsi_irq[65] exit spins=1
+[   10.758793] GEMINI-DEBUG dsi_irq[66] enter status=0x00000002
+[   10.758802] GEMINI-DEBUG dsi_irq[66] exit spins=1
+[   10.758833] GEMINI-DEBUG dsi_irq[67] enter status=0x00000002
+[   10.758842] GEMINI-DEBUG dsi_irq[67] exit spins=1
+[   10.758873] GEMINI-DEBUG dsi_irq[68] enter status=0x00000002
+[   10.758882] GEMINI-DEBUG dsi_irq[68] exit spins=1
+[   10.758913] GEMINI-DEBUG dsi_irq[69] enter status=0x00000002
+[   10.758922] GEMINI-DEBUG dsi_irq[69] exit spins=1
+[   10.758953] GEMINI-DEBUG dsi_irq[70] enter status=0x00000002
+[   10.758961] GEMINI-DEBUG dsi_irq[70] exit spins=1
+[   10.758991] GEMINI-DEBUG dsi_irq[71] enter status=0x00000002
+[   10.759000] GEMINI-DEBUG dsi_irq[71] exit spins=1
+[   10.759031] GEMINI-DEBUG dsi_irq[72] enter status=0x00000002
+[   10.759040] GEMINI-DEBUG dsi_irq[72] exit spins=1
+[   10.759071] GEMINI-DEBUG dsi_irq[73] enter status=0x00000002
+[   10.759080] GEMINI-DEBUG dsi_irq[73] exit spins=1
+[   10.759110] GEMINI-DEBUG dsi_irq[74] enter status=0x00000002
+[   10.759119] GEMINI-DEBUG dsi_irq[74] exit spins=1
+[   10.759150] GEMINI-DEBUG dsi_irq[75] enter status=0x00000002
+[   10.759159] GEMINI-DEBUG dsi_irq[75] exit spins=1
+[   10.759189] GEMINI-DEBUG dsi_irq[76] enter status=0x00000002
+[   10.759198] GEMINI-DEBUG dsi_irq[76] exit spins=1
+[   10.759229] GEMINI-DEBUG dsi_irq[77] enter status=0x00000002
+[   10.759238] GEMINI-DEBUG dsi_irq[77] exit spins=1
+[   10.759269] GEMINI-DEBUG dsi_irq[78] enter status=0x00000002
+[   10.759278] GEMINI-DEBUG dsi_irq[78] exit spins=1
+[   10.759308] GEMINI-DEBUG dsi_irq[79] enter status=0x00000002
+[   10.759317] GEMINI-DEBUG dsi_irq[79] exit spins=1
+[   10.759348] GEMINI-DEBUG dsi_irq[80] enter status=0x00000002
+[   10.759356] GEMINI-DEBUG dsi_irq[80] exit spins=1
+[   10.759387] GEMINI-DEBUG dsi_irq[81] enter status=0x00000002
+[   10.759395] GEMINI-DEBUG dsi_irq[81] exit spins=1
+[   10.759425] GEMINI-DEBUG dsi_irq[82] enter status=0x00000002
+[   10.759434] GEMINI-DEBUG dsi_irq[82] exit spins=1
+[   10.759465] GEMINI-DEBUG dsi_irq[83] enter status=0x00000002
+[   10.759474] GEMINI-DEBUG dsi_irq[83] exit spins=1
+[   10.759505] GEMINI-DEBUG dsi_irq[84] enter status=0x00000002
+[   10.759513] GEMINI-DEBUG dsi_irq[84] exit spins=1
+[   10.759544] GEMINI-DEBUG dsi_irq[85] enter status=0x00000002
+[   10.759553] GEMINI-DEBUG dsi_irq[85] exit spins=1
+[   10.759584] GEMINI-DEBUG dsi_irq[86] enter status=0x00000002
+[   10.759593] GEMINI-DEBUG dsi_irq[86] exit spins=1
+[   10.759624] GEMINI-DEBUG dsi_irq[87] enter status=0x00000002
+[   10.759633] GEMINI-DEBUG dsi_irq[87] exit spins=1
+[   10.759663] GEMINI-DEBUG dsi_irq[88] enter status=0x00000002
+[   10.759672] GEMINI-DEBUG dsi_irq[88] exit spins=1
+[   10.759703] GEMINI-DEBUG dsi_irq[89] enter status=0x00000002
+[   10.759712] GEMINI-DEBUG dsi_irq[89] exit spins=1
+[   10.759743] GEMINI-DEBUG dsi_irq[90] enter status=0x00000002
+[   10.759752] GEMINI-DEBUG dsi_irq[90] exit spins=1
+[   10.759782] GEMINI-DEBUG dsi_irq[91] enter status=0x00000002
+[   10.759791] GEMINI-DEBUG dsi_irq[91] exit spins=1
+[   10.759822] GEMINI-DEBUG dsi_irq[92] enter status=0x00000002
+[   10.759831] GEMINI-DEBUG dsi_irq[92] exit spins=1
+[   10.759862] GEMINI-DEBUG dsi_irq[93] enter status=0x00000002
+[   10.759871] GEMINI-DEBUG dsi_irq[93] exit spins=1
+[   10.759902] GEMINI-DEBUG dsi_irq[94] enter status=0x00000002
+[   10.759910] GEMINI-DEBUG dsi_irq[94] exit spins=1
+[   10.759941] GEMINI-DEBUG dsi_irq[95] enter status=0x00000002
+[   10.759950] GEMINI-DEBUG dsi_irq[95] exit spins=1
+[   10.759981] GEMINI-DEBUG dsi_irq[96] enter status=0x00000002
+[   10.759990] GEMINI-DEBUG dsi_irq[96] exit spins=1
+[   10.760020] GEMINI-DEBUG dsi_irq[97] enter status=0x00000002
+[   10.760029] GEMINI-DEBUG dsi_irq[97] exit spins=1
+[   10.760060] GEMINI-DEBUG dsi_irq[98] enter status=0x00000002
+[   10.760069] GEMINI-DEBUG dsi_irq[98] exit spins=1
+[   10.760100] GEMINI-DEBUG dsi_irq[99] enter status=0x00000002
+[   10.760108] GEMINI-DEBUG dsi_irq[99] exit spins=1
+[   10.760139] GEMINI-DEBUG dsi_irq[100] enter status=0x00000002
+[   10.760149] GEMINI-DEBUG dsi_irq[100] exit spins=1
+[   10.760184] GEMINI-DEBUG dsi_irq[101] enter status=0x00000002
+[   10.760193] GEMINI-DEBUG dsi_irq[101] exit spins=1
+[   10.760223] GEMINI-DEBUG dsi_irq[102] enter status=0x00000002
+[   10.760234] GEMINI-DEBUG dsi_irq[102] exit spins=1
+[   10.760265] GEMINI-DEBUG dsi_irq[103] enter status=0x00000002
+[   10.760275] GEMINI-DEBUG dsi_irq[103] exit spins=1
+[   10.760306] GEMINI-DEBUG dsi_irq[104] enter status=0x00000002
+[   10.760315] GEMINI-DEBUG dsi_irq[104] exit spins=1
+[   10.760346] GEMINI-DEBUG dsi_irq[105] enter status=0x00000002
+[   10.760355] GEMINI-DEBUG dsi_irq[105] exit spins=1
+[   10.760386] GEMINI-DEBUG dsi_irq[106] enter status=0x00000002
+[   10.760395] GEMINI-DEBUG dsi_irq[106] exit spins=1
+[   10.760425] GEMINI-DEBUG dsi_irq[107] enter status=0x00000002
+[   10.760434] GEMINI-DEBUG dsi_irq[107] exit spins=1
+[   10.760465] GEMINI-DEBUG dsi_irq[108] enter status=0x00000002
+[   10.760474] GEMINI-DEBUG dsi_irq[108] exit spins=1
+[   10.760505] GEMINI-DEBUG dsi_irq[109] enter status=0x00000002
+[   10.760515] GEMINI-DEBUG dsi_irq[109] exit spins=1
+[   10.760546] GEMINI-DEBUG dsi_irq[110] enter status=0x00000002
+[   10.760555] GEMINI-DEBUG dsi_irq[110] exit spins=1
+[   10.760585] GEMINI-DEBUG dsi_irq[111] enter status=0x00000002
+[   10.760594] GEMINI-DEBUG dsi_irq[111] exit spins=1
+[   10.760624] GEMINI-DEBUG dsi_irq[112] enter status=0x00000002
+[   10.760634] GEMINI-DEBUG dsi_irq[112] exit spins=1
+[   10.760664] GEMINI-DEBUG dsi_irq[113] enter status=0x00000002
+[   10.760673] GEMINI-DEBUG dsi_irq[113] exit spins=1
+[   10.760704] GEMINI-DEBUG dsi_irq[114] enter status=0x00000002
+[   10.760713] GEMINI-DEBUG dsi_irq[114] exit spins=1
+[   10.760744] GEMINI-DEBUG dsi_irq[115] enter status=0x00000002
+[   10.760753] GEMINI-DEBUG dsi_irq[115] exit spins=1
+[   10.760784] GEMINI-DEBUG dsi_irq[116] enter status=0x00000002
+[   10.760792] GEMINI-DEBUG dsi_irq[116] exit spins=1
+[   10.760823] GEMINI-DEBUG dsi_irq[117] enter status=0x00000002
+[   10.760832] GEMINI-DEBUG dsi_irq[117] exit spins=1
+[   10.760862] GEMINI-DEBUG dsi_irq[118] enter status=0x00000002
+[   10.760871] GEMINI-DEBUG dsi_irq[118] exit spins=1
+[   10.760902] GEMINI-DEBUG dsi_irq[119] enter status=0x00000002
+[   10.760911] GEMINI-DEBUG dsi_irq[119] exit spins=1
+[   10.760942] GEMINI-DEBUG dsi_irq[120] enter status=0x00000002
+[   10.760951] GEMINI-DEBUG dsi_irq[120] exit spins=1
+[   10.760982] GEMINI-DEBUG dsi_irq[121] enter status=0x00000002
+[   10.760991] GEMINI-DEBUG dsi_irq[121] exit spins=1
+[   10.761021] GEMINI-DEBUG dsi_irq[122] enter status=0x00000002
+[   10.761030] GEMINI-DEBUG dsi_irq[122] exit spins=1
+[   10.761060] GEMINI-DEBUG dsi_irq[123] enter status=0x00000002
+[   10.761069] GEMINI-DEBUG dsi_irq[123] exit spins=1
+[   10.761100] GEMINI-DEBUG dsi_irq[124] enter status=0x00000002
+[   10.761108] GEMINI-DEBUG dsi_irq[124] exit spins=1
+[   10.761140] GEMINI-DEBUG dsi_irq[125] enter status=0x00000002
+[   10.761149] GEMINI-DEBUG dsi_irq[125] exit spins=1
+[   10.761180] GEMINI-DEBUG dsi_irq[126] enter status=0x00000002
+[   10.761188] GEMINI-DEBUG dsi_irq[126] exit spins=1
+[   10.761219] GEMINI-DEBUG dsi_irq[127] enter status=0x00000002
+[   10.761228] GEMINI-DEBUG dsi_irq[127] exit spins=1
+[   10.761258] GEMINI-DEBUG dsi_irq[128] enter status=0x00000002
+[   10.761267] GEMINI-DEBUG dsi_irq[128] exit spins=1
+[   10.761298] GEMINI-DEBUG dsi_irq[129] enter status=0x00000002
+[   10.761306] GEMINI-DEBUG dsi_irq[129] exit spins=1
+[   10.761337] GEMINI-DEBUG dsi_irq[130] enter status=0x00000002
+[   10.761345] GEMINI-DEBUG dsi_irq[130] exit spins=1
+[   10.761376] GEMINI-DEBUG dsi_irq[131] enter status=0x00000002
+[   10.761385] GEMINI-DEBUG dsi_irq[131] exit spins=1
+[   10.761416] GEMINI-DEBUG dsi_irq[132] enter status=0x00000002
+[   10.761425] GEMINI-DEBUG dsi_irq[132] exit spins=1
+[   10.761455] GEMINI-DEBUG dsi_irq[133] enter status=0x00000002
+[   10.761464] GEMINI-DEBUG dsi_irq[133] exit spins=1
+[   10.761495] GEMINI-DEBUG dsi_irq[134] enter status=0x00000002
+[   10.761504] GEMINI-DEBUG dsi_irq[134] exit spins=1
+[   10.761534] GEMINI-DEBUG dsi_irq[135] enter status=0x00000002
+[   10.761543] GEMINI-DEBUG dsi_irq[135] exit spins=1
+[   10.761574] GEMINI-DEBUG dsi_irq[136] enter status=0x00000002
+[   10.761583] GEMINI-DEBUG dsi_irq[136] exit spins=1
+[   10.761614] GEMINI-DEBUG dsi_irq[137] enter status=0x00000002
+[   10.761622] GEMINI-DEBUG dsi_irq[137] exit spins=1
+[   10.761653] GEMINI-DEBUG dsi_irq[138] enter status=0x00000002
+[   10.761662] GEMINI-DEBUG dsi_irq[138] exit spins=1
+[   10.761694] GEMINI-DEBUG dsi_irq[139] enter status=0x00000002
+[   10.761703] GEMINI-DEBUG dsi_irq[139] exit spins=1
+[   10.761734] GEMINI-DEBUG dsi_irq[140] enter status=0x00000002
+[   10.761742] GEMINI-DEBUG dsi_irq[140] exit spins=1
+[   10.761773] GEMINI-DEBUG dsi_irq[141] enter status=0x00000002
+[   10.761782] GEMINI-DEBUG dsi_irq[141] exit spins=1
+[   10.761813] GEMINI-DEBUG dsi_irq[142] enter status=0x00000002
+[   10.761822] GEMINI-DEBUG dsi_irq[142] exit spins=1
+[   10.761853] GEMINI-DEBUG dsi_irq[143] enter status=0x00000002
+[   10.761862] GEMINI-DEBUG dsi_irq[143] exit spins=1
+[   10.761892] GEMINI-DEBUG dsi_irq[144] enter status=0x00000002
+[   10.761901] GEMINI-DEBUG dsi_irq[144] exit spins=1
+[   10.761932] GEMINI-DEBUG dsi_irq[145] enter status=0x00000002
+[   10.761941] GEMINI-DEBUG dsi_irq[145] exit spins=1
+[   10.761972] GEMINI-DEBUG dsi_irq[146] enter status=0x00000002
+[   10.761981] GEMINI-DEBUG dsi_irq[146] exit spins=1
+[   10.762014] GEMINI-DEBUG dsi_irq[147] enter status=0x00000002
+[   10.762023] GEMINI-DEBUG dsi_irq[147] exit spins=1
+[   10.762053] GEMINI-DEBUG dsi_irq[148] enter status=0x00000002
+[   10.762062] GEMINI-DEBUG dsi_irq[148] exit spins=1
+[   10.762093] GEMINI-DEBUG dsi_irq[149] enter status=0x00000002
+[   10.762102] GEMINI-DEBUG dsi_irq[149] exit spins=1
+[   10.762132] GEMINI-DEBUG dsi_irq[150] enter status=0x00000002
+[   10.762142] GEMINI-DEBUG dsi_irq[150] exit spins=1
+[   10.762176] GEMINI-DEBUG dsi_irq[151] enter status=0x00000002
+[   10.762185] GEMINI-DEBUG dsi_irq[151] exit spins=1
+[   10.762216] GEMINI-DEBUG dsi_irq[152] enter status=0x00000002
+[   10.762224] GEMINI-DEBUG dsi_irq[152] exit spins=1
+[   10.762257] GEMINI-DEBUG dsi_irq[153] enter status=0x00000002
+[   10.762266] GEMINI-DEBUG dsi_irq[153] exit spins=1
+[   10.762296] GEMINI-DEBUG dsi_irq[154] enter status=0x00000002
+[   10.762305] GEMINI-DEBUG dsi_irq[154] exit spins=1
+[   10.762336] GEMINI-DEBUG dsi_irq[155] enter status=0x00000002
+[   10.762345] GEMINI-DEBUG dsi_irq[155] exit spins=1
+[   10.762376] GEMINI-DEBUG dsi_irq[156] enter status=0x00000002
+[   10.762384] GEMINI-DEBUG dsi_irq[156] exit spins=1
+[   10.762430] GEMINI-DEBUG dsi_irq[157] enter status=0x00000002
+[   10.762439] GEMINI-DEBUG dsi_irq[157] exit spins=1
+[   10.762470] GEMINI-DEBUG dsi_irq[158] enter status=0x00000002
+[   10.762479] GEMINI-DEBUG dsi_irq[158] exit spins=1
+[   10.762516] GEMINI-DEBUG dsi_irq[159] enter status=0x00000002
+[   10.762525] GEMINI-DEBUG dsi_irq[159] exit spins=1
+[   10.762555] GEMINI-DEBUG dsi_irq[160] enter status=0x00000002
+[   10.762564] GEMINI-DEBUG dsi_irq[160] exit spins=1
+[   10.762595] GEMINI-DEBUG dsi_irq[161] enter status=0x00000002
+[   10.762604] GEMINI-DEBUG dsi_irq[161] exit spins=1
+[   10.762635] GEMINI-DEBUG dsi_irq[162] enter status=0x00000002
+[   10.762643] GEMINI-DEBUG dsi_irq[162] exit spins=1
+[   10.762674] GEMINI-DEBUG dsi_irq[163] enter status=0x00000002
+[   10.762683] GEMINI-DEBUG dsi_irq[163] exit spins=1
+[   10.762714] GEMINI-DEBUG dsi_irq[164] enter status=0x00000002
+[   10.762723] GEMINI-DEBUG dsi_irq[164] exit spins=1
+[   10.762753] GEMINI-DEBUG dsi_irq[165] enter status=0x00000002
+[   10.762762] GEMINI-DEBUG dsi_irq[165] exit spins=1
+[   10.762792] GEMINI-DEBUG dsi_irq[166] enter status=0x00000002
+[   10.762801] GEMINI-DEBUG dsi_irq[166] exit spins=1
+[   10.762832] GEMINI-DEBUG dsi_irq[167] enter status=0x00000002
+[   10.762841] GEMINI-DEBUG dsi_irq[167] exit spins=1
+[   10.762872] GEMINI-DEBUG dsi_irq[168] enter status=0x00000002
+[   10.762880] GEMINI-DEBUG dsi_irq[168] exit spins=1
+[   10.762911] GEMINI-DEBUG dsi_irq[169] enter status=0x00000002
+[   10.762920] GEMINI-DEBUG dsi_irq[169] exit spins=1
+[   10.762951] GEMINI-DEBUG dsi_irq[170] enter status=0x00000002
+[   10.762960] GEMINI-DEBUG dsi_irq[170] exit spins=1
+[   10.762990] GEMINI-DEBUG dsi_irq[171] enter status=0x00000002
+[   10.762999] GEMINI-DEBUG dsi_irq[171] exit spins=1
+[   10.763030] GEMINI-DEBUG dsi_irq[172] enter status=0x00000002
+[   10.763039] GEMINI-DEBUG dsi_irq[172] exit spins=1
+[   10.763070] GEMINI-DEBUG dsi_irq[173] enter status=0x00000002
+[   10.763079] GEMINI-DEBUG dsi_irq[173] exit spins=1
+[   10.763110] GEMINI-DEBUG dsi_irq[174] enter status=0x00000002
+[   10.763118] GEMINI-DEBUG dsi_irq[174] exit spins=1
+[   10.763149] GEMINI-DEBUG dsi_irq[175] enter status=0x00000002
+[   10.763157] GEMINI-DEBUG dsi_irq[175] exit spins=1
+[   10.763188] GEMINI-DEBUG dsi_irq[176] enter status=0x00000002
+[   10.763196] GEMINI-DEBUG dsi_irq[176] exit spins=1
+[   10.763218] GEMINI-DEBUG dsi_irq[177] enter status=0x00000002
+[   10.763227] GEMINI-DEBUG dsi_irq[177] exit spins=1
+[   10.763259] GEMINI-DEBUG dsi_irq[178] enter status=0x00000002
+[   10.763268] GEMINI-DEBUG dsi_irq[178] exit spins=1
+[   10.763299] GEMINI-DEBUG dsi_irq[179] enter status=0x00000002
+[   10.763308] GEMINI-DEBUG dsi_irq[179] exit spins=1
+[   10.763339] GEMINI-DEBUG dsi_irq[180] enter status=0x00000002
+[   10.763348] GEMINI-DEBUG dsi_irq[180] exit spins=1
+[   10.763379] GEMINI-DEBUG dsi_irq[181] enter status=0x00000002
+[   10.763388] GEMINI-DEBUG dsi_irq[181] exit spins=1
+[   10.763418] GEMINI-DEBUG dsi_irq[182] enter status=0x00000002
+[   10.763427] GEMINI-DEBUG dsi_irq[182] exit spins=1
+[   10.763458] GEMINI-DEBUG dsi_irq[183] enter status=0x00000002
+[   10.763466] GEMINI-DEBUG dsi_irq[183] exit spins=1
+[   10.763499] GEMINI-DEBUG dsi_irq[184] enter status=0x00000002
+[   10.763508] GEMINI-DEBUG dsi_irq[184] exit spins=1
+[   10.763531] GEMINI-DEBUG dsi_irq[185] enter status=0x00000002
+[   10.763540] GEMINI-DEBUG dsi_irq[185] exit spins=1
+[   10.763562] GEMINI-DEBUG dsi_irq[186] enter status=0x00000002
+[   10.763571] GEMINI-DEBUG dsi_irq[186] exit spins=1
+[   10.888179] GEMINI-DEBUG dsi_irq[187] enter status=0x00000002
+[   10.888187] GEMINI-DEBUG dsi_irq[187] exit spins=1
+[   10.948179] GEMINI-DEBUG dsi_irq[188] enter status=0x00000002
+[   10.948187] GEMINI-DEBUG dsi_irq[188] exit spins=1
+[   10.948211] GEMINI-DEBUG dsi_irq[189] enter status=0x00000002
+[   10.948219] GEMINI-DEBUG dsi_irq[189] exit spins=1
+[   10.948242] GEMINI-DEBUG dsi_irq[190] enter status=0x00000002
+[   10.948251] GEMINI-DEBUG dsi_irq[190] exit spins=1
+[   10.948273] GEMINI-DEBUG dsi_irq[191] enter status=0x00000002
+[   10.948282] GEMINI-DEBUG dsi_irq[191] exit spins=1
+[   10.948316] GEMINI-DEBUG dsi_irq[192] enter status=0x00000001
+[   10.948326] GEMINI-DEBUG dsi_irq[192] exit spins=1
+[   10.948333] GEMINI-DEBUG dsi_irq[193] enter status=0x00000002
+[   10.948338] GEMINI-DEBUG dsi_irq[193] exit spins=1
+[   10.948338] [drm] dsi get 1 byte data from the panel address(0xa)
+[   10.948346] panel-solomon-ssd2092 1401c000.dsi.0: GEMINI-PANEL post-init: DCS read 0x0a ret=1 val=0x1c
+[   10.948380] GEMINI-DEBUG dsi_irq[194] enter status=0x00000001
+[   10.948391] GEMINI-DEBUG dsi_irq[194] exit spins=1
+[   10.948398] GEMINI-DEBUG dsi_irq[195] enter status=0x00000002
+[   10.948403] GEMINI-DEBUG dsi_irq[195] exit spins=1
+[   10.948404] [drm] dsi get 1 byte data from the panel address(0xb)
+[   10.948411] panel-solomon-ssd2092 1401c000.dsi.0: GEMINI-PANEL post-init: DCS read 0x0b ret=1 val=0x09
+[   10.948443] GEMINI-DEBUG dsi_irq[196] enter status=0x00000001
+[   10.948454] GEMINI-DEBUG dsi_irq[196] exit spins=1
+[   10.948461] GEMINI-DEBUG dsi_irq[197] enter status=0x00000002
+[   10.948467] GEMINI-DEBUG dsi_irq[197] exit spins=1
+[   10.948468] [drm] dsi get 1 byte data from the panel address(0xc)
+[   10.948475] panel-solomon-ssd2092 1401c000.dsi.0: GEMINI-PANEL post-init: DCS read 0x0c ret=1 val=0x70
+[   10.948508] GEMINI-DEBUG dsi_irq[198] enter status=0x00000001
+[   10.948519] GEMINI-DEBUG dsi_irq[198] exit spins=1
+[   10.948526] GEMINI-DEBUG dsi_irq[199] enter status=0x00000002
+[   10.948531] GEMINI-DEBUG dsi_irq[199] exit spins=1
+[   10.948532] [drm] dsi get 1 byte data from the panel address(0xd)
+[   10.948539] panel-solomon-ssd2092 1401c000.dsi.0: GEMINI-PANEL post-init: DCS read 0x0d ret=1 val=0x10
+[   10.948572] GEMINI-DEBUG dsi_irq[200] enter status=0x00000001
+[   10.948583] GEMINI-DEBUG dsi_irq[200] exit spins=1
+[   10.948590] GEMINI-DEBUG dsi_irq[201] enter status=0x00000002
+[   10.948596] GEMINI-DEBUG dsi_irq[201] exit spins=1
+[   10.948596] [drm] dsi get 1 byte data from the panel address(0xe)
+[   10.948603] panel-solomon-ssd2092 1401c000.dsi.0: GEMINI-PANEL post-init: DCS read 0x0e ret=1 val=0x80
+[   10.948614] GEMINI-DEBUG dsi_poweron enter refcount=1
+[   10.999770] GEMINI-DEBUG dsi_irq[202] enter status=0x00000008
+[   10.999780] GEMINI-DEBUG dsi_irq[202] exit spins=1
+[   10.999814] GEMINI-DEBUG dsi_irq[203] enter status=0x00000001
+[   10.999824] GEMINI-DEBUG dsi_irq[203] exit spins=1
+[   10.999831] GEMINI-DEBUG dsi_irq[204] enter status=0x00000002
+[   10.999837] GEMINI-DEBUG dsi_irq[204] exit spins=1
+[   10.999838] [drm] type is 0x02, try again
+[   10.999841] [drm] dsi get 0 byte data from the panel address(0xa)
+[   10.999847] panel-solomon-ssd2092 1401c000.dsi.0: GEMINI-PANEL enable(HS up): RDDPM pre  ret=0 val=0x00
+[   11.018394] GEMINI-DEBUG dsi_irq[205] enter status=0x00000008
+[   11.018404] GEMINI-DEBUG dsi_irq[205] exit spins=1
+[   11.018428] GEMINI-DEBUG dsi_irq[206] enter status=0x00000002
+[   11.018437] GEMINI-DEBUG dsi_irq[206] exit spins=1
+[   11.018449] panel-solomon-ssd2092 1401c000.dsi.0: GEMINI-PANEL enable(HS up): sleep-out ret=0
+[   11.148259] GEMINI-DEBUG dsi_irq[207] enter status=0x00000008
+[   11.148268] GEMINI-DEBUG dsi_irq[207] exit spins=1
+[   11.148292] GEMINI-DEBUG dsi_irq[208] enter status=0x00000002
+[   11.148301] GEMINI-DEBUG dsi_irq[208] exit spins=1
+[   11.148313] panel-solomon-ssd2092 1401c000.dsi.0: GEMINI-PANEL enable(HS up): display-on ret=0
+[   11.222492] GEMINI-DEBUG dsi_irq[209] enter status=0x00000008
+[   11.222501] GEMINI-DEBUG dsi_irq[209] exit spins=1
+[   11.222535] GEMINI-DEBUG dsi_irq[210] enter status=0x00000001
+[   11.222545] GEMINI-DEBUG dsi_irq[210] exit spins=1
+[   11.222552] GEMINI-DEBUG dsi_irq[211] enter status=0x00000002
+[   11.222557] GEMINI-DEBUG dsi_irq[211] exit spins=1
+[   11.222558] [drm] type is 0x02, try again
+[   11.222561] [drm] dsi get 0 byte data from the panel address(0xa)
+[   11.222568] panel-solomon-ssd2092 1401c000.dsi.0: GEMINI-PANEL enable(HS up): RDDPM post ret=0 val=0x00
+[   11.222588] GEMINI-DEBUG plane_update_new_state addr=0x00000000fe200000 pitch=4320 fmt=0x34325258
+[   11.222600] GEMINI-DEBUG crtc_update_config pending_planes=0x1 shadow_register=0 cmdq_chan=0000000000000000
+[   11.241009] GEMINI-DEBUG crtc_ddp_irq pending_planes=1
+[   11.241300] GEMINI-DEBUG plane_update_new_state addr=0x00000000fe200000 pitch=4320 fmt=0x34325258
+[   11.241309] GEMINI-DEBUG crtc_update_config pending_planes=0x1 shadow_register=0 cmdq_chan=0000000000000000
+[   11.259549] GEMINI-DEBUG crtc_ddp_irq pending_planes=1
+[   11.278092] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   11.289511] Console: switching to colour frame buffer device 135x135
+[   11.289697] GEMINI-DEBUG plane_update_new_state addr=0x00000000fe200000 pitch=4320 fmt=0x34325258
+[   11.289711] GEMINI-DEBUG crtc_update_config pending_planes=0x1 shadow_register=0 cmdq_chan=0000000000000000
+[   11.296644] GEMINI-DEBUG crtc_ddp_irq pending_planes=1
+[   11.315181] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   11.333723] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   11.334436] mediatek-drm mediatek-drm.1.auto: [drm] fb0: mediatekdrmfb frame buffer device
+[   11.352267] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   12.093478] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   12.094148] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   12.094870] panel-solomon-ssd2092 1401c000.dsi.0: Solomon SSD2092 FHD DSI panel registered
+[   12.095049] GEMINI-DEBUG plane_update_new_state addr=0x00000000fe200000 pitch=4320 fmt=0x34325258
+[   12.097086] GEMINI-DEBUG crtc_update_config pending_planes=0x1 shadow_register=0 cmdq_chan=0000000000000000
+[   12.097238] clk: Not disabling unused clocks
+[   12.098879] ALSA device list:
+[   12.099266]   No soundcards found.
+[   12.101060] Freeing unused kernel memory: 2624K
+[   12.101812] Run /init as init process
++ exec
+[   12.112570] GEMINI-DEBUG crtc_ddp_irq pending_planes=1
+[   14.386749] EXT4-fs (mmcblk0p29): recovery complete
+[   14.388037] EXT4-fs (mmcblk0p29): mounted filesystem 5d14e74a-9b89-4a3b-8347-f1d6149267cb r/w with ordered data mode. Quota mode: none.
+[   14.817379] systemd[1]: System time advanced to built-in epoch: Mon 2026-04-13 19:38:05 UTC
+[   14.882833] NET: Registered PF_INET6 protocol family
+[   14.884749] Segment Routing with IPv6
+[   14.885274] In-situ OAM (IOAM) with IPv6
+[!p]104[?7h[   14.956292] systemd[1]: systemd 257.13-1~deb13u1 running in system mode (+PAM +AUDIT +SELINUX +APPARMOR +IMA +IPE +SMACK +SECCOMP +GCRYPT -GNUTLS +OPENSSL +ACL +BLKID +CURL +ELFUTILS +FIDO2 +IDN2 -IDN +IPTC +KMOD +LIBCRYPTSETUP +LIBCRYPTSETUP_PLUGINS +LIBFDISK +PCRE2 +PWQUALITY +P11KIT +QRENCODE +TPM2 +BZIP2 +LZ4 +XZ +ZLIB +ZSTD +BPF_FRAMEWORK +BTF -XKBCOMMON -UTMP +SYSVINIT +LIBARCHIVE)
+[   14.960727] systemd[1]: Detected architecture arm64.
+
+[0;1;39mWelcome to [0m[1mDebian GNU/Linux 13 (trixie)[0m[0;1;39m![0m
+
+[   14.985188] systemd[1]: Hostname set to <gemini>.
+[   15.056624] systemd[1]: memfd_create() called without MFD_EXEC or MFD_NOEXEC_SEAL set
+[   15.335148] systemd[1]: bpf-restrict-fs: BPF LSM hook not enabled in the kernel, BPF LSM not supported.
+[   15.917367] systemd[1]: Queued start job for default target graphical.target.
+[   15.966891] systemd[1]: Created slice system-getty.slice - Slice /system/getty.
+[[0;32m  OK  [0m] Created slice [0;1;39msystem-getty.slice[0m - Slice /system/getty.
+[   15.982892] systemd[1]: Created slice system-modprobe.slice - Slice /system/modprobe.
+[[0;32m  OK  [0m] Created slice [0;1;39msystem-modprobe.slice[0m - Slice /system/modprobe.
+[   15.998815] systemd[1]: Created slice system-serial\x2dgetty.slice - Slice /system/serial-getty.
+[[0;32m  OK  [0m] Created slice [0;1;39msystem-serial\x2dget…slice[0m - Slice /system/serial-getty.
+[   16.013971] systemd[1]: Created slice user.slice - User and Session Slice.
+[[0;32m  OK  [0m] Created slice [0;1;39muser.slice[0m - User and Session Slice.
+[   16.024750] systemd[1]: Started systemd-ask-password-console.path - Dispatch Password Requests to Console Directory Watch.
+[[0;32m  OK  [0m] Started [0;1;39msystemd-ask-password-conso…[0mequests to Console Directory Watch.
+[   16.036602] systemd[1]: Started systemd-ask-password-wall.path - Forward Password Requests to Wall Directory Watch.
+[[0;32m  OK  [0m] Started [0;1;39msystemd-ask-password-wall.…[0md Requests to Wall Directory Watch.
+[   16.048488] systemd[1]: proc-sys-fs-binfmt_misc.automount - Arbitrary Executable File Formats File System Automount Point skipped, unmet condition check ConditionPathExists=/proc/sys/fs/binfmt_misc
+[   16.050827] systemd[1]: Expecting device dev-ttyS0.device - /dev/ttyS0...
+         Expecting device [0;1;39mdev-ttyS0.device[0m - /dev/ttyS0...
+[   16.064499] systemd[1]: Reached target paths.target - Path Units.
+[[0;32m  OK  [0m] Reached target [0;1;39mpaths.target[0m - Path Units.
+[   16.076324] systemd[1]: Reached target remote-fs.target - Remote File Systems.
+[[0;32m  OK  [0m] Reached target [0;1;39mremote-fs.target[0m - Remote File Systems.
+[   16.088305] systemd[1]: Reached target slices.target - Slice Units.
+[[0;32m  OK  [0m] Reached target [0;1;39mslices.target[0m - Slice Units.
+[   16.100362] systemd[1]: Reached target swap.target - Swaps.
+[[0;32m  OK  [0m] Reached target [0;1;39mswap.target[0m - Swaps.
+[   16.120938] systemd[1]: Listening on systemd-creds.socket - Credential Encryption/Decryption.
+[[0;32m  OK  [0m] Listening on [0;1;39msystemd-creds.socket[0m - Credential Encryption/Decryption.
+[   16.132869] systemd[1]: Listening on systemd-initctl.socket - initctl Compatibility Named Pipe.
+[[0;32m  OK  [0m] Listening on [0;1;39msystemd-initctl.socke…[0m- initctl Compatibility Named Pipe.
+[   16.144873] systemd[1]: Listening on systemd-journald-dev-log.socket - Journal Socket (/dev/log).
+[[0;32m  OK  [0m] Listening on [0;1;39msystemd-journald-dev-…socket[0m - Journal Socket (/dev/log).
+[   16.156905] systemd[1]: Listening on systemd-journald.socket - Journal Sockets.
+[[0;32m  OK  [0m] Listening on [0;1;39msystemd-journald.socket[0m - Journal Sockets.
+[   16.169195] systemd[1]: Listening on systemd-networkd.socket - Network Service Netlink Socket.
+[[0;32m  OK  [0m] Listening on [0;1;39msystemd-networkd.socket[0m - Network Service Netlink Socket.
+[   16.180418] systemd[1]: systemd-pcrextend.socket - TPM PCR Measurements skipped, unmet condition check ConditionSecurity=measured-uki
+[   16.182044] systemd[1]: systemd-pcrlock.socket - Make TPM PCR Policy skipped, unmet condition check ConditionSecurity=measured-uki
+[   16.184274] systemd[1]: Listening on systemd-udevd-control.socket - udev Control Socket.
+[[0;32m  OK  [0m] Listening on [0;1;39msystemd-udevd-control.socket[0m - udev Control Socket.
+[   16.196710] systemd[1]: Listening on systemd-udevd-kernel.socket - udev Kernel Socket.
+[[0;32m  OK  [0m] Listening on [0;1;39msystemd-udevd-kernel.socket[0m - udev Kernel Socket.
+[   16.216005] systemd[1]: Mounting dev-hugepages.mount - Huge Pages File System...
+         Mounting [0;1;39mdev-hugepages.mount[0m - Huge Pages File System...
+[   16.233013] systemd[1]: Mounting dev-mqueue.mount - POSIX Message Queue File System...
+         Mounting [0;1;39mdev-mqueue.mount[0m - POSIX Message Queue File System...
+[   16.247841] mtk_crtc_ddp_irq: 222 callbacks suppressed
+[   16.247860] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   16.249500] systemd[1]: Mounting run-lock.mount - Legacy Locks Directory /run/lock...
+         Mounting [0;1;39mrun-lock.mount[0m - Legacy Locks Directory /run/lock...
+[   16.266378] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   16.284918] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   16.287631] systemd[1]: Mounting sys-kernel-debug.mount - Kernel Debug File System...
+         Mounting [0;1;39msys-kernel-debug.mount[0m - Kernel Debug File System...
+[   16.303465] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   16.304928] systemd[1]: sys-kernel-tracing.mount - Kernel Trace File System skipped, unmet condition check ConditionPathExists=/sys/kernel/tracing
+[   16.312532] systemd[1]: Mounting tmp.mount - Temporary Directory /tmp...
+         Mounting [0;1;39mtmp.mount[0m - Temporary Directory /tmp...
+[   16.322013] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   16.334245] systemd[1]: Starting kmod-static-nodes.service - Create List of Static Device Nodes...
+         Starting [0;1;39mkmod-static-nodes.service[0m…eate List of Static Device Nodes...
+[   16.340553] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   16.354125] systemd[1]: Starting modprobe@configfs.service - Load Kernel Module configfs...
+         Starting [0;1;39mmodprobe@configfs.service[0m - Load Kernel Module configfs...
+[   16.359095] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   16.373888] systemd[1]: Starting modprobe@drm.service - Load Kernel Module drm...
+         Starting [0;1;39mmodprobe@drm.service[0m - Load Kernel Module drm...
+[   16.377642] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   16.390182] systemd[1]: Starting modprobe@efi_pstore.service - Load Kernel Module efi_pstore...
+         Starting [0;1;39mmodprobe@efi_pstore.servi…[0m - Load Kernel Module efi_pstore...
+[   16.396186] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   16.410257] systemd[1]: Starting modprobe@fuse.service - Load Kernel Module fuse...
+         Starting [0;1;39mmodprobe@fuse.service[0m - Load Kernel Module fuse...
+[   16.414730] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   16.424819] systemd[1]: systemd-fsck-root.service - File System Check on Root Device skipped, unmet condition check ConditionPathIsReadWrite=!/
+[   16.426747] systemd[1]: systemd-hibernate-clear.service - Clear Stale Hibernate Storage Info skipped, unmet condition check ConditionPathExists=/sys/firmware/efi/efivars/HibernateLocation-8cf2644b-4b0b-428f-9387-6d876050dc67
+[   16.437621] systemd[1]: Starting systemd-journald.service - Journal Service...
+         Starting [0;1;39msystemd-journald.service[0m - Journal Service...
+[   16.456792] systemd[1]: Starting systemd-modules-load.service - Load Kernel Modules...
+         Starting [0;1;39msystemd-modules-load.service[0m - Load Kernel Modules...
+[   16.461784] fuse: init (API version 7.39)
+[   16.472731] systemd[1]: Starting systemd-network-generator.service - Generate Network Units from Kernel Command Line...
+         Starting [0;1;39msystemd-network-generator…[0mk Units from Kernel Command Line...
+[   16.484572] systemd[1]: systemd-pcrmachine.service - TPM PCR Machine ID Measurement skipped, unmet condition check ConditionSecurity=measured-uki
+[   16.490628] systemd[1]: Starting systemd-remount-fs.service - Remount Root and Kernel File Systems...
+         Starting [0;1;39msystemd-remount-fs.servic…[0munt Root and Kernel File Systems...
+[   16.493571] systemd[1]: systemd-tpm2-setup-early.service - Early TPM SRK Setup skipped, unmet condition check ConditionSecurity=measured-uki
+[   16.500852] systemd[1]: Starting systemd-udev-load-credentials.service - Load udev Rules from Credentials...
+         Starting [0;1;39msystemd-udev-load-credent…[0mLoad udev Rules from Credentials...
+[   16.508803] systemd[1]: Starting systemd-udev-trigger.service - Coldplug All udev Devices...
+         Starting [0;1;39msystemd-udev-trigger.service[0m - Coldplug All udev Devices...
+[   16.519292] systemd[1]: Mounted dev-hugepages.mount - Huge Pages File System.
+[[0;32m  OK  [0m] Mounted [0;1;39mdev-hugepages.mount[0m - Huge Pages File System.
+[   16.539440] systemd[1]: Mounted dev-mqueue.mount - POSIX Message Queue File System.
+[[0;32m  OK  [0m] Mounted [0;1;39mdev-mqueue.mount[0m - POSIX Message Queue File System.
+[   16.559420] systemd[1]: Mounted run-lock.mount - Legacy Locks Directory /run/lock.
+[[0;32m  OK  [0m] Mounted [0;1;39mrun-lock.mount[0m - Legacy Locks Directory /run/lock.
+[   16.573431] systemd[1]: Mounted sys-kernel-debug.mount - Kernel Debug File System.
+[[0;32m  OK  [[   16.574649] systemd-journald[177]: Collecting audit messages is disabled.
+0m] Mounted [0;1;39msys-kernel-debug.mount[0m - Kernel Debug File System.
+[   16.586635] EXT4-fs (mmcblk0p29): re-mounted 5d14e74a-9b89-4a3b-8347-f1d6149267cb r/w. Quota mode: none.
+[   16.591699] systemd[1]: Mounted tmp.mount - Temporary Directory /tmp.
+[[0;32m  OK  [0m] Mounted [0;1;39mtmp.mount[0m - Temporary Directory /tmp.
+[   16.606012] systemd[1]: Finished kmod-static-nodes.service - Create List of Static Device Nodes.
+[[0;32m  OK  [0m] Finished [0;1;39mkmod-static-nodes.service[0m…Create List of Static Device Nodes.
+[   16.622057] systemd[1]: modprobe@configfs.service: Deactivated successfully.
+[   16.623868] systemd[1]: Finished modprobe@configfs.service - Load Kernel Module configfs.
+[[0;32m  OK  [0m] Finished [0;1;39mmodprobe@configfs.service[0m - Load Kernel Module configfs.
+[   16.637802] systemd[1]: modprobe@drm.service: Deactivated successfully.
+[   16.639497] systemd[1]: Finished modprobe@drm.service - Load Kernel Module drm.
+[[0;32m  OK  [0m] Finished [0;1;39mmodprobe@drm.service[0m - Load Kernel Module drm.
+[   16.653784] systemd[1]: modprobe@efi_pstore.service: Deactivated successfully.
+[   16.655554] systemd[1]: Finished modprobe@efi_pstore.service - Load Kernel Module efi_pstore.
+[[0;32m  OK  [0m] Finished [0;1;39mmodprobe@efi_pstore.service[0m - Load Kernel Module efi_pstore.
+[   16.669816] systemd[1]: modprobe@fuse.service: Deactivated successfully.
+[   16.671531] systemd[1]: Finished modprobe@fuse.service - Load Kernel Module fuse.
+[[0;32m  OK  [0m] Finished [0;1;39mmodprobe@fuse.service[0m - Load Kernel Module fuse.
+[   16.686038] systemd[1]: Finished systemd-modules-load.service - Load Kernel Modules.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-modules-load.service[0m - Load Kernel Modules.
+[   16.702214] systemd[1]: Finished systemd-network-generator.service - Generate Network Units from Kernel Command Line.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-network-generator…[0mork Units from Kernel Command Line.
+[   16.719636] systemd[1]: Finished systemd-remount-fs.service - Remount Root and Kernel File Systems.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-remount-fs.servic…[0mmount Root and Kernel File Systems.
+[   16.733240] systemd[1]: Started systemd-journald.service - Journal Service.
+[[0;32m  OK  [0m] Started [0;1;39msystemd-journald.service[0m - Journal Service.
+[   16.754135] systemd[1]: Finished systemd-udev-load-credentials.service - Load udev Rules from Credentials.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-udev-load-credent…[0m- Load udev Rules from Credentials.
+[   16.801421] systemd[1]: Reached target network-pre.target - Preparation for Network.
+[[0;32m  OK  [0m] Reached target [0;1;39mnetwork-pre.target[0m - Preparation for Network.
+[   16.821726] systemd[1]: systemd-hwdb-update.service - Rebuild Hardware Database skipped, unmet condition check ConditionNeedsUpdate=/etc
+[   16.827889] systemd[1]: Starting systemd-journal-flush.service - Flush Journal to Persistent Storage...
+         Starting [0;1;39msystemd-journal-flush.ser…[0msh Journal to Persistent Storage...
+[   16.844805] systemd[1]: Starting systemd-pstore.service - Platform Persistent Storage Archival...
+         Starting [0;1;39msystemd-pstore.service[0m - …form Persistent Storage Archival...
+[   16.864379] systemd[1]: Starting systemd-random-seed.service - Load/Save OS Random Seed...
+         Starting [0;1;39msystemd-random-seed.service[0m - Load/Save OS Random Seed...
+[   16.903332] systemd[1]: Starting systemd-sysctl.service - Apply Kernel Variables...
+         Starting [0;1;39msystemd-sysctl.service[0m - Apply Kernel Variables...
+[   16.921751] systemd[1]: Starting systemd-tmpfiles-setup-dev-early.service - Create Static Device Nodes in /dev gracefully...
+         Starting [0;1;39msystemd-tmpfiles-setup-de…[0m Device Nodes in /dev gracefully...
+[   16.924840] systemd[1]: systemd-tpm2-setup.service - TPM SRK Setup skipped, unmet condition check ConditionSecurity=measured-uki
+[   16.949575] systemd[1]: Finished systemd-pstore.service - Platform Persistent Storage Archival.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-pstore.service[0m - …atform Persistent Storage Archival.
+[   16.963960] systemd-journald[177]: Received client request to flush runtime journal.
+[   16.967864] systemd-journald[177]: File /var/log/journal/d496dd5dda974f95a3a7ede81e07c936/system.journal corrupted or uncleanly shut down, renaming and replacing.
+[   16.985829] systemd[1]: Finished systemd-sysctl.service - Apply Kernel Variables.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-sysctl.service[0m - Apply Kernel Variables.
+[   17.041383] systemd[1]: Finished systemd-tmpfiles-setup-dev-early.service - Create Static Device Nodes in /dev gracefully.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-tmpfiles-setup-de…[0mic Device Nodes in /dev gracefully.
+[   17.057331] systemd[1]: systemd-sysusers.service - Create System Users skipped, no trigger condition checks were met.
+[   17.063858] systemd[1]: Starting systemd-tmpfiles-setup-dev.service - Create Static Device Nodes in /dev...
+         Starting [0;1;39msystemd-tmpfiles-setup-de…[0meate Static Device Nodes in /dev...
+[   17.176339] systemd[1]: Finished systemd-journal-flush.service - Flush Journal to Persistent Storage.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-journal-flush.ser…[0mlush Journal to Persistent Storage.
+[   17.194737] systemd[1]: Finished systemd-tmpfiles-setup-dev.service - Create Static Device Nodes in /dev.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-tmpfiles-setup-de…[0mCreate Static Device Nodes in /dev.
+[   17.216858] systemd[1]: Reached target local-fs-pre.target - Preparation for Local File Systems.
+[[0;32m  OK  [0m] Reached target [0;1;39mlocal-fs-pre.target[0m…Preparation for Local File Systems.
+[   17.228527] systemd[1]: Reached target local-fs.target - Local File Systems.
+[[0;32m  OK  [0m] Reached target [0;1;39mlocal-fs.target[0m - Local File Systems.
+[   17.248806] systemd[1]: Listening on systemd-sysext.socket - System Extension Image Management.
+[[0;32m  OK  [0m] Listening on [0;1;39msystemd-sysext.socket[0m… System Extension Image Management.
+[   17.261561] systemd[1]: systemd-binfmt.service - Set Up Additional Binary Formats skipped, unmet condition check ConditionPathIsMountPoint=/proc/sys/fs/binfmt_misc
+[   17.268620] systemd[1]: Starting systemd-tmpfiles-setup.service - Create System Files and Directories...
+         Starting [0;1;39msystemd-tmpfiles-setup.se…[0mate System Files and Directories...
+[   17.286856] systemd[1]: Starting systemd-udevd.service - Rule-based Manager for Device Events and Files...
+         Starting [0;1;39msystemd-udevd.service[0m - R…ager for Device Events and Files...
+[   17.435906] systemd[1]: Finished systemd-tmpfiles-setup.service - Create System Files and Directories.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-tmpfiles-setup.se…[0mreate System Files and Directories.
+[   17.450139] systemd[1]: ldconfig.service - Rebuild Dynamic Linker Cache skipped, no trigger condition checks were met.
+[   17.451742] systemd[1]: systemd-firstboot.service - First Boot Wizard skipped, unmet condition check ConditionFirstBoot=yes
+[   17.453749] systemd[1]: systemd-journal-catalog-update.service - Rebuild Journal Catalog skipped, unmet condition check ConditionNeedsUpdate=/var
+[   17.455967] systemd[1]: systemd-update-done.service - Update is Completed skipped, no trigger condition checks were met.
+[   17.521491] systemd[1]: Mounting sys-fs-fuse-connections.mount - FUSE Control File System...
+         Mounting [0;1;39msys-fs-fuse-connections.mount[0m - FUSE Control File System...
+[   17.537365] systemd[1]: Mounting sys-kernel-config.mount - Kernel Configuration File System...
+         Mounting [0;1;39msys-kernel-config.mount[0m - Kernel Configuration File System...
+[   17.591386] systemd[1]: Started systemd-udevd.service - Rule-based Manager for Device Events and Files.
+[[0;32m  OK  [0m] Started [0;1;39msystemd-udevd.service[0m - Ru…anager for Device Events and Files.
+[   17.605555] systemd[1]: Mounted sys-fs-fuse-connections.mount - FUSE Control File System.
+[[0;32m  OK  [0m] Mounted [0;1;39msys-fs-fuse-connections.mount[0m - FUSE Control File System.
+[   17.617955] systemd[1]: Mounted sys-kernel-config.mount - Kernel Configuration File System.
+[[0;32m  OK  [0m] Mounted [0;1;39msys-kernel-config.mount[0m - Kernel Configuration File System.
+[   17.650364] systemd[1]: Starting systemd-networkd.service - Network Configuration...
+         Starting [0;1;39msystemd-networkd.service[0m - Network Configuration...
+[   17.666304] systemd[1]: Finished systemd-udev-trigger.service - Coldplug All udev Devices.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-udev-trigger.service[0m - Coldplug All udev Devices.
+[   17.690543] systemd[1]: Reached target sysinit.target - System Initialization.
+[[0;32m  OK  [0m] Reached target [0;1;39msysinit.target[0m - System Initialization.
+[   17.705550] systemd[1]: apt-daily.timer: Not using persistent file timestamp Mon 2026-04-13 19:38:12 UTC as it is in the future.
+[   17.707401] systemd[1]: Started apt-daily.timer - Daily apt download activities.
+[[0;32m  OK  [0m] Started [0;1;39mapt-daily.timer[0m - Daily apt download activities.
+[   17.711017] systemd[1]: apt-daily-upgrade.timer: Not using persistent file timestamp Mon 2026-04-13 19:38:12 UTC as it is in the future.
+[   17.716551] systemd[1]: Started apt-daily-upgrade.timer - Daily apt upgrade and clean activities.
+[[0;32m  OK  [0m] Started [0;1;39mapt-daily-upgrade.timer[0m - …y apt upgrade and clean activities.
+[   17.728713] systemd[1]: dpkg-db-backup.timer: Not using persistent file timestamp Tue 2026-04-14 00:00:00 UTC as it is in the future.
+[   17.730538] systemd[1]: Started dpkg-db-backup.timer - Daily dpkg database backup timer.
+[[0;32m  OK  [0m] Started [0;1;39mdpkg-db-backup.timer[0m - Daily dpkg database backup timer.
+[   17.744832] systemd[1]: e2scrub_all.timer: Not using persistent file timestamp Mon 2026-04-13 19:38:12 UTC as it is in the future.
+[   17.746870] systemd[1]: Started e2scrub_all.timer - Periodic ext4 Online Metadata Check for All Filesystems.
+[[0;32m  OK  [0m] Started [0;1;39me2scrub_all.timer[0m - Period…Metadata Check for All Filesystems.
+[   17.760756] systemd[1]: fstrim.timer: Not using persistent file timestamp Mon 2026-04-13 19:38:12 UTC as it is in the future.
+[   17.763144] systemd[1]: Started fstrim.timer - Discard unused filesystem blocks once a week.
+[[0;32m  OK  [0m] Started [0;1;39mfstrim.timer[0m - Discard unused filesystem blocks once a week.
+[   17.776635] systemd[1]: Started systemd-tmpfiles-clean.timer - Daily Cleanup of Temporary Directories.
+[[0;32m  OK  [0m] Started [0;1;39msystemd-tmpfiles-clean.tim…[0my Cleanup of Temporary Directories.
+[   17.788584] systemd[1]: Reached target timers.target - Timer Units.
+[[0;32m  OK  [0m] Reached target [0;1;39mtimers.target[0m - Timer Units.
+[   17.801161] systemd[1]: Listening on dbus.socket - D-Bus System Message Bus Socket.
+[[0;32m  OK  [0m] Listening on [0;1;39mdbus.socket[0m - D-Bus System Message Bus Socket.
+[   17.822042] systemd[1]: Listening on sshd-unix-local.socket - OpenSSH Server Socket (systemd-ssh-generator, AF_UNIX Local).
+[[0;32m  OK  [0m] Listening on [0;1;39msshd-unix-local.socke…[0mtemd-ssh-generator, AF_UNIX Local).
+[   17.837024] systemd[1]: Listening on systemd-hostnamed.socket - Hostname Service Socket.
+[[0;32m  OK  [0m] Listening on [0;1;39msystemd-hostnamed.socket[0m - Hostname Service Socket.
+[   17.848587] systemd[1]: Reached target sockets.target - Socket Units.
+[[0;32m  OK  [0m] Reached target [0;1;39msockets.target[0m - Socket Units.
+[   17.884973] systemd[1]: Starting ifupdown-pre.service - Helper to synchronize boot up for ifupdown...
+         Starting [0;1;39mifupdown-pre.service[0m - He…synchronize boot up for ifupdown...
+[   17.887906] systemd[1]: systemd-pcrphase-sysinit.service - TPM PCR Barrier (Initialization) skipped, unmet condition check ConditionSecurity=measured-uki
+[   17.892866] systemd[1]: Reached target basic.target - Basic System.
+[[0;32m  OK  [0m] Reached target [0;1;39mbasic.target[0m - Basic System.
+[   17.897051] systemd[1]: System is tainted: unmerged-bin
+[   17.910680] systemd[1]: Starting dbus.service - D-Bus System Message Bus...
+         Starting [0;1;39mdbus.service[0m - D-Bus System Message Bus...
+[   17.936869] systemd[1]: Starting e2scrub_reap.service - Remove Stale Online ext4 Metadata Check Snapshots...
+         Starting [0;1;39me2scrub_reap.service[0m - Re…ne ext4 Metadata Check Snapshots...
+[   17.939846] systemd[1]: getty-static.service - getty on tty2-tty6 if dbus and logind are not available skipped, unmet condition check ConditionPathExists=!/usr/bin/dbus-daemon
+[   17.943103] systemd[1]: sshd-keygen.service - Generate sshd host keys on first boot skipped, unmet condition check ConditionFirstBoot=yes
+[   17.980126] systemd[1]: Starting systemd-logind.service - User Login Management...
+         Starting [0;1;39msystemd-logind.service[0m - User Login Management...
+[   17.992438] systemd[1]: systemd-pcrphase.service - TPM PCR Barrier (User) skipped, unmet condition check ConditionSecurity=measured-uki
+[   18.154984] systemd[1]: Finished ifupdown-pre.service - Helper to synchronize boot up for ifupdown.
+[[0;32m  OK  [0m] Finished [0;1;39mifupdown-pre.service[0m - He…o synchronize boot up for ifupdown.
+[   18.180909] cfg80211: Loading compiled-in X.509 certificates for regulatory database
+[   18.206805] Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+[   18.207766] platform regulatory.0: Direct firmware load for regulatory.db failed with error -2
+[   18.211708] cfg80211: failed to load regulatory.db
+[   18.300698] systemd[1]: Started systemd-logind.service - User Login Management.
+[[0;32m  OK  [0m] Started [0;1;39msystemd-logind.service[0m - User Login Management.
+[   18.313237] systemd[1]: Started systemd-networkd.service - Network Configuration.
+[[0;32m  OK  [0m] Started [0;1;39msystemd-networkd.service[0m - Network Configuration.
+[   18.375247] systemd[1]: e2scrub_reap.service: Deactivated successfully.
+[   18.377562] systemd[1]: Finished e2scrub_reap.service - Remove Stale Online ext4 Metadata Check Snapshots.
+[[0;32m  OK  [0m] Finished [0;1;39me2scrub_reap.service[0m - Re…line ext4 Metadata Check Snapshots.
+[   18.566035] systemd[1]: Found device dev-ttyS0.device - /dev/ttyS0.
+[[0;32m  OK  [0m] Found device [0;1;39mdev-ttyS0.device[0m - /dev/ttyS0.
+[   18.964180] random: crng init done
+[   19.025545] systemd[1]: Started dbus.service - D-Bus System Message Bus.
+[[0;32m  OK  [0m] Started [0;1;39mdbus.service[0m - D-Bus System Message Bus.
+[   19.055076] systemd[1]: Finished systemd-random-seed.service - Load/Save OS Random Seed.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-random-seed.service[0m - Load/Save OS Random Seed.
+[   20.171422] systemd[1]: Created slice system-systemd\x2dbacklight.slice - Slice /system/systemd-backlight.
+[[0;32m  OK  [0m] Created slice [0;1;39msystem-systemd\x2dba…[0m - Slice /system/systemd-backlight.
+[   20.184928] systemd[1]: first-boot-complete.target - First Boot Complete skipped, unmet condition check ConditionFirstBoot=yes
+[   20.187627] systemd[1]: Listening on systemd-rfkill.socket - Load/Save RF Kill Switch Status /dev/rfkill Watch.
+[[0;32m  OK  [0m] Listening on [0;1;39msystemd-rfkill.socket[0m…ll Switch Status /dev/rfkill Watch.
+[   20.206747] systemd[1]: Starting networking.service - Raise network interfaces...
+         Starting [0;1;39mnetworking.service[0m - Raise network interfaces...
+[   20.226185] systemd[1]: Starting systemd-backlight@backlight:backlight.service - Load/Save Screen Backlight Brightness of backlight:backlight...
+         Starting [0;1;39msystemd-backlight@backlig…[0mrightness of backlight:backlight...
+[   20.240519] systemd[1]: systemd-machine-id-commit.service - Save Transient machine-id to Disk skipped, unmet condition check ConditionPathIsMountPoint=/etc/machine-id
+[   20.272417] systemd[1]: Starting systemd-networkd-persistent-storage.service - Enable Persistent Storage in systemd-networkd...
+         Starting [0;1;39msystemd-networkd-persiste…[0mtent Storage in systemd-networkd...
+[   20.312097] systemd[1]: Finished systemd-backlight@backlight:backlight.service - Load/Save Screen Backlight Brightness of backlight:backlight.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-backlight@backlig…[0m Brightness of backlight:backlight.
+[   20.345961] systemd[1]: Finished systemd-networkd-persistent-storage.service - Enable Persistent Storage in systemd-networkd.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-networkd-persiste…[0mistent Storage in systemd-networkd.
+[   20.476890] systemd[1]: Finished networking.service - Raise network interfaces.
+[[0;32m  OK  [0m] Finished [0;1;39mnetworking.service[0m - Raise network interfaces.
+[   20.491471] systemd[1]: Reached target network.target - Network.
+[[0;32m  OK  [0m] Reached target [0;1;39mnetwork.target[0m - Network.
+[   20.513847] systemd[1]: Starting ssh.service - OpenBSD Secure Shell server...
+         Starting [0;1;39mssh.service[0m - OpenBSD Secure Shell server...
+[   20.529998] systemd[1]: Starting systemd-user-sessions.service - Permit User Sessions...
+         Starting [0;1;39msystemd-user-sessions.service[0m - Permit User Sessions...
+[   20.600218] systemd[1]: Finished systemd-user-sessions.service - Permit User Sessions.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-user-sessions.service[0m - Permit User Sessions.
+[   20.621417] systemd[1]: Started getty@tty1.service - Getty on tty1.
+[[0;32m  OK  [0m] Started [0;1;39mgetty@tty1.service[0m - Getty on tty1.
+[   20.639882] systemd[1]: Started serial-getty@ttyS0.service - Serial Getty on ttyS0.
+[[0;32m  OK  [0m] Started [0;1;39mserial-getty@ttyS0.service[0m - Serial Getty on ttyS0.
+[   20.653903] systemd[1]: Reached target getty.target - Login Prompts.
+[[0;32m  OK  [0m] Reached target [0;1;39mgetty.target[0m - Login Prompts.
+[   20.855835] systemd[1]: Started ssh.service - OpenBSD Secure Shell server.
+[[0;32m  OK  [0m] Started [0;1;39mssh.service[0m - OpenBSD Secure Shell server.
+[   20.870137] systemd[1]: Reached target multi-user.target - Multi-User System.
+[[0;32m  OK  [0m] Reached target [0;1;39mmulti-user.target[0m - Multi-User System.
+[   20.884933] systemd[1]: Reached target graphical.target - Graphical Interface.
+[[0;32m  OK  [0m] Reached target [0;1;39mgraphical.target[0m - Graphical Interface.
+[   20.896886] systemd[1]: Startup finished in 14.742s (kernel) + 6.145s (userspace) = 20.888s.
+[!p]104[?7h[6n[32766;32766H[6n[24;1H[   20.928475] GEMINI-DEBUG plane_update_new_state addr=0x00000000fe200000 pitch=4320 fmt=0x34325258
+[   20.928502] GEMINI-DEBUG crtc_update_config pending_planes=0x1 shadow_register=0 cmdq_chan=0000000000000000
+[!p]104[?7h[6n[32766;32766H[6n[24;1H[   21.254657] mtk_crtc_ddp_irq: 55 callbacks suppressed
+[   21.254678] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   21.273203] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   21.291746] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   21.310288] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   21.328840] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   21.347376] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   21.365921] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   21.384463] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   21.403007] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+[   21.421551] GEMINI-DEBUG crtc_ddp_irq pending_planes=0
+
+Debian GNU/Linux 13 gemini ttyS0
+
+gemini login: 
+gemini login: 
+gemini login: 
+gemini login: 

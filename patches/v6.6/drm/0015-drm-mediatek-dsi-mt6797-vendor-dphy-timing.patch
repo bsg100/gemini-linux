@@ -1,0 +1,30 @@
+diff --git a/drivers/gpu/drm/mediatek/mtk_dsi.c b/drivers/gpu/drm/mediatek/mtk_dsi.c
+index d8bfc2cce..4eadc5d89 100644
+--- a/drivers/gpu/drm/mediatek/mtk_dsi.c
++++ b/drivers/gpu/drm/mediatek/mtk_dsi.c
+@@ -259,6 +259,25 @@ static void mtk_dsi_phy_timconfig(struct mtk_dsi *dsi)
+ 	timcon3 = timing->clk_hs_prepare | timing->clk_hs_post << 8 |
+ 		  timing->clk_hs_exit << 16;
+ 
++	/*
++	 * GEMINI (MT6797): override the formula-derived D-PHY timing with
++	 * the values the stock LK bootloader programs (read live off the
++	 * hardware's steady-state PHY_TIMCON0-3, golden register dump,
++	 * boot.md capture 246: DSI+0110).  Mainline's formula produces
++	 * LP-mode windows (LPX, TA_GO/SURE/GET, CLK_ZERO/TRAIL, HS_EXIT)
++	 * ~40% shorter than LK's at this lane rate; with those values the
++	 * SSD2092 panel NAKs LP long packets with ACK+Error reports, LP
++	 * reads time out (-ETIMEDOUT/empty), the manufacturer init table
++	 * never lands, and the panel booster stays off (glass dark).  With
++	 * LK's values, LP reads work and the panel initializes -- validated
++	 * on hardware 2026-07-12 (builds #118-#125, boot.md).  Values are
++	 * MT6797/Gemini-specific; this tree only targets that device.
++	 */
++	timcon0 = 0x0a12080a;
++	timcon1 = 0x14320f28;
++	timcon2 = 0x0d320100;
++	timcon3 = 0x00141208;
++
+ 	writel(timcon0, dsi->regs + DSI_PHY_TIMECON0);
+ 	writel(timcon1, dsi->regs + DSI_PHY_TIMECON1);
+ 	writel(timcon2, dsi->regs + DSI_PHY_TIMECON2);

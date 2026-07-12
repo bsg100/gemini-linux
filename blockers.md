@@ -1951,3 +1951,452 @@ Total disk size: 0x0000000e8f800000, sectors: 0x000000000747c000
 **To restore this exact baseline later:** flash `boot2` and `linux` with the
 two images above (`mtk w boot2 ...` / `mtk w linux ...`), leave all other
 partitions untouched.
+
+## Update 2026-07-09 — B-17 DSI IRQ bounded-timeout fix attempted, regresses intermittently, still open
+
+Attempted a fix for the recurring cpu0 hard-lock (the same class of failure
+B-13 already root-caused): `patches/v6.6/drm/0012-drm-mediatek-dsi-bound-irq-busy-wait-timeout.patch`
+bounds the unbounded `while (tmp & DSI_BUSY)` spin in `mtk_dsi_irq()` with
+`readl_poll_timeout_atomic()` (1us poll / 20ms timeout).
+
+**First version regressed hard**: builds #195/#197 (boot.md) both hit a
+full watchdog reset (`wdt_by_pass_pwk`) — root cause was the timeout branch
+returning `IRQ_HANDLED` without clearing `DSI_INTSTA` or waking
+`irq_wait_queue`, turning a level-triggered IRQ's bounded poll into an
+unbounded hardirq-storm with the status bit never cleared. Fixed by always
+clearing/waking on both paths.
+
+**Corrected version (build #200) is still not reliable.** Same flashed
+image, three power-on attempts, three different outcomes: a full ATF
+`aee_wdt_dump` hang (cpu0 stuck, no console output at all), then two
+clean-looking serial boots that never brought up USB gadget networking
+(`en12` stayed `inactive`, no device visible to `system_profiler` at all).
+See boot.md "BUILD #200" for full detail. `/sys/fs/pstore/` was checked
+after each recovery and found empty — no crash record survives, consistent
+with the failure being ATF's own pre-Linux hang detector (which never
+reaches Linux's panic/oops path) combined with the physical power-cycles
+likely dropping DRAM self-refresh.
+
+**Working hypothesis:** this is a timing-dependent race in how/when LK's
+leftover DSI engine state (from framebuffer/logo display during boot) gets
+touched by Linux's `mtk_dsi` driver — not a deterministic bug reachable by
+re-reading patch 0012's C code, since the same image produces different
+outcomes run to run. Patch 0012 is held out of the default patch stack
+until this is understood; `boot2` is back on the known-good build #71
+baseline.
+
+**Update 2026-07-09 — stress test result: 0008-alone (no 0012) also hangs, same signature. Race is upstream of both DSI patches.**
+
+Built #203 (`logs/2026-07-09-203-b17-0008-only-plus-pstore-trace`, banner #73,
+sha256 `3eda93ee165eb4cb6a37fa2d6eab5647483df618d61e655af7ba5d46f0f87344`):
+patch 0012 held out entirely (only 0008 in the drm stack), plus a new debug
+patch (`patches/v6.6/zz-debug/0002-GEMINI-DEBUG-dsi-irq-poweron-poweroff-trace.patch`)
+adding unconditional `pr_info` trace points around `mtk_dsi_irq()` entry/exit
+and `mtk_dsi_poweron`/`poweroff` entry/exit, relying on
+`CONFIG_PSTORE_CONSOLE=y` to mirror them into `/sys/fs/pstore/console-ramoops-0`
+even across a warm (watchdog) reset.
+
+Capture `logs/2026-07-09-204-b17-0008-only-plus-pstore-trace-boot.log`
+spans two power-on sessions:
+
+- **Session 1** (first ~1880 lines): booted clean on serial, reached the
+  normal `mtu3` mux-switch cutoff, `RGU STA: 0` / "WDT does not trigger
+  reboot" confirms this was a genuine cold start, not a post-hang reset. But
+  `en12` never enumerated (`status: inactive`, no USB device visible to
+  `system_profiler` at all) even after ~45s of polling — same silent
+  gadget-networking failure seen twice on build #200.
+- **Session 2** (device power-cycled again): the *new* capture opens with
+  `RGU STA: A0000000` / `"SW reset with bypass power key flag"` /
+  `"[PLFM] WDT reboot bypass power key!"` — meaning **session 1's kernel
+  silently hung and self-reset via hardware watchdog sometime after we
+  stopped polling it**, even though its serial log looked clean up to the
+  `mtu3` cutoff. Session 2 itself then hangs identically: `el3_exit` at
+  4.324s, **no kernel console output at all** (not even the `Linux version`
+  banner), then `aee_wdt_dump: on cpu0` at 14.327s with
+  `pc == lr == 0xffffffc000087fa8` — byte-for-byte the same hang address
+  seen on build #200's first attempt. No `GEMINI-DEBUG` trace lines appear
+  anywhere in either session, meaning the kernel never got near
+  `mtk_dsi_irq()`/`mtk_dsi_poweron()` before hanging.
+
+**Conclusion: this is not a patch 0012 regression.** Patch 0008 alone,
+predating 0012 entirely, reproduces the identical early cpu0 hard-lock
+(same hang PC, same `aee_wdt_dump` signature) and the identical silent
+USB-gadget failure. The race is upstream of both DSI patches — most likely
+in how early cpu0 boot collides with LK's leftover DSI/display engine
+state, independent of what either patch does once Linux's own `mtk_dsi`
+driver code starts running (trace evidence shows the hang precedes that
+code executing at all in the fatal case). This reframes the investigation:
+re-reading/adjusting `mtk_dsi.c` further is unlikely to fix it, since the
+hang is already over by the time that code would run.
+
+**Next steps (agreed 2026-07-09, not yet executed):**
+1. Stress-test patch 0008 *alone* (no 0012) across several consecutive
+   power cycles — 0008 predates this regression and has been assumed
+   stable, but was never specifically stress-tested back-to-back the way
+   0012 just was. If 0008-alone is also flaky, the race is upstream of
+   0012 entirely and this investigation has been chasing the wrong patch.
+2. Add unconditional (non-ratelimited) debug `printk`/`pr_info` trace
+   points around `mtk_dsi_irq()` entry, the RACK write, the poll result,
+   and `mtk_dsi_poweron`/`poweroff` entry/exit — tagged so they're
+   greppable, and using plain printk (not `dev_err_ratelimited`) so a
+   storm isn't suppressed. Since `CONFIG_PSTORE_CONSOLE=y` is already
+   enabled, these should land in `/sys/fs/pstore/console-ramoops-0` even
+   across a *warm* reset (watchdog-triggered), letting us revert to the
+   baseline image afterward and read the trace without needing to catch
+   it live over UART. Caveat: this only works if DRAM self-refresh
+   survives whatever reset path fires — a full physical power-cycle by the
+   user appears to wipe it (observed empty pstore after build #200's
+   attempts), so where possible prefer waiting for/triggering the
+   automatic watchdog reset rather than manually power-cycling, to
+   maximize the chance the trace survives to be read.
+3. Once forward progress is possible, consider the GIC pending/active-IRQ
+   dump technique from the parked bare-metal plan (`SPI 229`
+   pending/active state at hang time) to identify definitively whether
+   the same DSI IRQ is implicated across all three failure modes.
+
+## Update 2026-07-09 (later) — hang re-attributed: the "early cpu0 hard-lock" was almost certainly the ANDROID kernel, not ours
+
+Resolving the recorded hang address against build #203's `System.map`
+(`logs/2026-07-09-203-b17-0008-only-plus-pstore-trace/System.map`) overturns
+the conclusion above:
+
+- Our Linux 6.6 kernel's text starts at `0xffff800080000000` (`_text`,
+  confirmed from System.map; all 171k symbols live in `0xffff8000...`).
+  The hang PC `0xffffffc000087fa8` is **not in our kernel's address space at
+  all.**
+- `0xffffffc000080000` is exactly the text base of the **pre-4.20 arm64 VA
+  layout used by 3.18-era kernels** — i.e. the vendor Android kernel
+  (offset `0x7fa8` from text start, inside early head.S-era setup code).
+- The same hang session contained `[LK]jump to K64 0x40080000` — the
+  **Android `boot` partition's kernel load address**, not boot2's
+  `0x40200000`. Every clean session in these captures shows
+  `jump to K64 0x40200000` followed by our correct banner.
+- Android boots are consoleless by design (LK hardcodes
+  `printk.disable_uart=1`), which fully explains "el3_exit then total
+  silence then aee_wdt" — no need to hypothesize our kernel dying before
+  console init.
+
+**Revised hypothesis:** on the "hang" cycles, LK selected/fell back to the
+Android `boot` partition (boot-partition selection on the Gemini is
+power-on-button-combo dependent, and LK may also fall back after a WDT
+flag), and the *Android 3.18 kernel* hung and watchdog-looped. Patch 0008
+(and 0012) may never have hung at all — every capture where LK jumped to
+`0x40200000` booted our kernel cleanly on serial. The "byte-identical hang
+PC across builds #200 and #203" is explained trivially: both were the same
+Android kernel image.
+
+**What survives of B-17 regardless of the above:** the silent
+USB-gadget-enumeration failure. Now observed on three genuinely-clean boots
+(2x build #200, 1x build #203 session with `RGU STA: 0`, correct #73
+banner, clean serial log to the `mtu3` cutoff): `en12` stays
+`status: inactive`, `system_profiler SPUSBDataType` shows **zero** matching
+USB devices (so the device never appears on the Mac's USB bus at all — not
+an IP-config issue), SSH times out. This is independent of any hang and is
+now the primary open B-17 question. Also unresolved: blockers.md's earlier
+claim that build #203 session 1 "silently hung after polling stopped"
+(post-hoc `RGU STA: A0000000`) — that WDT flag could equally have been set
+by a subsequent Android-fallback cycle; treat as unconfirmed.
+
+**Evidence-handling lesson:** the raw hang captures were lost —
+`ftdi-monitor.py` was relaunched to the *same* log path each power cycle,
+overwriting prior sessions (only the final clean session survives in
+`logs/2026-07-09-204-...`). Per the existing logging rules, every capture
+attempt must get a fresh `NN`-numbered filename.
+
+**Revised next steps (2026-07-09):**
+1. **Button-controlled power-on test** (zero-build; build #203 still on
+   boot2): several consecutive power-ons deliberately selecting the Linux
+   boot entry, fresh log file per attempt, checking the `[LK]jump to K64`
+   address in each. If `0x40200000` boots are always clean and only
+   `0x40080000` cycles hang, the hang half of B-17 closes as a
+   boot-selection artifact.
+2. **Read the AEE crash record from the `expdb` partition** via mtkclient
+   (`mtk r expdb expdb.bin` — targeted read, safe): MTK's AEE writes
+   watchdog dumps there, so the hang cycles' register/stack dumps are
+   likely recoverable and symbolicatable against a vendor 3.18 System.map
+   (buildable from `gemini-android-kernel-3.18` in the VM).
+3. Investigate the USB-gadget enumeration failure as its own thread
+   (likely `mtu3`/UART-USB mux timing) — it will not be fixed as a side
+   effect of display work.
+
+## Update 2026-07-10 — B-17 crash ROOT-CAUSED and FIXED (OVL leftover IRQ → NULL-deref panic); flip_done timeout is the remaining display blocker
+
+Full narrative and evidence in boot.md ("B-17 ROOT-CAUSED AND FIXED",
+2026-07-10). Summary:
+
+- **#203 never reached userspace** (journal on shared rootfs: all 10 boots
+  banner #5). Its crash hid in the 0.5–6s window behind the mtu3 console-mux
+  cutoff. Disabling USB entirely (build #218, banner #76) kept serial alive
+  and captured the death: **NULL deref in interrupt context** —
+  `mtk_disp_ovl_irq_handler → mtk_crtc_ddp_irq → mtk_crtc_ddp_config`
+  dereferencing `crtc->state` (NULL until the first atomic commit). LK
+  leaves the OVL scanning out the splash with `OVL_INTEN` armed; probe
+  requests the IRQ and the leftover interrupt fires mid-bind. Panic → WDT →
+  Android fallback (this also finally explains the fallback boots).
+- **Fixed by `patches/v6.6/drm/0012`** (quiesce OVL_INTEN/INTSTA at probe +
+  NULL-state guard in the IRQ path). Build #221 (banner #77) validated:
+  no oops, kernel alive 93+s, DRM bound, DSI IRQ clean.
+- **pstore/ramoops is a dead end on this device**: the preloader
+  re-initializes DRAM on every boot path (proven by pmsg-marker and
+  sysrq-panic tests with readout build #212/banner #75, even at the
+  vendor's own `mediatek,pstore` address 0x44410000). Crash capture
+  strategy = serial visibility via no-USB debug builds, not RAM.
+- **Remaining B-17/display blocker:** `flip_done timed out` / vblank wait
+  timeouts — OVL frame-done never fires after enable; no frames flow, panel
+  dark, fbcon commit-retry loop appears to stall boot before systemd.
+  Lead: verify DSI video-vs-command mode, TE/trigger and mutex SOF against
+  vendor 3.18 source (LK log says `vido_mode`).
+- The B-17 *gadget* half (silent USB failure on clean boots) is unchanged;
+  the FTDI-first-then-swap cable protocol remains the reliable workaround.
+
+**Cleanup state:** boot = readout #212 (#75), boot2 = fix-validation #221
+(#77, no USB). Before resuming normal work: rebuild with
+`configs/gemini-usb.config` restored (currently parked as
+`.disabled`; delete `configs/gemini-nousb-debug.config` and also remove it
+from the VM — build-pack rsync doesn't `--delete`), and reflash baseline.
+
+## Update 2026-07-10 (later) — flip_done: three stacked defects fixed, pipeline now error-free but frameless; register-dump diagnostic built
+
+Working the remaining flip_done/vblank timeout, three real, cumulative
+defects were found and fixed (full evidence in boot.md builds #223–#229):
+
+1. **Mutex EOF bits** — `mt6797_mutex_driver_data` borrowed
+   `mt2712_mutex_sof`, which sets only the SOF field; vendor
+   `ddp_get_mutex_src()` sets SOF *and* EOF to DSI0 for a video-mode path,
+   and without EOF the OVL never receives frame-done. Fixed in
+   `patches/v6.6/soc/0001` (new `mt6797_mutex_sof[]`, `SOF | SOF<<6`,
+   mirroring mainline mt8183). Build #223 — necessary but not sufficient.
+2. **LK leftover DSI video mode** — `DSI_MODE_CTRL` left in video mode by
+   the splash survives `mtk_dsi_reset_engine()`, making every panel init
+   command time out (-62) in `mtk_dsi_host_transfer()`. Fixed in
+   `patches/v6.6/drm/0013` (force cmd mode in `mtk_dsi_poweron`). Build
+   #225 — **validated**: init sequence now completes (187 CMD_DONE IRQs).
+3. **MIPI-TX PLL sleeping in atomic context** — our mt6797 mipitx PHY had
+   `usleep_range()` in clk `.enable` (runs under the CCF enable spinlock);
+   `BUG: scheduling while atomic` in every display boot. Fixed in
+   `patches/v6.6/phy/0004` (ops moved to `.prepare/.unprepare`, as mt8173
+   mipi_tx). Build #227 — **validated**: BUG gone (capture 228).
+
+Despite all three, flip_done ×9 / vblank ×4 persist: the pipeline
+configures with zero software errors but no frame-done interrupt ever
+arrives. Next step is visibility, not another guess:
+`patches/v6.6/zz-debug/0003-GEMINI-DEBUG-ddp-register-dump.patch` (build
+#229, banner #81) dumps raw mmsys/mutex/OVL0/RDMA0/DSI0 registers at t≈8s
+and t≈8.5s while the stuck commit holds the pipeline powered — the
+interpretation matrix is in boot.md's BUILD #229 entry. Awaiting flash and
+capture 230.
+
+## Update 2026-07-10 (evening) — flip_done/vblank timeout ROOT-CAUSED: OD0 misconfiguration (mainline mtk_od_config clobbered by mtk_dither_set)
+
+The register-dump campaign (builds #229–#241, boot.md captures 230→242)
+walked the failure to a single engine:
+
+1. Eliminated in hardware, in order: mmsys routing table (soc/0002,
+   verified mux-by-mux), OVL cascade wiring, layerless-frame limitation
+   (layer poke, capture 234), MM CG clock gating, engine clock rate
+   (mm_sel = 325 MHz from imgpll, capture 236), wedged-OVL0-FSM from LK
+   handoff (OVL_RST poke, capture 238).
+2. Capture 238's OVL FLOW_CTRL_DBG decode (vendor ovl_printf_status):
+   both OVLs stuck in eng_act with out_valid=1/out_ready=0 → downstream
+   backpressure, not head-engine failure.
+3. Capture 240's mid-chain pixel counters: OD0 IN_CNT frozen while its
+   OUT_CNT free-runs — OD0 blocks its input, self-generates output
+   (which is why DSI streamed and RDMA0 underflowed).
+4. **Root cause:** OD_CFG[1:0] is the mode field (vendor
+   common/od10/ddp_od.c: 0x1 relay/bypass, 0x2 core-en; vendor default
+   0x1). Mainline `mtk_od_config()` writes OD_RELAYMODE, then
+   `mtk_dither_set()` overwrites OD_CFG with DISP_DITHERING only →
+   hardware ends at 0x4 = dither on, no mode. MT8173 tolerates this;
+   MT6797's OD (needs table/DRAM init mainline never does) does not.
+5. **Confirmed live (capture 242, build #241):** poking OD0_CFG=0x5
+   (relay+dither) at 8.7 s instantly completed the stuck atomic commit —
+   fbcon bound (`fb0: mediatekdrmfb`), panel registered, plane enabled
+   (OVL0 SRC_CON=0x1), old FME_UND/ABNORMAL_SOF signature gone.
+
+**Fix to write:** `patches/v6.6/drm/0014` — preserve the relay bit in
+`mtk_od_config` (OD_CFG = OD_RELAYMODE | dithering). Upstream candidate.
+
+**New follow-on blocker (next up):** ~0.4 s into first real scanout,
+right after `clk: Disabling unused clocks`, the system bus-hung and
+WDT-reset to the Android slot (capture 242). Suspects: (a) SMI larb0
+IOMMU-bypass gap (the earlier B-13 vendor-source finding) biting on
+first real layer DMA — new latched layer-0 FIFO-underflow bit fits;
+(b) late clk cleanup gating a now-needed clock (imgpll refcount). Plan:
+build with drm/0014 + `clk_ignore_unused` temporarily restored to
+separate (a) from (b) in one flash.
+
+**Update 2026-07-10 (night) — flip_done FIXED and validated (capture 244, build #243):**
+`patches/v6.6/drm/0014` (re-assert OD_RELAYMODE after mtk_dither_set)
+confirmed: fbcon binds at 1.0 s, zero flip_done/vblank timeouts, full
+boot to graphical.target in 10 s with the display stack enabled. The
+capture-242 scanout WDT-reset did not reproduce with `clk_ignore_unused`
+(TEMPORARY, in configs/gemini-cmdline.config) → the crash suspect is
+late clk cleanup, not the SMI larb0 gap. Remaining before this blocker
+closes: (1) find which clock clk_disable_unused kills during scanout and
+hold a proper reference (then remove the temporary flag); (2) confirm
+pixels on the physical panel; (3) strip zz-debug/0003 and restore the
+production USB config for a clean production build.
+
+**Update 2026-07-10 (late night) — panel-dark follow-up:** on the
+milestone build #243 boot, the physical panel shows **backlight lit,
+image black** (PWM confirmed enabled at 200/255 via serial login;
+systemd-backlight not the culprit). Pixels aren't reaching the glass
+despite a fully clean pipeline → active suspect is DSI video
+timing/format mismatch vs. the panel's requirements. LK's own DSI
+register dump in every capture is the golden reference; /dev/mem is
+blocked, so build #245 (banner #89) extends the zz-debug dump to the
+full DSI block 0x000–0x1AC for a kernel-vs-LK register diff. See
+boot.md "BUILD #245".
+
+**Update 2026-07-10 — DSI diff complete (capture 246), fix candidate
+built (build #247):** kernel-vs-LK register diff shows format/lanes/
+resolution all match; mismatches are (1) TXRX_CTRL — kernel disables EOT
+packets and runs continuous HS clock where LK enables EOT + non-continuous
+clock (mtk_dsi's DIS_EOT logic is inverted vs the flag name), and (2)
+vertical/horizontal porches (panel patch used vendor-3.18 LCM values;
+LK programs VSA=3/VBP=15/VFP=10 and wider horizontal blanking). Build
+#247 (banner #90) updates panel/0005 to match LK on both. PHY_TIMCON
+diffs deliberately deferred. See boot.md "CAPTURE 246 result".
+
+**Update 2026-07-10 — controller theory exhausted; panel side
+implicated (capture 248):** build #247's registers landed LK-identical
+(TXRX_CTRL bit-for-bit, LK porches), link streams frames error-free,
+still black. User confirms **LK's Planet logo displays, then goes dark
+at kernel takeover** — panel HW and LK init are good; our panel
+driver's reset/regulator/init takeover is the killer, or the panel
+rejects our config internally. Build #249 (banner #91, zz-debug/0004)
+adds differential DCS read-back (0x0a–0x0e) before our reset pulse (LK
+state) and after our init, to name the failing step. See boot.md
+"CAPTURE 248 result".
+
+**Update 2026-07-10 — panel-dark ROOT-CAUSED (capture 250): TPS65132
+bias never programmed.** DCS read-back: panel initialized, display ON,
+booster OFF (0x0a=0x1c) — no analog rails. AVDD/AVEE come from a
+TPS65132 on I2C1 @0x3e whose volatile VPOS/VNEG registers LK reprograms
+every boot; our DTS had GPIO-only fixed regulators, so after the panel
+driver's power-cycle the chip runs unprogrammed. Fix in build #251
+(banner #92): mainline `ti,tps65132` regulator node (outp/outn 5.4 V,
+enable-gpios 60/251) + CONFIG_REGULATOR_TPS65132=y. See boot.md
+"CAPTURE 250 result".
+
+**Update 2026-07-10 — second-layer bug: I2C1 combined transfers broken
+(captures 252/253).** tps65132 probe timed out; interactive i2cdetect
+proved the bus and chip fine but write-then-read (WRRD) transfers dead:
+mt6797.dtsi i2c nodes fall back to the mt6577 compat (no auto-restart,
+no aux-len). Fix `i2c/0001` (build #254, banner #93): match
+"mediatek,mt6797-i2c" to mt8173 driver data (same IP generation,
+confirmed against vendor mt6797 mt_i2c). Upstream candidate. See
+boot.md "CAPTURE 252/253 result".
+
+**Update 2026-07-11 — thick horizontal-band artifact appears on BOTH the
+vendor-live-TIMCON build AND the plain mainline-formula build; not caused
+by the TIMCON patch, and NOT a confirmed regression (no prior baseline
+was actually documented).** Harvested live, steady-state `PHY_TIMCON0-3`
+register values off the stock vendor 3.18 kernel while it was actively
+driving the panel correctly (see boot.md "Full scatter-file recovery
+reflash..." entry) and hardcoded them in debug patch `zz-debug/0008` as a
+controlled experiment (build #105, `logs/2026-07-11-279-...`). Result:
+kernel boot fully clean (no flip_done/vblank timeouts, DSI bound, panel
+registered, DCS reads all normal); physical panel showed thick,
+regularly-spaced light-blue/black horizontal bands — real pixel content.
+Photo: `logs/2026-07-11-279-dsi-timcon-vendor-live-values/panel-thick-bars-result.jpg`.
+
+Initially treated as a regression and reverted (patch 0008 disabled,
+rebuilt as `logs/2026-07-11-281-revert-timcon-back-to-baseline/`, banner
+`#106`) — reflashed #106 (**pure mainline-formula TIMCON, confirmed by
+reading the built tree directly, no override present**) and the user
+confirmed on physical hardware: **"same horizontal lines as the previous
+build."** D-PHY timing (`PHY_TIMCON0-3`) is therefore **ruled out** as the
+cause — visually identical result with the vendor-harvested override and
+without it. Further, boot.md was checked and contains **no prior entry
+describing a "thin top-of-frame corruption" baseline** before this
+session's own (now-corrected) write-up — the last actually-documented
+visual state (#243/#245) was backlight-lit but fully **black**, not
+corrupted. So there is no confirmed evidence this banding is a
+regression at all; it may be the first real pixel content this panel has
+shown under our own kernel.
+
+Clock-domain cross-check remains valid context: `mm_dsi0_mm`/`mm_sel` =
+325 MHz and PLL CON0 = `0xf0002001` are confirmed identical between our
+build and the vendor's (build #235/#237) — consistent with the banding
+being unrelated to clock/PLL/D-PHY-timing setup generally, not just the
+TIMCON registers specifically.
+
+**Next step:** redirect investigation away from D-PHY bit-timing,
+toward: (1) OVL/DDP layer config — the coarse, regular band pattern is
+consistent with a scanline-count/line-stride mismatch rather than a
+signal-integrity issue; (2) panel init command sequence — check for a
+missing/incorrect column/page-address-set or memory-write command
+producing a short repeating pattern instead of a full frame; (3)
+framebuffer/scanout stride — cross-check the documented 1088-px
+GPU-aligned stride vs. the panel's native 1080px on this code path. A
+deliberate reference photo of build #106 is still worth capturing, but
+TIMCON tuning is no longer the active lead. See boot.md "BUILD #105 ...
+vendor-live TIMCON experiment" and "BUILD #106 recheck" for the full
+account and correction.
+
+**Update 2026-07-11 (later) — lead #2 (DSI HSA/HBP/HFP word counts) also
+closed off; DSI-level config now doubly confirmed correct, root cause is
+upstream of DSI.** Same method as the TIMCON test: overrode
+`DSI_HSA_WC`/`DSI_HBP_WC`/`DSI_HFP_WC` with LK's exact proven register
+values (`0x1c`/`0x94`/`0x74`, capture 244) instead of mainline's
+formula-plus-correction derivation, which the panel patch's own comment
+admits only lands "within one byte" of LK's values (build #107,
+`zz-debug/0009-...`, `logs/2026-07-11-283-.../`). Kernel-side register
+readback confirmed the override applied exactly as intended, and also
+confirmed `DSI_PSCTRL` word-count = 1080×3 (RGB888, native panel width, not
+the 1088-aligned GPU stride) with `PACKED_PS_24BIT_RGB888` selected —
+correct. Boot fully clean, no flip_done/vblank timeouts, no DSI/panel
+errors. User confirmed on hardware: **"same orange white black horizontal
+bars then fade to black"** — identical to builds #105/#106.
+
+Two independent, hardware-verified-correct DSI-level fixes (D-PHY bit
+timing, and now line word-counts) have produced **zero visible change**.
+This rules out the DSI protocol/timing layer as the cause with fairly high
+confidence — the DSI engine is provably transmitting a well-formed,
+correctly-timed stream. **The problem is upstream: what the OVL/RDMA layer
+is actually reading from memory and handing to DSI** (layer pitch/format/
+address vs. what DRM/fbcon actually allocated, or CRTC blend config) is now
+the primary suspect, since it has not yet been directly instrumented the
+way the DSI registers have. Next action: extend the existing DDP debug
+dump (`zz-debug/0003`/`0006`) to also capture the per-layer OVL registers
+(`OVL_CON`, `OVL_ADDR`, `OVL_PITCH`/`HDR_PITCH`) so the live pitch/format/
+address can be read back and cross-checked against the DRM/fbcon-side
+allocation. See boot.md "BUILD #107" for full detail.
+
+**Update 2026-07-12 — PANEL LIT: display path RESOLVED end-to-end (build
+#132, banner #119, ⭐).** The banding/dark-panel saga is over; three
+stacked defects, each individually necessary:
+
+1. **Init-table packet type** (found 2026-07-11, `zz-debug/0020`): vendor
+   `DSI_set_cmdq_V2` sends commands ≥0xB0 as GENERIC packets; we sent DCS.
+   The whole manufacturer init table had been corrupt from the start —
+   this was the actual cause of the banding artifact (not OVL, not DSI
+   timing).
+2. **D-PHY LP/turnaround timing** (found 2026-07-12, `zz-debug/0008`
+   re-enabled): mainline's TIMCON formula yields LP windows ~40% shorter
+   than LK's proven values; the panel answered with ACK+Error and LP reads
+   failed. With LK's TIMCON0–3, DCS reads work for the first time.
+3. **Link mode** (found 2026-07-12): the vendor *kernel* LCM driver runs
+   this panel in SYNC_PULSE **video mode** (`LCM_DSI_CMD_MODE=0`); LK's
+   command-mode splash misled the 07-11 command-mode pivot (which also
+   reintroduced flip_done timeouts). Video mode restored.
+
+Result on hardware: solid-white test fill visible on the glass, clean boot,
+zero flip_done/vblank timeouts, graphical.target in 21 s. See boot.md
+"BUILD #132". Remaining follow-ups: fbcon-on-glass check (build #134),
+then productization — fold 0020 into `panel/0005`, derive/fold correct
+TIMCON values properly (vendor formula, not hardcode), strip zz-debug
+patches, re-enable USB gadget config, re-verify `clk_ignore_unused` removal.
+
+**Update 2026-07-12 (evening) — PHASE 5 COMPLETE: readable text console on
+the physical panel.** After first light (build #132), the residual banding
+on structured content was root-caused with an RGB-thirds test pattern to a
+video line-timing mismatch: the mode timings had been reverse-engineered
+from LK's register dump, but LK drives the panel in command mode, so its
+video porches are meaningless. Switching to the vendor kernel LCM driver's
+video timings (HFP26/HSA4/HBP20, VFP76/VSA1/VBP43, 167333 kHz) produced a
+perfect stable image (build #138) and then a readable landscape console
+(rotate:3 + TER16x32, build #143). All fixes productized in build #145
+(banner #126): folded into panel/0005 and drm/0015, zz-debug stripped, USB
+restored, clk_ignore_unused dropped. See boot.md builds #136–#145.
