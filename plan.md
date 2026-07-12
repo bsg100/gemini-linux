@@ -253,6 +253,49 @@ Goals:
 - Reliable network connectivity
 - Remote administration capability
 
+## WiFi plan (approved 2026-07-12, user decision: staged, WiFi only — no BT)
+
+Research summary: the Gemini's internal WiFi is the **CONSYS block on the
+MT6797 die** (AHB @0x18070000, MT6625-class core; vendor DTB
+`consys@18070000` / `wifi@180f0000`), not a discrete chip. **No mainline
+driver has ever existed**; the only implementation is the vendor gen2 WMT
+stack (~150 KLOC WiFi alone, ~314 KLOC full combo) with firmware blobs plus
+a userspace `wmt_launcher`. Nearest prior art, frank-w's BPI-Router-Linux
+(same gen2 core, external-SDIO HIF), last worked on kernel 5.6. A USB WiFi
+dongle by contrast is fully upstream (`mtu3` host mode + `xhci-mtk` +
+`mt76`), but USB is currently disabled (B-18) and host mode is untested.
+
+Staged plan, hardware-verifiable gates:
+
+- **Stage 0 — B-18 root cause (prerequisite).** Desk research (vendor
+  aw9523 power-up ordering, GPIO58/GPIO87 vs USB-C mux/FUSB301A pinctrl in
+  the vendor DTB), then a one-variable-per-flash diagnostic matrix: (A) skip
+  SHDN assertion, (B) INT/GPIO87 bias-pull-up, (C) cable hot-plug after
+  boot, (D) deferred aw9523b probe, (E) FUSB301A read-only CC logging. All
+  USB builds log dmesg to eMMC (serial dies at the B-15 mux). **Gate G0:**
+  keyboard + working gadget SSH in one build; B-18 RESOLVED.
+- **Stage 1 — USB host mode + dongle WiFi.** Extend the ssusb DTS patch:
+  `dr_mode = "host"`, `mediatek,mtk-xhci` child node (IRQ SPI 126), u2port1
+  phy, `vbus-supply` fixed regulator on the vendor `usb1_drvvbus` GPIO;
+  configs for XHCI_MTK + mt76. Open hardware question (first flash
+  answers): right port on ssusb u2port1 vs the separate `usb1@11200000`
+  MUSB (no mainline glue — port only if xhci path fails). **Gate G1a:**
+  right-port enumeration (USB stick). Dongle: **MT7921U** recommended
+  (Netgear A8000 class; fallback MT7612U/mt76x2u); firmware + wpa_supplicant
+  or iwd into `scripts/mkrootfs.sh`. **Gate G1b (done):** scan/associate/
+  DHCP/ping + SSH-over-WiFi — which frees the left port for serial
+  permanently.
+- **Stage 2 — CONSYS feasibility spike (time-boxed ~5 days / ~8 flashes;
+  deliverable = go/no-go report in research.md, NOT working WiFi).** Add
+  CONN power domain to mtk-scpsys mt6797 data (vendor CONN_PWR_CON =
+  SPM+0x32C, PWR_STATUS BIT(1)); resolve the "conn" clock in clk-mt6797;
+  vcn18/vcn28/vcn33_wifi regulators; minimal consys DTS node + 2MB no-map
+  reserved memory; throwaway probe driver reading CONSYS chip-ID (**gate
+  G2a**), then minimal MCU release + ROM firmware handshake using blobs
+  from the Android vendor partition (**gate G2b**). GO to a full gen2 port
+  only if both gates pass and the frank-w 5.6→6.6 delta looks mechanical;
+  otherwise the dongle remains the WiFi path and CONSYS stays Phase 9.
+
 ---
 
 # Phase 9: Optional Hardware

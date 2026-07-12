@@ -158,6 +158,20 @@ Three possible approaches, in order of increasing effort:
 
 **Recommendation:** Option A for Phase 8. Option B as a Phase 9 optional milestone after the system boots stably with USB-Ethernet.
 
+### WiFi plan adopted (2026-07-12, user decision)
+
+Staged plan recorded in plan.md Phase 8 ("WiFi plan"). Summary: Stage 0 =
+B-18 root cause (prerequisite; five-build single-variable diagnostic
+matrix); Stage 1 = Option A realized as **USB dongle WiFi** (mtu3
+`dr_mode="host"` + xhci-mtk + mt76, recommended dongle MT7921U, fallback
+MT7612U) with gates G1a (right-port enumeration) / G1b (SSH-over-WiFi);
+Stage 2 = a **time-boxed CONSYS feasibility spike** (~5 days) that only
+proves power-domain/clock/regulator bring-up (chip-ID readback, G2a) and
+MCU firmware handshake (G2b), producing a go/no-go on Option B. WiFi only;
+BT explicitly out of scope. Corrected measurement: the gen2 WiFi driver is
+~150 KLOC incl. headers (whole combo ~314 KLOC), larger than the earlier
+"~75–103 KLOC" estimate above.
+
 ---
 
 # Battery & Charging Research (2026-07-12, for Phase 7 — queued AFTER keyboard completion)
