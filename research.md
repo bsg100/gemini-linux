@@ -157,3 +157,64 @@ Three possible approaches, in order of increasing effort:
 - Not recommended
 
 **Recommendation:** Option A for Phase 8. Option B as a Phase 9 optional milestone after the system boots stably with USB-Ethernet.
+
+---
+
+# Battery & Charging Research (2026-07-12, for Phase 7 — queued AFTER keyboard completion)
+
+**User observation:** the Gemini charges when booted into Android; unclear
+whether it charges under our Linux 6.6.
+
+## Hardware
+
+- **Charger:** Richtek RT9466, I2C addr 0x53 (vendor `rt9466.dtsi`:
+  `ichg = 2000000` µA, `aicr = 500000` µA, 12 h safety timer,
+  `en_wdt = true`). Vendor driver:
+  `gemini-android-kernel-3.18/.../power/mt6797/rt9466.c`.
+- **Fuel gauge:** MT6351 PMIC integrated (coulomb counter + AUXADC) — NO
+  mainline support at all (hardware.md; B-12 family). Charger-only
+  operation + userspace voltage monitoring is the documented minimum.
+
+## What happens today under our Linux (no charger driver)
+
+1. In OUR (Kali-slot) boot chain, **LK itself cannot talk to the RT9466**
+   — every capture shows `rt9466_i2c_read_byte: I2CR[0x40] failed`,
+   `get primary charger failed`, `pchr_turn_on_charging: enable charging
+   failed, ret = -95`. So no software configures the charger before or
+   after kernel handoff on the Linux boot path.
+2. Therefore charging (if any) runs on **RT9466 power-on hardware
+   defaults**: charge enable is default-on in hardware with conservative
+   default current/termination, so the device most likely trickle-charges
+   — but default safety-timer/WDT behavior is unverified against the
+   datasheet, and nothing re-enables charge after faults. This matches
+   "charges in Android (vendor driver active), unsure in Linux".
+3. **Empirical check available any time** (careful: read-only, and do
+   NOT hammer a bus the keypad polls): `i2cget -y -f <bus> 0x53 0x42`
+   (CHG_STAT) on the running device, with/without VBUS, would confirm
+   charging state definitively. Bus number for 0x53 needs confirming
+   from the vendor DTB (not i2c5).
+
+## Mainline path (the Phase 7 plan)
+
+- `drivers/power/supply/rt9467-charger.c` (v6.6) **explicitly supports
+  RT9466** (VID 0x8 accepted in probe). DTS: `compatible =
+  "richtek,rt9467"` node already drafted in dts/0001 but `disabled`.
+- **Blocker: the mainline driver hard-requires its IRQ** —
+  `dev_err_probe(-EINVAL, "Failed to get (%s) irq")` for every one of its
+  chg IRQs; the RT9466 INT line is GPIO246 → EINT, and pinctrl-mt6797 has
+  NO EINT support (**B-11**, same blocker as the keyboard IRQ path).
+  Options, in preference order:
+  1. **Fix B-11** (EINT in pinctrl-mt6797) — proper fix; also upgrades
+     the keyboard to IRQ-driven and unblocks FUSB301A/touchscreen. This
+     makes B-11 the natural Phase 7 opener.
+  2. Patch rt9467-charger.c to make the IRQ optional + poll attach/EOC
+     state (local patch, like the keypad polling one).
+- Safety notes for the build: charger-only mode is safe (RT9466 does CV
+  termination in hardware); the driver's WDT-kick and safety-timer
+  handling replace the vendor equivalents; no fuel gauge = no SoC%, so
+  userspace battery display waits for an MT6351 AUXADC driver (~200–500
+  LOC, deferred).
+
+**Sequencing (user decision 2026-07-12):** finish the keyboard build
+first (Fn layer, keymap verification); battery/charging is the next
+build after that.
