@@ -15,7 +15,7 @@ new file mode 100644
 index 000000000..25211133d
 --- /dev/null
 +++ b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
-@@ -0,0 +1,923 @@
+@@ -0,0 +1,932 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Device tree for Planet Computers Gemini PDA
@@ -529,11 +529,20 @@ index 000000000..25211133d
 +	 *   interrupt-parent = <&pio>; interrupts = <87 IRQ_TYPE_LEVEL_LOW>;
 +	 *   interrupt-controller; #interrupt-cells = <2>;
 +	 * when B-11 is fixed.
++	 *
++	 * pinctrl-0 = <&aw9523b_pins> applies the SHDN/GPIO58 output-high
++	 * pinmux and, critically, the GPIO87/INT bias-pull-up (matches the
++	 * vendor DTB's aw9523pin state). B-18 root-cause candidate: this
++	 * property was previously missing, so aw9523b_pins was defined
++	 * but never applied and GPIO87 was left floating right next to
++	 * USB/mtu3 IRQ activity. See blockers.md B-18.
 +	 */
 +	aw9523b: gpio@5b {
 +		compatible = "awinic,aw9523b";
 +		reg = <0x5b>;
 +		reset-gpios = <&pio 58 GPIO_ACTIVE_LOW>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&aw9523b_pins>;
 +		gpio-controller;
 +		#gpio-cells = <2>;
 +		status = "okay";

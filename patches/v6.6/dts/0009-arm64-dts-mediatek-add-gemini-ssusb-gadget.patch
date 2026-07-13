@@ -10,7 +10,7 @@ index 2caeca572..da0c101fc 100644
  
  / {
  	model = "Planet Computers Gemini PDA";
-@@ -833,3 +834,79 @@ msdc0: mmc@11230000 {
+@@ -842,3 +843,79 @@ msdc0: mmc@11230000 {
  		status = "okay";
  	};
  };

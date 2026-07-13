@@ -5929,3 +5929,38 @@ so it works on the current kernel too).
 Remaining keymap niceties (not blockers): Esc key (not in the 53-key
 matrix?), media/brightness Fn keys (X11-only in Gemian), arrow
 PgUp/Home combos.
+
+---
+
+## BUILD #175 (banner #140) — B-18 RESOLVED: keyboard + display + USB gadget SSH together for the first time
+
+**2026-07-13.** Following the WiFi-plan Stage 0 desk research (vendor
+`aw9523_key.c` power-up sequencing + vendor-DTB pin/bus topology — see
+research.md/blockers.md B-18), found that `patches/v6.6/dts/0001-...patch`
+defined an `aw9523b_pins` pinctrl state (SHDN/GPIO58 output-high +
+GPIO87/INT `bias-pull-up`) but never referenced it from any `pinctrl-0`
+property — dead DTS, leaving GPIO87/INT floating next to USB/mtu3 IRQ
+activity. Added `pinctrl-names = "default"; pinctrl-0 = <&aw9523b_pins>;`
+to the `aw9523b: gpio@5b` node. Regenerated the three DTS patches that
+touch `mt6797-gemini-pda.dts` (0001, 0009, 0011) via apply-edit-rediff
+(applied the patch set, made the edit against the real file, re-diffed)
+so their line-number context stays internally consistent — verified the
+full `patches/v6.6/` set still applies cleanly end-to-end afterward.
+
+Also restored `configs/gemini-usb.config` (from `.disabled`) and retired
+`configs/gemini-serial-console.config` to `.disabled`, since the
+USB-off/`clk_ignore_unused` fallback (B-18 workaround) is no longer
+needed. Cleaned two stale config fragments off the VM (rsync doesn't
+`--delete`; same lesson as builds #149/#151 — always verify the
+provenance `config` after fragment renames).
+
+Build #175 (banner #140, `logs/2026-07-13-175-b18-aw9523b-pinctrl-fix/`,
+sha256 `d34d58474bca24a851eda4c93ac660aada268c8cb3de1f231d44b00d7c7883c8`),
+flashed to `boot2`. **Result: booted cleanly to prompt, keyboard works,
+USB gadget enumerated** (`en12`, fixed MAC `42:00:15:19:82:00`, static IP
+`10.15.19.1` alias reapplied on the Mac), `ping 10.15.19.82` and
+`ssh root@10.15.19.82` both succeeded (banner confirmed over SSH:
+`Linux gemini 6.6.0-dirty #140 SMP PREEMPT Mon Jul 13 00:45:17 UTC 2026
+aarch64`). All three B-18 symptoms cleared in a single fix — no need for
+the 5-variant diagnostic matrix. **New baseline: display + keyboard + USB
+gadget SSH, all working together, first time since Phase 6 began.**
