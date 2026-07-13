@@ -14,6 +14,11 @@
 #   LINUX_SRC   Path to kernel source tree (default: ~/linux-6.6)
 #   PATCHES_DIR Path to project patches directory (default: ~/gemini_linux/patches/v6.6)
 #   JOBS        Parallel build jobs (default: nproc)
+#   BUILD_NN    Build number — sets KBUILD_BUILD_VERSION so the kernel
+#               banner (#NNN in `uname -a`) matches the build-pack build
+#               number exactly (added 2026-07-13; before this the banner
+#               was the VM's incrementing .version counter, which drifted
+#               from the build number)
 
 set -euo pipefail
 
@@ -76,7 +81,7 @@ build)
     echo "==> Building kernel (JOBS=$JOBS)"
     cd "$LINUX_SRC"
     [[ -f .config ]] || { echo "  No .config — running defconfig first"; make ARCH=$ARCH defconfig; }
-    make ARCH=$ARCH -j"$JOBS" Image.gz dtbs modules
+    make ARCH=$ARCH -j"$JOBS" ${BUILD_NN:+KBUILD_BUILD_VERSION="$BUILD_NN"} Image.gz dtbs modules
     echo "==> Build complete"
     echo "    Image:   $LINUX_SRC/arch/arm64/boot/Image.gz"
     echo "    Modules: run 'make ARCH=$ARCH modules_install INSTALL_MOD_PATH=<dir>'"

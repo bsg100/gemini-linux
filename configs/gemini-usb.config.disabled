@@ -1,0 +1,35 @@
+# USB host mode + xHCI for a USB WiFi dongle (Stage 1, WiFi plan; see
+# patches/v6.6/dts/0009, dr_mode="otg" + usb-role-switch +
+# role-switch-default-mode="host" + xhci child node).
+#
+# Build #143 (dr_mode="host", CONFIG_USB_MTU3_HOST) proved host-only mode is
+# a dead end on this hardware: xhci-mtk binds and its MMIO reads work, but
+# the port0 mux is never actually flipped to host (mtu3_host.c's
+# ssusb_host_setup() assumes it's already hardwired that way, which only
+# holds for boards with a fixed Type-A receptacle -- see the DTS comment
+# above the ssusb node). switch_port_to_host() -- the code that does the
+# real mux flip -- only runs through the OTG role-switch path, so this
+# fragment switches to CONFIG_USB_MTU3_DUAL_ROLE, which also requires
+# CONFIG_USB_GADGET=y and CONFIG_EXTCON=y as Kconfig dependencies (extcon
+# itself isn't used at runtime -- usb-role-switch takes priority when both
+# are compiled in). Role defaults to host (role-switch-default-mode) with
+# no runtime switch wired up yet, so g_ether/gadget SSH is still not
+# available in this build -- revisit once Gate G1a passes.
+# USB_STORAGE is enabled for the Gate G1a smoke test (USB stick) before the
+# WiFi dongle; see configs/gemini-wifi-usb.config for the mt76 stack.
+CONFIG_USB=y
+CONFIG_USB_GADGET=y
+CONFIG_EXTCON=y
+CONFIG_USB_MTU3=y
+CONFIG_USB_MTU3_DUAL_ROLE=y
+CONFIG_USB_ROLE_SWITCH=y
+CONFIG_PHY_MTK_TPHY=y
+CONFIG_USB_XHCI_HCD=y
+CONFIG_USB_XHCI_MTK=y
+CONFIG_USB_STORAGE=y
+
+# FUSB301A USB-C CC controller (patches/v6.6/usb/0001-...): I2C-only
+# diagnostic, build #149 -- see patches/v6.6/dts/0012-...-fusb301a-cc-
+# diagnostic.patch. Not wired as a usb-role-switch consumer yet.
+CONFIG_TYPEC=y
+CONFIG_TYPEC_FUSB301A=y

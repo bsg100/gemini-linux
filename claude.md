@@ -246,6 +246,13 @@ invariants, and print the flash/capture commands. `build.sh` remains the
 in-VM primitive it calls. The `/build-pack` skill wraps this plus the
 documentation follow-ups (boot.md entry, blockers.md update).
 
+**Banner = build number (since 2026-07-13):** build-pack passes the build
+number as `BUILD_NN` → `KBUILD_BUILD_VERSION`, so the kernel banner `#NNN`
+in `uname -a` now equals the build-pack `<NN>` exactly, and the verify step
+fails the build if they differ. Builds ≤ #175 predate this — their banner
+was the VM's own incrementing `.version` counter (e.g. build #175 = banner
+#140); use the provenance dir or boot.md to map older numbers.
+
 ## GCC Version Note
 
 GCC 15.2.0 in the VM is confirmed working with both Linux 6.6 LTS and the 3.18 BSP kernel (Kali/Gemian). The GCC ≤ 4.9 requirement mentioned in earlier project notes was not substantiated by testing.

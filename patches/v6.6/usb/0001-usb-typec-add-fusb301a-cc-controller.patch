@@ -103,7 +103,7 @@ index 000000000..86dafa334
 +	else
 +		role = USB_ROLE_NONE;
 +
-+	dev_info(fusb->dev, "status=0x%02x type=0x%02x cc=%s role=%d\n",
++	dev_dbg(fusb->dev, "status=0x%02x type=0x%02x cc=%s role=%d\n",
 +		status, type,
 +		(status & FUSB301A_CC_ORIENT) ? "CC2" : "CC1", role);
 +
