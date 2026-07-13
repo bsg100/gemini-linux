@@ -274,17 +274,30 @@ Staged plan, hardware-verifiable gates:
   boot, (D) deferred aw9523b probe, (E) FUSB301A read-only CC logging. All
   USB builds log dmesg to eMMC (serial dies at the B-15 mux). **Gate G0:**
   keyboard + working gadget SSH in one build; B-18 RESOLVED.
-- **Stage 1 — USB host mode + dongle WiFi.** Extend the ssusb DTS patch:
-  `dr_mode = "host"`, `mediatek,mtk-xhci` child node (IRQ SPI 126), u2port1
-  phy, `vbus-supply` fixed regulator on the vendor `usb1_drvvbus` GPIO;
-  configs for XHCI_MTK + mt76. Open hardware question (first flash
-  answers): right port on ssusb u2port1 vs the separate `usb1@11200000`
-  MUSB (no mainline glue — port only if xhci path fails). **Gate G1a:**
-  right-port enumeration (USB stick). Dongle: **MT7921U** recommended
-  (Netgear A8000 class; fallback MT7612U/mt76x2u); firmware + wpa_supplicant
-  or iwd into `scripts/mkrootfs.sh`. **Gate G1b (done):** scan/associate/
-  DHCP/ping + SSH-over-WiFi — which frees the left port for serial
-  permanently.
+- **Stage 1 — USB host mode + dongle WiFi.** **1.1 built 2026-07-13, not
+  yet flashed (build #142,** `logs/2026-07-13-220-stage1-usb-host-xhci/`
+  **):** extended `patches/v6.6/dts/0009-...` with `dr_mode = "host"`, a
+  `mediatek,mtk-xhci` child node (IRQ SPI 126) on the existing single
+  dual-role mtu3 controller (confirmed from the vendor DTB — not a second
+  PHY port), and a `usb1_vbus` `regulator-fixed` node driving VBUS via
+  GPIO94 (decoded from the vendor DTB's `usb1_drvvbus_low/high` pinctrl
+  states, since no discrete VBUS regulator exists in the vendor tree).
+  `configs/gemini-usb.config` rewritten for `USB_MTU3_HOST` + `XHCI_MTK` +
+  `USB_STORAGE`. Confirmed `xhci-mtk.c` already has a generic
+  `"mediatek,mtk-xhci"` compatible fallback, so no driver-source change
+  was needed. Host mode and gadget mode are Kconfig-mutually-exclusive, so
+  **this build has no g_ether/SSH** — verification is panel-console/dmesg
+  only. **Gate G1a (open):** flash `boot2`, USB stick in the right-hand
+  port, confirm xhci-mtk probe + enumeration in dmesg. If xhci-mtk doesn't
+  bind, add a one-line mt6797 compatible entry (mechanical fix, not a new
+  driver). The `usb1@11200000` MUSB controller (no mainline driver) stays
+  out of scope unless this path fails outright.
+  Dongle: **MT7921U** recommended (Netgear A8000 class; fallback
+  MT7612U/mt76x2u); firmware + wpa_supplicant or iwd into
+  `scripts/mkrootfs.sh`. **Gate G1b:** scan/associate/DHCP/ping +
+  SSH-over-WiFi — which frees the left port for serial permanently. Dual-role
+  (`otg` + `usb-role-switch`) to restore gadget SSH alongside host mode is
+  deferred until after G1a/G1b.
 - **Stage 2 — CONSYS feasibility spike (time-boxed ~5 days / ~8 flashes;
   deliverable = go/no-go report in research.md, NOT working WiFi).** Add
   CONN power domain to mtk-scpsys mt6797 data (vendor CONN_PWR_CON =

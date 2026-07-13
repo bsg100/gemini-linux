@@ -2478,3 +2478,148 @@ three B-18 symptoms cleared in one fix, no diagnostic matrix needed.
 USB-off/`clk_ignore_unused` fallback is no longer needed — mtu3 + keyboard
 now coexist). **New baseline:** display + keyboard + USB gadget SSH, all
 together, for the first time since Phase 6 began.
+
+## 🟡 B-19 — WiFi Stage 1 Gate G1a: USB host mode never enumerates a real device, cause unknown
+
+**Symptom:** with `mtu3` in host/OTG mode (`patches/v6.6/dts/0009-...`),
+`xhci-mtk` binds and the controller comes up without crashing, but a USB
+stick plugged into the right-hand port never appears beyond the virtual
+root hub in `lsusb`, and `/proc/interrupts` never shows a single fire on
+the xhci IRQ (SPI 126) — consistent with no electrical connect event ever
+being registered, across every build tried.
+
+**Ruled out, in order (see boot.md builds #142–#148):**
+- xhci sysfs device-name collision with the parent ssusb node (#142→#143
+  fix: separate MAC-only register window for the xhci child).
+- Pure `dr_mode="host"` never flipping the port0 U2/U3 mux, because that
+  only happens via the OTG role-switch path (#143→#144 fix: `dr_mode="otg"`
+  + `usb-role-switch` + `role-switch-default-mode="host"` — this also
+  fixed a real "HC died" crash, but did not fix enumeration).
+- Missing VBUS gating: GPIO94 (`usb1_drvvbus`) alone is not the real power
+  switch — SW7226 (GPIO72) is a separate load-switch IC in series (#145
+  fix, vendor-sourced from `usb_typec.c`'s `fusb300_eint_work()`).
+- Missing FUSB301A-mux idle state: GPIO70/71 floating instead of the
+  vendor's documented safe-idle values (#146 fix, same vendor source).
+- FUSB340 USB3 redriver (GPIO251/252, a fourth, separate mux found in the
+  vendor DTB's `usb_c_pinctrl@0` node) — **tried in #147, caused a real
+  display regression** (panel went blank, no crash visible in the serial
+  log up to the expected B-15 mux death) and was reverted in #148 (display
+  confirmed restored on hardware). Either the vendor-DTB pin decode for
+  GPIO251/252 is wrong, or those pins are genuinely shared with/gate the
+  display power path — do not re-attempt without independent GPIO
+  debugfs readback *and* a test that isolates display from USB, not both
+  changed in the same build.
+
+**Current state (build #148, vendor GPIO fixes 94/72/70/71 all present,
+confirmed via `/sys/kernel/debug/gpio` readback on hardware):** every
+GPIO-level gate documented in the vendor 3.18 source/DTB for this signal
+path is now asserted correctly, and the stick still does not enumerate.
+This is a materially different situation from B-18 (which was a genuine
+one-line dead-pinctrl-reference bug) — the GPIO layer is very likely
+exonerated at this point.
+
+**Not yet investigated:** whether this is a physical issue (bad
+cable/adapter/stick — should be tested with a second known-good stick and
+cable before further kernel changes), or a deeper mtu3/xhci-mtk driver gap
+specific to this SoC that isn't visible in the vendor 3.18 source (which
+never ran xhci/host mode at all — Android only ever used gadget mode on
+this port). Recommend a physical-layer sanity check (different stick,
+different cable, multimeter/scope on VBUS at the connector if available)
+before spending further flash cycles on driver-side theories.
+
+**Blocks:** WiFi Stage 1 Gate G1a (plan.md Phase 8), and therefore Stage
+1.2 (MT7921U dongle) and Gate G1b.
+
+**Update 2026-07-13 (post build #148):** a second, different USB2.0 device
+(SD card reader, VID:PID 349C:0418, confirmed via Mac-side `ioreg`) was
+tested in the same port and also shows nothing beyond the root hub — rules
+out "bad first stick" as an explanation. Next candidate, not yet tested:
+cable/CC orientation. GPIO70/71 (`fusb301a_sw_sel`) hardcode the CC1
+orientation default; if the physical connector is inserted CC2, that mux
+may not be a simple polarity swap but could route D+/D- to nothing at all
+in the "wrong" orientation. Zero-risk test recommended before any further
+kernel changes: flip the cable/adapter 180° and recheck `lsusb`.
+
+**Correction 2026-07-13 (confirmed with user): wrong physical port tested
+throughout builds #142-148.** The Gemini PDA has two physical USB-C ports.
+`mtu3`/xhci-mtk (all the GPIO/mux work in this blocker) is wired to the
+**left** port — the same one used for UART/FTDI (B-15's `FORCE_UART_EN`
+mux bit lives inside mainline `mtk-tphy`'s PHY init for this exact
+connector) and for gadget SSH (build #175). The **right-hand** port —
+where every test device in this blocker was plugged in — is driven by the
+separate legacy `usb1@11200000` MUSB-style controller
+(`mediatek,mt6797-usb11`), which has **no mainline driver** (hardware.md,
+driver_ports.md). Nothing was ever going to enumerate there regardless of
+GPIO state. `plan.md`'s Gate G1a instructions ("right-hand port") were
+written before this was verified against physical hardware and are wrong.
+**Next step: retest with the SD card reader in the left port** (single
+cable-swap with the FTDI rig, same protocol as gadget-SSH verification).
+
+**Update 2026-07-13 (build #150): likely root cause found -- CC-less
+adapter cable.** Enabled the existing (previously unused) FUSB301A driver
+(`patches/v6.6/usb/0001-...`) as an I2C-only diagnostic (not wired to
+usb-role-switch). With the SD card reader plugged into the confirmed-correct
+left port via a **USB-C-to-USB-A adapter**, the chip itself reports
+`status=0x00 type=0x00 cc=CC1 role=0` -- i.e. the ATTACH bit has never been
+set. A bare/passive C-to-A adapter typically carries no CC pins at all
+(just VBUS/GND/D+/D- passthrough), so this is consistent with the cable
+itself never presenting a valid Rp/Rd to the FUSB301A, independent of any
+kernel/GPIO work. The vendor's own fusb300_eint_work() only asserts the
+VBUS/mux switch GPIOs *after* confirming CC attach over I2C -- our static
+"skip negotiation, assert post-attach state" approach may not be
+sufficient if the physical switch ICs (sw7226/fusb301a-sw) have any
+hardware interlock tied to genuine CC attach, separate from the GPIOs we
+drive from Linux. **Next step (zero kernel changes): retest with a native
+USB-C storage device, or a C-to-A adapter/dongle confirmed to implement
+real Type-C CC signaling**, before any further driver/DTS work on this
+gate.
+
+**Stopping point 2026-07-13 (Gate G1a paused, not resolved).** Final test:
+enabled the FUSB301A driver's DFP-mode write and re-probed with a
+**native USB-C dongle** (MediaTek network dongle, proper Type-C plug, no
+adapter) on the confirmed-correct left port. Result: identical
+`status=0x00 type=0x00 cc=CC1 role=0` to the CC-less USB-A adapter test --
+ATTACH never asserts regardless of device or cable. This rules out the
+CC-less-adapter theory too.
+
+**Summary of everything ruled out this investigation (builds #142-150):**
+- xhci sysfs device-name collision (fixed, #143)
+- dr_mode host-only never flipping the port mux (fixed, #144 -- also fixed
+  a real "HC died" crash)
+- Missing VBUS gating (GPIO94, sw7226/GPIO72) -- confirmed correctly
+  asserted (#145)
+- Missing FUSB301A-mux idle state (GPIO70/71) -- confirmed correctly
+  asserted (#146)
+- FUSB340 redriver (GPIO251/252) -- caused a real display regression,
+  reverted (#147/#148); dead end, not a safe lead
+- Wrong physical port (right-hand, driven by the driverless legacy
+  `usb1@11200000` MUSB controller) -- corrected to the left port (mtu3),
+  confirmed via B-15/gadget-SSH precedent
+- Bad test device -- ruled out with two different devices (SD reader,
+  network dongle)
+- CC-less adapter cable -- ruled out with a native USB-C dongle
+
+**Remaining unknown:** the FUSB301A's `MODE` register write
+(`regMode = 0x04`, meant to force DFP/host mode) is explicitly flagged
+`FIXME`/unverified in the driver source -- it was reverse-engineered from
+the vendor 3.18 driver's usage, not from a real ON Semiconductor FUSB301
+datasheet. If that encoding is wrong, the chip may never actually enable
+CC toggling/attach detection, which would explain `ATTACH=0` regardless of
+what's plugged in. **Do not attempt further register-level changes to
+this driver without the real FUSB301A/FUSB301 datasheet** (or the vendor
+Android BSP driver's register `#define`s, which were not consulted for
+this field -- only the call-site logic was). Paused here rather than
+continue guessing bit patterns blind.
+
+**Reverted to known-good baseline:** flashed back to build #175
+(banner #140, `logs/2026-07-13-175-b18-aw9523b-pinctrl-fix/`, sha256
+`d34d58474bca24a851eda4c93ac660aada268c8cb3de1f231d44b00d7c7883c8`) --
+keyboard + display + USB gadget SSH all working together. All of builds
+#142-150's DTS/config changes (dr_mode=otg, xhci child node, VBUS/sw7226/
+fusb301a-mux/fusb340 gpio-hogs, FUSB301A diagnostic) remain in
+`patches/v6.6/` for whenever this gate is resumed, but are NOT in the
+currently flashed image.
+
+**Blocks:** WiFi Stage 1 Gate G1a (plan.md Phase 8), and therefore Stage
+1.2 (MT7921U dongle) and Gate G1b. Phase 8 networking is otherwise fully
+functional today via gadget SSH (build #175 baseline).

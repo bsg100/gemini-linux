@@ -1,5 +1,4 @@
 diff --git a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
-index 2caeca572..da0c101fc 100644
 --- a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
 +++ b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
 @@ -21,6 +21,7 @@
@@ -10,7 +9,7 @@ index 2caeca572..da0c101fc 100644
  
  / {
  	model = "Planet Computers Gemini PDA";
-@@ -842,3 +843,79 @@ msdc0: mmc@11230000 {
+@@ -930,3 +931,241 @@
  		status = "okay";
  	};
  };
@@ -29,12 +28,138 @@ index 2caeca572..da0c101fc 100644
 + * (CLK_INFRA_SSUSB_* ids 69/75/76). MT6797 scpsys has no USB power domain
 + * (USB sits on the always-on infra fabric), so no power-domains property.
 + *
-+ * Peripheral-only (dr_mode): gadget mode needs no XHCI/OTG/extcon, and the
-+ * Gemini's left port is the device-role port. High-speed only: u3port is
-+ * left unwired until USB3 is needed -- fewer PHY/clock unknowns for first
-+ * light. Note the left port is shared with the UART console mux: USB tests
-+ * require the FTDI rig unplugged.
++ * Host mode (Stage 1, WiFi plan): dr_mode = "otg" plus an xhci child node
++ * on the same controller (vendor DTB usb3_xhci@11270000, SPI 126 "xhci" --
++ * distinct from the SPI 127 "musb-hdrc" device-controller interrupt this
++ * node already used in gadget-only mode). Build #143
++ * (logs/2026-07-13-223-stage1-xhci-reg-fix) proved plain dr_mode = "host" is
++ * a dead end: xhci-mtk binds and its MMIO reads work fine (hcc_params etc
++ * read back real values), but SPI 126 never fires even once
++ * (/proc/interrupts count stuck at 0) -- "HC died"/"couldn't allocate
++ * usb_device" the moment a real device needs an actual command-ring
++ * completion. Root cause, from drivers/usb/mtu3/mtu3_host.c
++ * ssusb_host_setup(): pure USB_DR_MODE_HOST only calls ssusb_host_enable()
++ * + ssusb_set_force_mode() (IDDIG override bits) and *assumes* port0's
++ * U2/U3 mux is already hardwired to host by the SoC -- its own comment says
++ * "if support OTG, gadget driver will switch port0 to device mode", i.e.
++ * non-OTG mode never calls switch_port_to_host() (mtu3_dr.c), which does
++ * the real port0 mux flip, waits for clocks to settle, then calls
++ * toggle_opstate(). That assumption holds for boards with a fixed Type-A
++ * host receptacle; it does not hold for our shared Type-C port behind
++ * FUSB301A CC logic. switch_port_to_host() only runs via the OTG
++ * role-switch work queue, gated on dr_mode == USB_DR_MODE_OTG. Using "otg"
++ * with usb-role-switch + role-switch-default-mode = "host" (no
++ * connector/id-pin node needed -- ssusb_role_sw_register() reads
++ * role-switch-default-mode straight from DT and unconditionally runs the
++ * full switch sequence at probe, see mtu3_dr.c) gets fixed-host behaviour
++ * while actually exercising the port0 mux/opstate toggle. Needs
++ * CONFIG_USB_MTU3_DUAL_ROLE (pulls in USB_GADGET=y + EXTCON=y as Kconfig
++ * deps even though extcon itself isn't used here -- role-switch takes
++ * priority over extcon when both are compiled in, see
++ * ssusb_otg_switch_init()). g_ether/gadget SSH stays out of scope for this
++ * build (role defaults to host, no runtime switch wired up yet) -- revisit
++ * once Gate G1a passes. High-speed only: u3port is left unwired until
++ * USB3 is needed -- fewer PHY/clock unknowns for first light. Note the left
++ * port is shared with the UART console mux: USB tests require the FTDI rig
++ * unplugged, and serial dies at the mux handoff (B-15) once mtu3 is active
++ * regardless of role, so bring-up relies on the panel console + on-eMMC
++ * dmesg capture.
++ *
++ * VBUS is not a discrete regulator in the vendor tree -- it's driven
++ * directly via GPIO94 through the "usb1_drvvbus_low"/"usb1_drvvbus_high"
++ * pinctrl states (docs/vendor-dtb/gemini_kali_boot.dts, aeon_gpio node;
++ * pins = <0x5e00> decodes as MTK_PIN(0x5e, 0) = GPIO94, func 0/GPIO mode).
++ * Modelled here as a GPIO-controlled regulator-fixed per the mtu3 binding's
++ * own guidance, same pattern as vemc_fixed/vproc_fixed above.
 + */
++/ {
++	usb1_vbus: regulator-usb1-vbus {
++		compatible = "regulator-fixed";
++		regulator-name = "usb1_vbus";
++		regulator-min-microvolt = <5000000>;
++		regulator-max-microvolt = <5000000>;
++		gpio = <&pio 94 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++	};
++};
++
++/*
++ * sw7226_en (GPIO72) -- Build #144 (dr_mode="otg" + role-switch) proved the
++ * missing IRQ theory wrong: SPI 126 still never fires, but "HC died" is
++ * gone too and GPIO94 (usb1_vbus, above) reads back "out hi" in
++ * /sys/kernel/debug/gpio -- i.e. the controller is alive, VBUS looked
++ * correctly driven from Linux's side, and yet lsusb never sees anything
++ * beyond the virtual root hub. Root cause, from the vendor 3.18 reference
++ * source (drivers/misc/mediatek/usb_c/fusb302/usb_typec.c,
++ * fusb300_eint_work()): GPIO94 "usb1_drvvbus" is NOT the actual VBUS power
++ * switch. On real cable-insert the vendor driver asserts *both*
++ * "usb1_drvvbus_high" (GPIO94) *and* "sw7226_en_high" (GPIO72) --
++ * SW7226 is a separate physical USB power-switch IC gating the real 5V
++ * rail; GPIO94 alone is insufficient. We never wired GPIO72 at all, so
++ * VBUS was never actually present at the connector regardless of what the
++ * mtu3/regulator-fixed stack believed. pins = <0x4800> in the vendor DTB
++ * decodes to MTK_PIN(0x48, 0) = GPIO72, func 0/GPIO (docs/vendor-dtb/
++ * gemini_kali_boot.dts, aeon@21/22 "sw7226_en_low"/"sw7226_en_high"
++ * states). Modelled as a gpio-hog (not a second regulator-fixed) since
++ * nothing else in the tree needs to consume it as a supply -- it is purely
++ * a static enable line for this simplified always-host bring-up, same
++ * choice as dr_mode's role-switch-default-mode="host" skipping the full
++ * FUSB302 CC-detect FSM (I2C reads, EINT-driven state machine) for now.
++ */
++&pio {
++	sw7226_en_hog: sw7226-en-hog {
++		gpio-hog;
++		gpios = <72 GPIO_ACTIVE_HIGH>;
++		output-high;
++		line-name = "sw7226-en";
++	};
++
++	/*
++	 * fusb301a_sw_en/sel (GPIO70/71) -- a second, separate mux from
++	 * sw7226 (above): the vendor driver's fusb300_gpio_init() (usb_typec.c)
++	 * sets these to sw_en=high/sw_sel=low as the idle/default state at
++	 * driver init and never changes them again unless HDMI alt-mode is
++	 * negotiated (fusb300_eint_work() only touches them in the CCXstate
++	 * HDMI branch). With sw7226_en + usb1_drvvbus both confirmed "out hi"
++	 * on hardware (build #145) and the stick still not enumerating, GPIO70/
++	 * 71 showed up as completely unclaimed in /sys/kernel/debug/gpio --
++	 * i.e. LK never touches them and nothing in our tree requests them
++	 * either, so they're floating at silicon reset default, not the
++	 * vendor's documented safe-idle values. pins = <0x4600>/<0x4700> in
++	 * the vendor DTB decode to GPIO70/71 func 0/GPIO (docs/vendor-dtb/
++	 * gemini_kali_boot.dts, "fusb301a_sw_en_high"/"fusb301a_sw_sel_low").
++	 */
++	fusb301a_sw_en_hog: fusb301a-sw-en-hog {
++		gpio-hog;
++		gpios = <70 GPIO_ACTIVE_HIGH>;
++		output-high;
++		line-name = "fusb301a-sw-en";
++	};
++
++	fusb301a_sw_sel_hog: fusb301a-sw-sel-hog {
++		gpio-hog;
++		gpios = <71 GPIO_ACTIVE_HIGH>;
++		output-low;
++		line-name = "fusb301a-sw-sel";
++	};
++
++	/*
++	 * fusb340_noe/sel (GPIO251/252) -- REVERTED, build #147. Vendor DTB
++	 * decode (usb_c_pinctrl@0, "mediatek,usb_c_pinctrl") suggested these
++	 * are a USB3 redriver/mux distinct from FUSB301A/sw7226 (see the WiFi
++	 * plan / research notes for the full rationale), but asserting them
++	 * as gpio-hogs (NOE=low, SEL=low) killed the physical display on
++	 * hardware -- the only change between #146 (display fine) and #147
++	 * (display lost) was these two lines. Either the pin-number decode
++	 * from the decompiled vendor DTB is wrong, or GPIO251/252 are shared
++	 * with (or gate) something on the display power/bias path on the
++	 * real board, contrary to the vendor pinctrl label. Do not re-add
++	 * without independent GPIO readback confirmation (debugfs) *and* a
++	 * hardware test that isolates the display from the USB stick test --
++	 * not both changed in the same build again.
++	 */
++};
++
 +/ {
 +	u3phy: t-phy@11290000 {
 +		compatible = "mediatek,generic-tphy-v1";
@@ -85,8 +210,44 @@ index 2caeca572..da0c101fc 100644
 +		assigned-clocks = <&topckgen CLK_TOP_MUX_SSUSB_TOP_SYS>;
 +		assigned-clock-parents = <&topckgen CLK_TOP_UNIVPLL3_D2>;
 +		phys = <&u2port0 PHY_TYPE_USB2>;
-+		dr_mode = "peripheral";
++		vbus-supply = <&usb1_vbus>;
++		dr_mode = "otg";
++		usb-role-switch;
++		role-switch-default-mode = "host";
 +		maximum-speed = "high-speed";
 +		status = "okay";
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++
++		/*
++		 * xhci host child node, required by the mtu3 binding to enable
++		 * host mode. Build #142 (logs/2026-07-13-220-...) hard-crashed
++		 * this: reusing the parent's exact mac+ippc reg block gave the
++		 * child the same unit address/device name ("11271000.usb") as
++		 * the parent, so ssusb_host_init()'s platform_device_register()
++		 * hit "sysfs: cannot create duplicate filename" and the xhci
++		 * platform device never got a working sysfs entry -- no
++		 * xhci-mtk/xhci-hcd probe ever happened. Fixed per the mainline
++		 * mediatek,mtu3.yaml binding's own dual-role example: the xhci
++		 * child uses a *different*, MAC-only register window
++		 * (0x11270000, 1 page) distinct from the parent's mac+ippc
++		 * block at 0x11271000/0x11280700 -- not a re-use of the same
++		 * addresses. Vendor SPI 126 "xhci" IRQ.
++		 * "mediatek,mtk-xhci" is the generic fallback compatible that
++		 * xhci-mtk.c's of_device_id table already matches -- mt6797 has
++		 * no SoC-specific entry there and none is needed for this.
++		 */
++		xhci: usb@11270000 {
++			compatible = "mediatek,mtk-xhci";
++			reg = <0 0x11270000 0 0x1000>;
++			reg-names = "mac";
++			interrupts = <GIC_SPI 126 IRQ_TYPE_LEVEL_LOW>;
++			clocks = <&infrasys CLK_INFRA_SSUSB_SYS>,
++				 <&infrasys CLK_INFRA_SSUSB_REF>;
++			clock-names = "sys_ck", "ref_ck";
++			vbus-supply = <&usb1_vbus>;
++			status = "okay";
++		};
 +	};
 +};

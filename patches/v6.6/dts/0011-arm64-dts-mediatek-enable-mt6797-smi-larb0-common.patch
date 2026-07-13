@@ -1,8 +1,7 @@
 diff --git a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
-index 0000000..0000000 100644
 --- a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
 +++ b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
-@@ -599,6 +599,31 @@
+@@ -630,6 +630,31 @@
  	 * here only as the anchor comment for the pipeline it clocks. */
  };
  

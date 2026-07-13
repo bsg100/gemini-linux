@@ -5964,3 +5964,291 @@ USB gadget enumerated** (`en12`, fixed MAC `42:00:15:19:82:00`, static IP
 aarch64`). All three B-18 symptoms cleared in a single fix — no need for
 the 5-variant diagnostic matrix. **New baseline: display + keyboard + USB
 gadget SSH, all working together, first time since Phase 6 began.**
+
+## BUILD #142 (logs/2026-07-13-220-stage1-usb-host-xhci) — WiFi plan Stage 1.1: USB host mode on ssusb (untested on hardware)
+
+**2026-07-13.** First cut at Stage 1 of the WiFi plan (plan.md Phase 8):
+extended `patches/v6.6/dts/0009-...-ssusb-gadget.patch` (apply-edit-rediff
+against the 0001/0009/0011 patch set, same technique as the B-18 fix) to
+add host-mode support on the existing SSUSB controller, using facts
+confirmed from the vendor DTB (`docs/vendor-dtb/gemini_kali_boot.dts`)
+during Stage 1 desk research:
+
+- The vendor's combined SSUSB block (`0x11270000/0x11280000/0x11290000`)
+  is **one dual-role mtu3 controller** with two IRQs: SPI 127 "musb-hdrc"
+  (device, already used by the existing gadget-mode node) and **SPI 126
+  "xhci"** (host) — not two separate ports. Added an `xhci` child node
+  (`compatible = "mediatek,mtk-xhci"`, reusing the parent's mac/ippc reg
+  block, `interrupts = <GIC_SPI 126 IRQ_TYPE_LEVEL_LOW>`) per the mainline
+  `mediatek,mtu3.yaml` binding's dual-role-child pattern.
+- VBUS has no discrete regulator node in the vendor tree — it's driven
+  directly via GPIO94 through the `usb1_drvvbus_low`/`usb1_drvvbus_high`
+  pinctrl states (`pins = <0x5e00>` decodes as `MTK_PIN(0x5e, 0)` =
+  GPIO94, func 0/GPIO). Modelled as a new `regulator-fixed` node
+  (`usb1_vbus`), same pattern as the existing `vemc_fixed`/`vproc_fixed`
+  nodes, referenced as `vbus-supply` on both the mtu3 parent and the xhci
+  child.
+- `dr_mode` changed from `"peripheral"` to hard `"host"` (not `"otg"`) for
+  this first hardware cycle — avoids needing `usb-role-switch`/connector
+  machinery before host mode is even confirmed to enumerate anything.
+  **This means g_ether/gadget SSH is NOT available in this build** — mtu3's
+  host/gadget Kconfig options are a mutually exclusive choice
+  (`drivers/usb/mtu3/Kconfig`). Dual-role is deferred to after Gate G1a.
+- Confirmed via kernel source inspection (not just hardware.md's existing
+  flag) that `xhci-mtk.c`'s `of_device_id` table already includes a
+  generic `"mediatek,mtk-xhci"` fallback match (`drivers/usb/host/xhci-mtk.c`)
+  alongside the mt8173/mt8195-specific compatibles — so no driver source
+  change is needed for xhci-mtk to bind mt6797, despite no SoC-specific
+  entry existing for it.
+
+`configs/gemini-usb.config` rewritten for host mode: `CONFIG_USB=y`,
+`CONFIG_USB_MTU3=y`, `CONFIG_USB_MTU3_HOST=y` (was `_GADGET`),
+`CONFIG_USB_XHCI_HCD=y`, `CONFIG_USB_XHCI_MTK=y`, `CONFIG_USB_STORAGE=y`
+(cheap USB-stick smoke test ahead of an MT7921U WiFi dongle).
+
+**Build verification (VM, no hardware flash yet):** full patch set
+(`patches/v6.6/`, all subsystems) applied cleanly end-to-end; `.config`
+resolved to the intended symbols (`USB_MTU3_HOST=y`, `USB_XHCI_MTK=y`,
+`USB_XHCI_HCD=y`, `USB_STORAGE=y`); `make` completed with **zero
+warnings or errors** touching USB/xhci/mtu3/gemini; `fdtdump` on the
+compiled DTB confirms the `usb@11271000` node's `vbus-supply` phandle
+resolves and the child `usb@11271000` (xhci) node carries `interrupts =
+<0x00 0x7e 0x08>` (SPI 126) distinct from the parent's `<0x00 0x7f 0x08>`
+(SPI 127) as intended. Packed as build #142
+(`logs/2026-07-13-220-stage1-usb-host-xhci/`, sha256
+`861402f388d5342e1d2ad189b2fd84132e5f38562d45bc69013f58cafb716808`).
+
+**Not yet flashed/tested on hardware — Gate G1a still open.** Because
+this build has no gadget mode, verification on hardware must use the
+panel console (`console=tty0`) or on-eMMC dmesg, not SSH. Expected next
+step: flash `boot2`, plug a USB stick into the right-hand port, and read
+the panel for xhci-mtk probe/enumeration output.
+
+## BUILD #142 hardware result: xhci child device registration failed (sysfs duplicate filename) — root cause and fix, 2026-07-13
+
+**Flashed and booted on hardware.** Serial capture
+(`logs/2026-07-13-222-stage1-live-check.log`) confirms the banner
+(`#142 SMP PREEMPT Mon Jul 13 01:13:31 UTC 2026`) and shows `mtu3` probing
+correctly in host mode (`dr_mode: 1, drd: auto`) before the expected B-15
+mux handoff silences serial. On-device `dmesg` (photographed off the
+panel, physical keyboard — no SSH in this build) showed the real problem:
+
+```
+[    0.444458] mtu3 11271000.usb: supply vusb33 not found, using dummy regulator
+[    0.445850] mtu3 11271000.usb: dr_mode: 1, drd: auto
+[    0.446503] mtu3 11271000.usb: u2p_dis_msk: 0, u3p_dis_msk: 0
+[    0.447527] mtu3 11271000.usb: usb3-drd: 0
+[    0.448325] sysfs: cannot create duplicate filename '/bus/platform/devices/11271000.usb'
+[    0.457751]  ssusb_host_init+0x150/0x18c
+[    0.458268]  mtu3_probe+0x6b8/0x814
+[    0.463928]  mtu3_driver_init+0x1c/0x28
+[    0.465537] mtu3 11271000.usb: xHCI platform device register success...
+```
+
+No `xhci-mtk`/`xhci-hcd` probe line ever appeared after this — the xhci
+platform device was never usable despite mtu3 logging "register success".
+
+**Root cause:** the `xhci` child node in `patches/v6.6/dts/0009-...`
+reused the parent `ssusb` node's exact register block/unit address
+(`0x11271000`, mac+ippc). `ssusb_host_init()` calls
+`platform_device_register()` for the xhci child using a name derived from
+that address — identical to the parent's own device name
+(`11271000.usb`) — so `sysfs_create_dir_ns()` collided and the xhci
+platform device never got a working sysfs entry, meaning the driver core
+could never match/probe it against `xhci-mtk.c`.
+
+**Fix:** matched the mainline `mediatek,mtu3.yaml` binding's own dual-role
+example exactly — the xhci child must use a *different*, MAC-only
+register window than the parent. Changed the child node from
+`usb@11271000` (mac+ippc, same as parent) to `usb@11270000` (`reg = <0
+0x11270000 0 0x1000>`, `reg-names = "mac"` only). Regenerated
+`patches/v6.6/dts/0009-...` via the same apply/edit/rediff technique used
+for the B-18 fix, verified byte-identical reconstruction of the full
+patch stack. Config unchanged.
+
+**Build verification (VM):** full patch set applies cleanly; `.config`
+unchanged (`USB_MTU3_HOST=y` etc. as before); build clean, zero
+warnings. Packed as build #143 (`logs/2026-07-13-223-stage1-xhci-reg-fix/`,
+sha256 `6ae42067a5c50bce21f84b94167006f802473bd1c451d4acfe03c71b852673a0`).
+
+**Hardware result: "HC died" crash.** Flashed and booted; xhci-mtk bound
+this time (the sysfs-collision fix worked), but the host controller
+crashed shortly after with `xhci_hcd 11271000.usb: xHCI host controller
+not responding, assume dead` / `couldn't allocate usb_device`. Root
+cause: pure `dr_mode = "host"` only calls `mtu3_host.c`'s
+`ssusb_host_setup()` (`ssusb_host_enable()` + `ssusb_set_force_mode()`,
+IDDIG override bits) and *assumes* port0's U2/U3 mux is already hardwired
+to host by the SoC — true for boards with a fixed Type-A receptacle, not
+true for the Gemini's shared Type-C port. The actual port-mux flip
+(`switch_port_to_host()` in `mtu3_dr.c`) only runs through the OTG
+role-switch work queue, gated on `dr_mode == USB_DR_MODE_OTG`.
+
+## BUILD #144 — dr_mode host→otg + role-switch, 2026-07-13
+
+Changed `patches/v6.6/dts/0009-...`: `dr_mode = "host"` →
+`dr_mode = "otg"; usb-role-switch; role-switch-default-mode = "host";` on
+the `ssusb` node. This routes through the real `ssusb_role_sw_register()`
+→ mux-flip path at probe (reads `role-switch-default-mode` from DT and
+runs the full role-switch sequence unconditionally when
+`usb-role-switch` is present), without needing a `connector`/ID-pin node.
+`CONFIG_USB_MTU3_DUAL_ROLE` (mutually exclusive with `_HOST`/`_GADGET`,
+requires `USB_GADGET=y` + `EXTCON=y` as Kconfig deps even though extcon
+isn't used at runtime — role-switch takes priority). Still no
+g_ether/gadget SSH in this build.
+
+Packed as build #144 (`logs/2026-07-13-144-stage1-otg-rolesw/`, sha256
+`94da4bc7d0587cd5100db6bb289248cbc0225312244c554a39db09bd6fb51a24`).
+
+**Hardware result: crash fixed, enumeration still fails.** No more "HC
+died" — the OTG/role-switch path is genuinely more correct. But
+`/proc/interrupts` still showed SPI 126 (`xhci-hcd:usb1`) at 0 fires, and
+`lsusb` showed only the virtual root hub, same as #143. This ruled out
+"missing IRQ due to mux/role-switch mechanism" as the remaining blocker —
+the symptom is consistent with "nothing ever generates a port-status-change
+event at all," i.e. no real electrical connect ever registers, pointing at
+power/mux gating rather than IRQ routing.
+
+## BUILD #145 — VBUS mux gap: sw7226 GPIO72, 2026-07-13
+
+User question ("is it something we could harvest from the plant known good
+kali?") prompted reading the real vendor 3.18 driver source
+(`/Volumes/extdata/github/gemini-android-kernel-3.18/kernel-3.18/drivers/misc/mediatek/usb_c/fusb302/usb_typec.c`,
+despite its directory name this chip is actually an **FUSB301A**, a
+CC-orientation-only chip with no VBUS/data gating of its own — confirmed
+by its probe function only reading `regDeviceID`/`regStatus` over I2C).
+`fusb300_eint_work()` shows that on real cable-insert, the vendor driver
+asserts *both* `usb1_drvvbus_high` (GPIO94, already wired in #142) *and*
+`sw7226_en_high` (GPIO72) — SW7226 is a separate physical USB power-switch
+IC gating the real 5V rail; GPIO94 alone is insufficient. Added
+`sw7226_en_hog` gpio-hog (GPIO72, output-high) to `&pio` in
+`patches/v6.6/dts/0009-...`. Verified locally via `dtc` before syncing
+(caught and fixed a `/ {` / `&pio {` nesting bug introduced while adding
+the hog, before ever reaching the VM).
+
+Packed as build #145 (`logs/2026-07-13-145-stage1-sw7226-vbus/`, sha256
+`4b9a3388dbc511729db34b6d5d246a70673d8f50e73b0c799b794b5f510b41c9`).
+
+**Hardware result: GPIO confirmed correctly asserted, still no
+enumeration.** `/sys/kernel/debug/gpio` showed `gpio-606`
+(`regulator-usb1-vbus`, GPIO94) and `gpio-584` (`sw7226-en`, GPIO72) both
+`out hi`. Stick still not visible in `lsusb`.
+
+## BUILD #146 — fusb301a mux GPIO70/71, 2026-07-13
+
+Same vendor source, `fusb300_gpio_init()`: the idle/default state (set at
+driver init, never touched again outside the HDMI alt-mode branch) is
+`fusb301a_sw_en_high` (GPIO70) + `fusb301a_sw_sel_low` (GPIO71). Checked
+`/sys/kernel/debug/gpio` on hardware after #145 — GPIO70/71 were completely
+unclaimed (LK never touches them, nothing in our tree requested them
+either), i.e. floating at silicon reset default rather than the vendor's
+documented safe-idle values. Added `fusb301a_sw_en_hog` (GPIO70,
+output-high) and `fusb301a_sw_sel_hog` (GPIO71, output-low) to `&pio`.
+
+Packed as build #146 (`logs/2026-07-13-146-stage1-fusb301a-mux/`, sha256
+`77061130cf9adf897995bb3a642a8dbe0b931bdff7411eaa38b108f5e550593c`).
+
+**Hardware result: booted fine (display + keyboard both fine, initial
+"hang" report was just a slower boot, not a regression), USB stick still
+only shows the root hub in `lsusb`.** All three vendor-sourced GPIO fixes
+(VBUS/94, sw7226/72, fusb301a-mux/70+71) now exactly replicate the
+vendor's documented "USB1 OTG mode, no HDMI" idle state, confirmed via
+GPIO readback — yet enumeration still fails. This is a useful negative
+result: it means the GPIO/mux layer is very unlikely to be the remaining
+gap.
+
+## BUILD #147 — FUSB340 redriver GPIO251/252: DISPLAY REGRESSION, reverted in #148, 2026-07-13
+
+Vendor DTB (`docs/vendor-dtb/gemini_kali_boot.dts`) carries a completely
+separate `usb_c_pinctrl@0` node (`compatible = "mediatek,usb_c_pinctrl"`)
+with pinctrl states named `fusb340_noe_init/low/high` and
+`fusb340_sel_init/low/high` — an FUSB340 USB3 SuperSpeed redriver/mux,
+distinct from the FUSB301A CC chip and not referenced anywhere in
+`usb_typec.c`. Decoded `pins = <0xfb00>`/`<0xfc00>` to GPIO251/252.
+Added `fusb340_noe_hog` (GPIO251, output-low = enable, NOE being
+active-low by naming convention) and `fusb340_sel_hog` (GPIO252,
+output-low, matching the CC1-orientation default assumed elsewhere).
+
+Packed as build #147 (`logs/2026-07-13-147-stage1-fusb340-redriver/`,
+sha256 `4afb492115b0325fccf51fbdb1fa17da089c45326f3b37702afa47412535bf23`).
+
+**Hardware result: DISPLAY LOST.** Serial capture
+(`logs/2026-07-13-149-stage1-fusb340-crash.log`) looked completely normal
+up to the expected B-15 serial death at `mtu3` init — no crash visible in
+the log itself. But the physical panel went blank/unresponsive. The only
+change from #146 (display fine) was the two new GPIO251/252 hogs. Reverted
+immediately (build #148, below) rather than continue guessing blind on a
+live display regression.
+
+**Conclusion:** either the vendor-DTB pin-number decode for GPIO251/252 is
+wrong, or those pins are genuinely shared with (or gate) something on the
+display power/bias path on the real board, contrary to the vendor pinctrl
+label naming. Do not re-add without independent GPIO debugfs readback
+*and* a hardware test that isolates the display from the USB test —
+not both changed in the same build again. This lead is now considered a
+dead end absent new evidence.
+
+## BUILD #148 — revert FUSB340 hogs, display restored, 2026-07-13
+
+Reverted the GPIO251/252 gpio-hogs from #147; otherwise identical to #146
+(VBUS/94, sw7226/72, fusb301a-mux/70+71 all still present). Regenerated
+`patches/v6.6/dts/0009-...`/`0011-...` via the standard apply-edit-rediff
+technique, verified full-sequence reapplication byte-identical to the
+target file before syncing.
+
+Packed as build #148
+(`logs/2026-07-13-148-revert-fusb340-display-fix/`, sha256
+`94780ff6b1c49c0de84858c7427cbde91f3980343c3d835982d544295f4d2794`).
+
+**Hardware result: display restored, confirmed by user ("revert
+successful").** This confirms GPIO251/252 as the display regression
+cause. **Gate G1a status: still open.** Every GPIO-level gate found in
+the vendor 3.18 source and vendor DTB for the CC/VBUS/mux path is now
+correctly asserted (VBUS/94, sw7226/72, fusb301a-mux/70+71); the FUSB340
+redriver lead is a dead end (or at least not safely reproducible via
+static GPIO assertion). USB stick enumeration remains unexplained as of
+this build — next steps need to consider non-GPIO causes: a genuine
+physical connection/cable/stick issue, or something in the mtu3/xhci
+driver stack itself now that the "HC died" crash is gone but nothing
+electrical is ever detected.
+
+## BUILD #149/#150 — FUSB301A I2C diagnostic: chip responds, ATTACH never fires. Gate G1a PAUSED, 2026-07-13
+
+Enabled the previously-unused FUSB301A driver (`patches/v6.6/usb/0001-...`)
+as a pure I2C diagnostic (DTS node `status = "okay"`,
+`CONFIG_TYPEC_FUSB301A=y`; deliberately not wired as a `usb-role-switch`
+consumer, since the driver's own role-derivation logic is flagged FIXME
+and could set `USB_ROLE_NONE`, disabling the port). Build #149
+(`logs/2026-07-13-149-fusb301a-i2c-diagnostic/`, sha256
+`1ee984a32d84aa2e57e1845b6eb53ed18784129edc3128cd39f0170a44dd9d46`):
+`dmesg` confirmed the chip responds — "FUSB301A USB Type-C CC controller
+ready" (the `regDeviceID` I2C read succeeded). Bumped the status log from
+`dev_dbg` to `dev_info` (build #150,
+`logs/2026-07-13-150-fusb301a-status-visible/`, sha256
+`7b5a1b277c15869a9ca9f867cb676542761e1f565ceb8d47ab61c39de82a6238`) since
+no dynamic-debug support exists in this kernel (`CONFIG_DYNAMIC_DEBUG` not
+set, confirmed via missing `/sys/kernel/debug/dynamic_debug/control`).
+
+**Result: `status=0x00 type=0x00 cc=CC1 role=0` — ATTACH bit never set —
+with TWO different devices on the confirmed-correct left port:** a USB2.0
+SD card reader via a plain USB-C-to-USB-A adapter (VID:PID 349C:0418), and
+a native USB-C MediaTek network dongle (no adapter). Same reading both
+times. This rules out both "bad test device" and "CC-less adapter cable"
+as explanations.
+
+**Conclusion / Gate G1a paused, not resolved.** Every other theory this
+investigation has been able to test is now ruled out (see blockers.md B-19
+for the full list: xhci sysfs collision, host-only mux gap, VBUS/mux GPIO
+gaps, wrong physical port, bad device, bad cable). The one remaining
+unverified variable is the FUSB301A `MODE` register write (`0x04`),
+reverse-engineered from the vendor 3.18 driver's call site rather than a
+real datasheet — if wrong, the chip may never actually enable CC
+detection, explaining `ATTACH=0` regardless of what's plugged in. Not
+pursuing further register-level guesses without the real FUSB301A
+datasheet.
+
+**Reverted to known-good baseline:** re-flashed build #175 (banner #140,
+`logs/2026-07-13-175-b18-aw9523b-pinctrl-fix/`, sha256
+`d34d58474bca24a851eda4c93ac660aada268c8cb3de1f231d44b00d7c7883c8`) —
+keyboard + display + USB gadget SSH all confirmed working together. All
+Stage 1 DTS/config work (builds #142-150) remains in `patches/v6.6/` for
+when this gate is resumed, but is not part of the currently flashed image.
