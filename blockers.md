@@ -2414,7 +2414,7 @@ restored, clk_ignore_unused dropped. See boot.md builds #136–#145.
 
 ---
 
-## 🟡 B-18 — AW9523B keyboard enablement breaks USB gadget (SSH-over-USB); USB disabled by decision 2026-07-12
+## 🟢 B-18 — AW9523B keyboard enablement breaks USB gadget (SSH-over-USB) — RESOLVED 2026-07-13
 
 **Symptom evolution (all 2026-07-12, Phase 6):** on every build with the
 AW9523B GPIO expander enabled (`GPIO_AW9523B=y` + DTS node okay) AND
@@ -2450,7 +2450,31 @@ USB-broken + mtu3-on would have left no remote access at all.
 clk_ignore_unused is mandatory in this mode (build #153 wedged in the
 unused-clock sweep without mtu3 holding SSUSB clocks).
 
-**Current baseline:** build #164 (= #168 rebuild from committed configs):
-display + working keyboard + serial console/shell + panel kernel log.
-**Unblocks:** root-causing the aw9523b↔USB interaction → restore
-gemini-usb.config, drop gemini-serial-console.config, SSH returns.
+**Root cause found and fixed 2026-07-13:** desk research (vendor
+`aw9523_key.c` in gemini-android-kernel-3.18) showed the chip's INT pin
+(GPIO87/EINT10) gets an explicit `bias-pull-up` pinctrl state selected at
+probe (`aw9523_key_setup_eint()`). Our DTS already *defined* the matching
+state, `aw9523b_pins` (`patches/v6.6/dts/0001-...patch`: SHDN/GPIO58
+output-high + GPIO87/INT `bias-pull-up`/`input-enable`) — but it was never
+referenced by any `pinctrl-0` property on the `aw9523b` i2c node, so it was
+dead DTS: GPIO87/INT was left **floating**, right next to USB/mtu3 IRQ
+activity, which is consistent with both failure modes (#147/#157 hard wedge
+with a host attached at power-on; #159/#166 silent gadget non-enumeration).
+
+**Fix:** add `pinctrl-names = "default"; pinctrl-0 = <&aw9523b_pins>;` to
+the `aw9523b: gpio@5b` node. One-line functional change; regenerated the
+three DTS patches touching `mt6797-gemini-pda.dts` (0001/0009/0011) via
+apply-edit-rediff so their line-number context stays consistent
+(`patches/v6.6/dts/0001-arm64-dts-mediatek-add-gemini-pda-board.patch`,
+`.../0009-...ssusb-gadget.patch`, `.../0011-...smi-larb0-common.patch`).
+
+**Verified on hardware, build #175 (banner #140,
+`logs/2026-07-13-175-b18-aw9523b-pinctrl-fix/`):** clean boot to prompt,
+keyboard works, USB gadget enumerates (`en12`, fixed MAC
+`42:00:15:19:82:00`), ping + `ssh root@10.15.19.82` both succeed — all
+three B-18 symptoms cleared in one fix, no diagnostic matrix needed.
+`configs/gemini-usb.config` restored (from `.disabled`);
+`configs/gemini-serial-console.config` retired to `.disabled` (its
+USB-off/`clk_ignore_unused` fallback is no longer needed — mtu3 + keyboard
+now coexist). **New baseline:** display + keyboard + USB gadget SSH, all
+together, for the first time since Phase 6 began.
