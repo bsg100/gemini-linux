@@ -232,3 +232,181 @@ whether it charges under our Linux 6.6.
 **Sequencing (user decision 2026-07-12):** finish the keyboard build
 first (Fn layer, keymap verification); battery/charging is the next
 build after that.
+
+---
+
+# USB Left-Port PHY & Type-C Harvest (2026-07-14, Stage A of USB plan)
+
+Source-backed register/logic harvest from the vendor 3.18 tree
+(`/Volumes/extdata/github/gemini-android-kernel-3.18/kernel-3.18/`, below
+cited as `K/`) and the real device DTB
+(`docs/vendor-dtb/gemini_kali_boot.dts`, cited as `DTB`). Purpose: replace
+every guessed register in the B-19/B-20 work with a cited value.
+
+## 1. U2-PHY usb2uart (the B-15/B-20 "console mux")
+
+The left port's UART/USB console mux is the U2 PHY's usb2uart function
+plus ONE AP-side register. Vendor implementation:
+`K/drivers/misc/mediatek/mu3phy/mt6797/mtk-phy-asic.c` (guarded by
+`CONFIG_MTK_UART_USB_SWITCH=y` — SET in the known-good vendor config,
+`docs/vendor-dtb/kali_known_good_kernel.config:1544`).
+
+Register addresses (offsets from `mtk-phy-asic.h:19-39`; physical base =
+u2port0 com bank `0x11290800` from our `patches/v6.6/dts/0009` t-phy node,
+matching vendor DTB `usb3_sif2@11290000`):
+
+| Register | Phys addr | uart-mode bits (mtk-phy-asic.h:234-269,490-525) |
+|---|---|---|
+| U3D_U2PHYDTM0 | **0x11290868** | `RG_UART_MODE` [31:30], `FORCE_UART_BIAS_EN` [28], `FORCE_UART_TX_OE` [27], `FORCE_UART_EN` [26], `FORCE_SUSPENDM` [18], `RG_SUSPENDM` [3] |
+| U3D_U2PHYDTM1 | **0x1129086C** | `RG_UART_BIAS_EN` [18], `RG_UART_TX_OE` [17], `RG_UART_EN` [16] |
+| GPIO MISC mux | **0x10005600** | `0x80` = UART routed to USB D+/D- pads, `0x00` = USB (asic.c:207-208,301,311 — the dump labels it "0x10005600 (GPIO MISC)"; it is in the pinctrl block, NOT the UART) |
+| U3D_USBPHYACR6 | 0x11290818 | `RG_USB20_BC11_SW_EN` (cleared before uart switch) |
+| U3D_U2PHYACR4 | 0x11290820 | `RG_USB20_DM_100K_EN` [17] (set in uart mode) |
+
+Vendor logic (asic.c):
+- `usb_phy_check_in_uart_mode()` (:211-230): in-uart-mode ⇔
+  `(DTM0 >> 30) == 1`. **RG_UART_MODE, not FORCE_UART_EN, is the vendor's
+  definition of uart mode.**
+- `usb_phy_switch_to_uart()` (:232-304): VUSB33/VA10 on → BC11_SW_EN=0 →
+  RG_SUSPENDM=1, FORCE_SUSPENDM=1 → **RG_UART_MODE=1** → RG_UART_EN=1,
+  FORCE_UART_EN=1, FORCE_UART_TX_OE=1, FORCE_UART_BIAS_EN=1,
+  RG_UART_TX_OE=1, RG_UART_BIAS_EN=1 → DM_100K_EN=1 → **0x10005600=0x80**.
+- `usb_phy_switch_to_usb()` (:307-322): **0x10005600=0x00** → clear
+  FORCE_UART_EN → full `phy_init_soc()` re-init.
+- `phy_init_soc()` clears FORCE_UART_EN/RG_UART_EN **only if
+  `!in_uart_mode`** (:543-548) — vendor deliberately preserves uart mode
+  across PHY re-inits; the switch is manual/persistent (sysfs `portmode`,
+  `mu3d/drv/mt_usb.c:483-526`), NOT automatic per-boot.
+
+**Gap vs mainline** `drivers/phy/mediatek/phy-mtk-tphy.c`
+`u2_phy_instance_init()` (v6.6, :815-848): mainline clears FORCE_UART_EN
+(:823) and RG_UART_EN (:828) but **never clears RG_UART_MODE [31:30] and
+never touches 0x10005600**. If LK leaves both set (it runs its console on
+this port), the pad routing may remain UART even after mainline tphy init
+— candidate root cause for B-20's boot-with-host-attached failure, and
+possibly for B-19 host-mode D+/D- deadness too.
+
+Diagnostic devmem set (read-only, safe): `0x11290868`, `0x1129086C`,
+`0x10005600` — compare good boot (FTDI protocol) vs broken boot
+(Mac-cable-at-power-on).
+
+## 2. Vendor gadget connect logic (mu3d) — what drives "attach"
+
+`K/drivers/misc/mediatek/mu3d/drv/mt_usb.c`:
+- `usb_cable_connected()` (:256+): connected ⇔ **PMIC charger detection**
+  — `mu3d_hal_get_charger_type()` (BC1.2) ∈ {STANDARD_HOST,
+  CHARGING_HOST} AND `upmu_get_rgs_chrdet()` (MT6351 CHRDET) says VBUS
+  present. The FUSB301A plays NO role in vendor gadget attach; neither
+  does mtu3-internal VBUS sensing.
+- `connection_work()` (:84+): polls/reacts, does soft-connect/disconnect.
+- At controller init (`mu3d/drv/musb_init.c:714-721`): if PHY is in uart
+  mode, the vendor just logs `UART_MODE` and leaves it — gadget then
+  simply doesn't work until userspace flips `portmode`. Android's
+  always-enumerates behavior implies Android userspace/LK ensures USB
+  mode; our kernel must do the equivalent unconditionally.
+- `CONFIG_USB_MU3D_DEFAULT_U2_MODE=y` (known-good config:1509): vendor
+  ran the left port USB2-only by default.
+
+## 3. FUSB301A — real register map and vendor usage
+
+Real map from `K/drivers/misc/mediatek/usb_c/fusb301/fusb301.h:49-150`
+(Fairchild reference header; applies to both fusb301 drivers):
+
+| Reg | Addr | Bits |
+|---|---|---|
+| DeviceID | 0x01 | VERSION[7:3] REVISION[2:0] |
+| **Mode** | **0x02** | SOURCE[0] SOURCE_ACC[1] SINK[2] SINK_ACC[3] DRP[4] DRP_ACC[5] |
+| Control | 0x03 | INT_MASK[0] HOST_CUR[2:1] DRPTOGGLE[5:4] |
+| Manual | 0x04 | ERROR_REC[0] DISABLED[1] UNATT_SRC[2] UNATT_SNK[3] |
+| Reset | 0x05 | SW_RES[0] |
+| Mask | 0x10 | M_ATTACH[0] M_DETACH[1] M_BC_LVL[2] M_ACC_CH[3] |
+| Status | 0x11 | ATTACH[0] BC_LVL[2:1] VBUSOK[3] ORIENT[5:4] |
+| Type | 0x12 | device type decode |
+| Interrupt | 0x13 | I_ATTACH[0] I_DETACH[1] ... |
+
+So: **host/DFP = Mode(0x02)=0x01 (SOURCE)**; DRP = 0x10. The old
+`patches/v6.6/usb/0001` "regMode=0x04" write was to the Manual register —
+now fully explained (B-19's stopping point).
+
+**TWO FUSB301 chips exist** (DTB:3678 vs :3772): `fusb301a@25` on
+**i2c0** (11007000, id=0) and `fusb301@25` on **i2c1** (11008000, id=1).
+Vendor binds them with different drivers:
+- i2c0 chip → `K/.../usb_c/fusb302/usb_typec.c` (compatible
+  "mediatek,fusb301a", :331). Init = Mode:=0x01 SOURCE only (:54-68). Its
+  IRQ is NOT the FUSB301A INT — it is the **USB1 (right-port) ID pin**,
+  EINT 64 debounce 256ms ("mediatek,fusb301a-pin", DTB:5215-5221).
+  `fusb300_eint_work()` (:107-168): on ID low, read Status(0x11) ORIENT →
+  drive GPIO94 (usb1 VBUS), GPIO70/71 (HDMI lane mux by CC orientation),
+  GPIO72 (sw7226, OTG enable) — all right-port/HDMI plumbing, confirming
+  boot.md's B-20 finding.
+- i2c1 chip → `K/.../usb_c/fusb301/usb_typec.c` (compatible
+  "mediatek,fusb301"). Init = Mode:=0x01 SOURCE; its eint work function is
+  EMPTY (:93-100) — a stub. No CC-driven switching at all.
+
+**Open question (test live, zero-risk):** which physical port each chip
+serves. Our kernel found a chip on i2c0/0x25 (hardware.md), and B-20's
+dump of it showed ATTACH/ORIENT tracking the left port — but the vendor
+wires the i2c0 chip's logic to right-port muxes. `i2cdetect`/`i2cget` on
+both buses while plugging each port resolves this in minutes and MUST be
+done before further FUSB301A driver work.
+
+## 4. Vendor host mode on the SSUSB (left) port — it existed
+
+Contrary to B-19's "Android only ever used gadget mode on this port":
+known-good config has `CONFIG_USB_XHCI_MTK=y` (:1556) and the DTB has
+`usb3_xhci@11270000` with an `usb_iddig_bi_eint` child (EINT 181,
+DTB:4379-4392). Vendor host/device switch on SSUSB = **IDDIG ID-pin EINT
+181**, not CC logic. Implications for Stage C:
+- Left-port host mode is electrically proven (vendor shipped it).
+- The trigger the vendor used is the IDDIG line; how IDDIG is generated
+  on a Type-C port (FUSB301A? OTG cable detect?) is the key open
+  question — find the iddig handler in `K/.../ssusb/` or `xhci/` next.
+- Our mainline `dr_mode="otg"` + role-switch approach needs an input the
+  vendor got from IDDIG; forcing host role without it may be why G1a saw
+  zero connect events even with all GPIOs correct.
+
+## 5. Revalidated-assumption ledger (2026-07-14)
+
+- "PHY stuck in usb2uart on broken boots" — WEAKENED by the genuine #177
+  capture (serial dies at 0.454s ⇒ FORCE_UART_EN cleared) but NOT dead:
+  mainline leaves RG_UART_MODE + 0x10005600 uncleared, and serial death
+  only proves the FORCE bits changed. Devmem dump decides.
+- "FUSB301A Mode write 0x04" — resolved wrong; Mode=0x02, SOURCE=0x01.
+- "Vendor gadget attach = CC/controller sensing" — wrong; it's PMIC
+  BC1.2 + CHRDET (mt_usb.c). Mainline mtu3 without extcon must sense a
+  host by D+/D- reset, which fails if pad routing is stuck.
+- "Vendor never ran host mode on SSUSB" — wrong; XHCI_MTK=y + IDDIG
+  EINT 181.
+- "GPIO70/71/72/94 are left-port gadget path" — confirmed wrong (they
+  are right-port OTG/HDMI), per fusb302/usb_typec.c:96-156.
+
+## 6. LIVE verification 2026-07-14 (#177 good boot, gadget configured)
+
+PHY/mux registers with gadget WORKING (baseline for the broken-boot diff):
+- `U2PHYDTM0(0x11290868) = 0x52000008` → RG_UART_MODE[31:30]=01 (vendor
+  would call this "uart mode"!), FORCE_UART_BIAS_EN[28]=1,
+  FORCE_UART_EN[26]=0, RG_SUSPENDM[3]=1
+- `U2PHYDTM1(0x1129086C) = 0x00043E2E` → RG_UART_BIAS_EN[18]=1,
+  RG_UART_EN[16]=0
+- `GPIO MISC (0x10005600) = 0x80` → still "UART routing" value
+- Conclusion: RG_UART_MODE=1 and MISC=0x80 do NOT by themselves block
+  gadget USB. Only the FORCE_/RG_UART_EN bits (cleared by mainline tphy)
+  seem to matter for the data path. The broken-boot dump (staged in
+  /root/run-once.sh) must show which bits differ.
+
+FUSB301 chips, Mac attached to LEFT port (i2cget -f, DeviceID/Mode/
+Control/Manual/Status/Type):
+- **i2c0 chip: Status=0x00 Type=0x00 (sees nothing)** — it serves the
+  RIGHT port (consistent with §3 vendor wiring).
+- **i2c1 chip: Status=0x2b (ATTACH VBUSOK BC_LVL=01 ORIENT=CC2),
+  Type=0x08 — the LEFT port's CC controller is the i2c1 chip.**
+- Both chips Mode=0x04 (SINK), Control=0x03 (INT_MASK=1, HOST_CUR=01) —
+  power-on defaults; nothing in build #177 writes them.
+
+**Consequence for B-19 (Stage C):** every Stage 1 FUSB301A experiment
+(ATTACH always 0, "MODE write" tests) talked to the i2c0/right-port chip
+while devices were plugged into the left port. ATTACH=0 was the truthful
+answer for an empty right port. For left-port host mode the chip to
+program is **i2c1 0x25: Mode(0x02)=0x01 (SOURCE)** — and in SINK mode
+(current default) a downstream device presenting Rd is invisible, which
+is consistent with everything G1a observed.

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run staged one-shot diagnostic script
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/run-once-exec
+
+[Install]
+WantedBy=multi-user.target

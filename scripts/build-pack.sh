@@ -42,13 +42,14 @@ DATE="$(date +%Y-%m-%d)"
 PROV="$REPO/logs/$DATE-$NN-$DESC"
 NEXT=$((10#$NN + 1))
 
-echo "==> [1/6] Syncing patches/ and configs/ to VM"
+echo "==> [1/6] Syncing patches/, configs/ and scripts/ to VM"
 rsync -a --delete "$REPO/patches/" root@localhost:'~/gemini_linux/patches/' -e "ssh -p 5522"
-rsync -a "$REPO/configs/" root@localhost:'~/gemini_linux/configs/' -e "ssh -p 5522"
+rsync -a "$REPO/scripts/" root@localhost:'~/gemini_linux/scripts/' -e "ssh -p 5522"
+rsync -a --delete "$REPO/configs/" root@localhost:'~/gemini_linux/configs/' -e "ssh -p 5522"
 echo "==> [2/6] Reset kernel tree, patch, config, build (VM)"
 $VM 'cd ~/linux-6.6 && git reset -q && git checkout -- . && git clean -fdq -- Documentation arch drivers'
 $VM 'cd ~/gemini_linux && ./scripts/build.sh patch && ./scripts/build.sh config'
-$VM 'cd ~/gemini_linux && ./scripts/build.sh build' 2>&1 | tail -3
+$VM "cd ~/gemini_linux && BUILD_NN=$((10#$NN)) ./scripts/build.sh build" 2>&1 | tail -3
 
 echo "==> [3/6] Packing boot image (VM)"
 $VM 'python3 ~/gemini_linux/scripts/pack-boot-img.py \
@@ -74,17 +75,22 @@ cp "$OUT/System.map-latest" "$PROV/System.map"
 shasum -a 256 "$PROV/new_kali_boot.img"
 
 echo "==> [5/6] Verifying packed kernel"
-python3 - "$PROV/new_kali_boot.img" <<'EOF'
-import re, sys, zlib
+BUILD_NN="$((10#$NN))" python3 - "$PROV/new_kali_boot.img" <<'EOF'
+import os, re, sys, zlib
 d = open(sys.argv[1], 'rb').read()
 i = d.find(b'\x1f\x8b\x08')
 if i < 0:
     sys.exit("ERROR: no gzip kernel found in image")
 k = zlib.decompressobj(31).decompress(d[i:])
-m = re.search(rb'#\d+ SMP PREEMPT [^\x00]*UTC \d{4}', k)
+m = re.search(rb'#(\d+) SMP PREEMPT [^\x00]*UTC \d{4}', k)
 if not m:
     sys.exit("ERROR: no kernel banner in decompressed image")
 print("    banner:", m.group().decode())
+nn = os.environ['BUILD_NN']
+if m.group(1).decode() != nn:
+    sys.exit(f"ERROR: banner #{m.group(1).decode()} != build number #{nn} — "
+             "stale kernel or BUILD_NN not passed through to make")
+print(f"    banner matches build number #{nn}: OK")
 import os
 if b'GEMINI-DEBUG' in k:
     if os.environ.get('ALLOW_DEBUG') == '1':
@@ -98,8 +104,8 @@ echo "==> [6/6] Next steps (do not flash with mtk wl — targeted writes only)"
 cat <<EOF
 
 Flash (device in preloader mode):
-  /tmp/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot  $PROV/new_kali_boot.img
-  /tmp/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 $PROV/new_kali_boot.img
+  ~/gemini-build/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot  $PROV/new_kali_boot.img
+  ~/gemini-build/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 $PROV/new_kali_boot.img
 
 Capture:
   cd $REPO
