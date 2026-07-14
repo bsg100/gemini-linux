@@ -6252,3 +6252,86 @@ datasheet.
 keyboard + display + USB gadget SSH all confirmed working together. All
 Stage 1 DTS/config work (builds #142-150) remains in `patches/v6.6/` for
 when this gate is resumed, but is not part of the currently flashed image.
+
+## BUILDS #176/#177 + B-20 investigation — gadget "not attached" regression; FUSB301A exonerated; left-port UART/USB mux = U2-PHY usb2uart, 2026-07-13/14
+
+Full-evening debugging session after the morning's #175 baseline stopped
+enumerating its USB gadget. Timeline and evidence:
+
+**Numbering fix (permanent):** `build-pack.sh` now passes the build number
+as `BUILD_NN` → `KBUILD_BUILD_VERSION`, and the verify step FAILS if the
+packed kernel's banner ≠ build number (it caught a stale in-VM `build.sh`
+on its first run — build-pack now also rsyncs `scripts/`). From #176
+onward, banner == build number. Builds ≤ #175 keep their old banners
+(#175 = banner #140).
+
+**Builds:**
+- **#176 serial-known-good-baseline** (`logs/2026-07-13-176-...`, sha256
+  `e30c1036...`): exact #175 patch set (restored from commit `aff681d`;
+  Stage 1 fusb301a/host work parked), serial-console config (USB_MTU3
+  off, clk_ignore_unused). Booted clean to prompt in 12.2s
+  (`logs/2026-07-13-177-serial-baseline-boot.log`, banner #176).
+- **#177 usb-gadget-baseline** (`logs/2026-07-13-177-usb-gadget-baseline/`,
+  sha256 `f3a22628...`): same patch set + the #175-era USB config
+  (byte-identical content to #175). Currently flashed on boot2.
+
+**Rootfs:** the Jul 8 pristine image (`a87d4780...`) was reflashed to p29
+mid-evening — a MISTAKE, since it predates the 2026-07-12 Fn-keymap work
+(`/etc/gemini.bkmap` + `gemini-keymap.service`), which killed the symbol
+keys on the physical keyboard. Rebuilt via `mkrootfs.sh` (VM disk had to
+be cleaned: a stale rsync had put 3.3 GB of `logs/` in the VM) → new image
+sha256 `063b1ee8...` with keymap + busybox-static + #177 modules,
+verified by loop-mount, flashed to p29. Keyboard symbols confirmed back.
+Old image preserved as `debian13-rootfs-20260708-a87d4780.img`.
+
+**Gadget regression (B-20) evidence:**
+- Kernel and rootfs EXONERATED: pristine rootfs + byte-identical-to-#175
+  kernel still fail; failure is at USB enumeration (Mac sees no device at
+  all), below the rootfs layer.
+- Android (boot slot) enumerates on the same cable/port/Mac
+  (`Gemini_4G`) — hardware path intact.
+- SSH DID work once mid-evening on #177 + old rootfs (verified
+  `uname` banner #177, UDC `configured`) after a sequence involving FTDI
+  boots and a live cable swap — then broke again after the mtkclient DA
+  session that flashed the new rootfs. Every break tonight had a
+  preloader/DA session immediately upstream. Android bounce + cold boot
+  + hot replug were each tried afterwards; none reproduced the fix.
+- FUSB301A register dump over the (restored) device keyboard, decoded
+  against the REAL vendor register map
+  (`gemini-android-kernel-3.18/.../fusb301/fusb301.h`: 0x01 DeviceID,
+  0x02 Mode, 0x03 Control, 0x04 **Manual**, 0x05 Reset, 0x11 Status,
+  0x12 Type — note the Stage 1 driver wrote "mode" to 0x04, which is
+  actually the Manual register):
+  `DeviceID=0x12 Mode=0x04(SNK) Control=0x03 Manual=0x00
+  Status=0x2b (ATTACH=1, VBUSOK=1, BC_LVL=01, ORIENT=CC2) Type=0x08
+  (attached-to-source)` — **the CC chip sees the Mac perfectly.** The
+  "poisoned FUSB301A" theory is DEAD (Manual=0x00, attach clean).
+- GPIO70/71 ("fusb301a_sw_en/sel") probed and driven via
+  `busybox devmem` on pio 0x10005000 (MODE bank 0x380 = GPIO mode;
+  DIR bank2 0x...20 shows both outputs; DOUT bank2 was 0x0 = en LOW).
+  All four (en,sel) combinations tried — NO effect on enumeration, no
+  dmesg events, UDC stayed `not attached`.
+- Vendor source explains why: `fusb302/usb_typec.c` shows GPIO70/71/72/94
+  belong to the **USB1 (right port) OTG/HDMI path** (`fusb300_eint_work`
+  switches them on the USB1 ID pin, CC orientation for HDMI alt mode).
+  They are NOT the left-port gadget data path.
+
+**New working theory (B-20):** the left port's UART/USB console "mux"
+(B-15) is not a discrete mux at all — it is the MT6797 U2 PHY's
+**usb2uart function** (FORCE_UART_EN / RG_UART_EN bits in the U2 PHY DTM
+registers): D+/D- carry the LK serial console until the tphy driver
+clears those bits. If they stay set, USB data never reaches mtu3 while
+CC attach (separate pins) looks perfect — exactly tonight's signature.
+NOTE: the "#177 boots to prompt with serial" observation that motivated
+the mux theory came from a misread log (`2026-07-13-177-serial-baseline-
+boot.log` is actually the #176 BOOT — banner #176 inside); a genuine
+#177 serial capture has NOT been made yet.
+
+**Next session:**
+1. FTDI capture of a #177 cold boot: serial dying at ~0.45s = PHY
+   switched (problem elsewhere); serial surviving = PHY stuck in UART
+   mode = root cause confirmed.
+2. `devmem` read of U2 PHY DTM0/DTM1 (base from mt6797.dtsi u2port0) to
+   inspect the uart-mode bits directly on a broken boot.
+3. If stuck: clear live as proof, then permanent fix (tphy init path /
+   probe ordering).

@@ -2623,3 +2623,43 @@ currently flashed image.
 **Blocks:** WiFi Stage 1 Gate G1a (plan.md Phase 8), and therefore Stage
 1.2 (MT7921U dongle) and Gate G1b. Phase 8 networking is otherwise fully
 functional today via gadget SSH (build #175 baseline).
+
+## 🔴 B-20 — USB gadget enumeration intermittently dead: left-port data path stuck, suspected U2-PHY usb2uart (console) mode never clearing
+
+**Opened 2026-07-13 (late).** The #175/#177 gadget baseline (verified
+working twice on 2026-07-13: morning #175, and once mid-evening #177 with
+UDC `configured` + SSH) intermittently boots with the mtu3 UDC stuck at
+`not attached` and ZERO enumeration on the Mac — across kernels (#175
+content), rootfs (pristine and rebuilt), Android bounces, cold boots and
+hot replugs. Android itself always enumerates (`Gemini_4G`), so the
+hardware path is intact.
+
+**Ruled out (evidence in boot.md "BUILDS #176/#177 + B-20"):**
+- Kernel content (byte-identical to verified-working #175)
+- Rootfs (fails on pristine hash-verified image; failure is below the
+  rootfs layer — no enumeration at all)
+- FUSB301A state: register dump with the REAL vendor map shows a perfect
+  attach (Status=0x2b: ATTACH=1 VBUSOK=1 ORIENT=CC2; Manual=0x00 — the
+  Stage 1 "0x04 = MODE" write theory is dead, 0x04 is the Manual reg and
+  it is clean)
+- GPIO70/71 mux pins: vendor source proves they belong to the USB1
+  (right-port) OTG/HDMI path; driving all 4 states changed nothing.
+
+**Correlation:** every break followed an mtkclient preloader/DA session;
+the one mid-evening recovery followed FTDI-serial boots + live cable
+swap. Not yet causally explained.
+
+**Prime suspect:** the B-15 left-port UART/USB console "mux" is the
+MT6797 U2 PHY's usb2uart function (FORCE_UART_EN/RG_UART_EN in the PHY
+DTM registers). LK leaves the PHY in UART mode for its console; if our
+tphy init does not (always) clear it, D+/D- stay routed to UART while CC
+attach looks perfect — exactly the observed signature.
+
+**Next actions:** (1) genuine #177 FTDI boot capture — does serial die
+at ~0.45s? (the earlier "#177 serial to prompt" report was a misread of
+the #176 log); (2) devmem the U2 PHY DTM registers on a broken boot;
+(3) if UART bits stuck, clear live to prove, then fix tphy init/probe
+ordering permanently.
+
+**Blocks:** SSH-over-USB reliability (Phase 8), and any workflow that
+flashes then expects gadget access without a magic boot sequence.
