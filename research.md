@@ -462,3 +462,54 @@ hidden-mode workarounds (they are noise-robustness tweaks, acceptable for a
 bench test); clear bit0 to turn off. Combined with i2c1 FUSB301
 Mode(0x02)=0x01 SOURCE this exercises the full CC-attach + VBUS-source path
 with no kernel changes.
+
+## 8. Stage C Phase 0 LIVE RESULTS (2026-07-14): left-port VBUS chain proven; charger is BQ25896, NOT RT9466
+
+Live probes on build #225 over gadget SSH (staged-script protocol, logs
+`logs/2026-07-14-227..230-b19-phase0-*.log`). Headline: **the complete
+left-port host-mode power/CC chain works from userspace with zero kernel
+changes** — CC attach detection AND 5.0V VBUS sourcing both verified on
+real downstream devices (SD reader, MediaTek USB-C ethernet adapter, LEDs
+lit).
+
+**Correction to §7 and to Phase 7 research: there is no RT9466 on this
+device.** No I2C bus has a device at 0x53; i2c0 0x6b responds with
+REG14=0x06 → TI **BQ25896** (PN=000, rev 2). The vendor code's
+`CONFIG_MTK_BQ25896_SUPPORT`/`bq25890_otg_en()` branch is the live one
+(`charging_hw_bq25890.c`); the RT9466 branch was dead config. Mainline
+support is `drivers/power/supply/bq25890_charger.c` (compatible
+`ti,bq25896`), which exposes the boost as a `usb-otg-vbus` regulator
+(:1223-1229) — still an excellent Phase 2/Phase 7 fit.
+
+**The working recipe (all three required):**
+1. FUSB301 (i2c1 0x25) `Mode(0x02)=0x01` SOURCE → Status shows
+   ATTACH+orientation for a sink (verified both CC1 and CC2 orientations,
+   Type=0x10 SINK).
+2. BQ25896 (i2c0 0x6b) `REG03 OTG_CONFIG bit5=1` — **with the I2C watchdog
+   disabled first** (`REG07[5:4]=00`, default 0x9d = 40s WD that resets
+   REG03 to defaults; explains the OTG bit "clearing itself" in early
+   runs). Vendor Android instead kicks the WD continuously.
+3. **GPIO107 HIGH** — `GPIO_OTG_DRVVBUS_PIN` in the board dws
+   (`aeon6797_6m_n.dws:1561`); wired to the BQ25896 OTG pin (boost is
+   pin-AND-register gated, no fault raised when pin low — the silent
+   no-boost failure mode). LK hands over GPIO107 as GPIO-mode output LOW.
+   devmem: DOUT-set 0x10005134 bit11, clear 0x10005138 bit11.
+
+With all three: REG0B VBUS_STAT=111 (boost mode), REG11 VBUS ADC = 5.0V,
+FUSB Status = ATTACH|VBUSOK, adapter LEDs lit. Battery held 4.08V.
+Boost config default REG0A=0x73 (4.998V, 1.4A limit) — no change needed.
+
+**Safety notes for Phase 2:** BQ auto-prioritizes a real input when VBUS
+appears externally (Mac replug during boost was handled without damage;
+one transient BOOST_FAULT latched at hot-unplug, self-cleared). The FUSB
+in SOURCE mode while a Mac (another source) is attached drops the gadget
+link — restore SINK before reconnecting for SSH.
+
+**Phase 2 design consequence:** DTS = `bq25896@6b` on i2c0 with
+`usb-otg-vbus` regulator as `vbus-supply` of the ssusb node; GPIO107
+driven high (gpio-hog, or preferably the regulator's enable path if
+plumbed); the mainline driver must not leave the 40s watchdog armed
+(check its WD handling at probe). IDDIG (EINT 181) remains untested —
+still unknown who drives it; may be unnecessary if we use
+`role-switch-default-mode="host"` or wire the FUSB301A driver as the
+role-switch source.

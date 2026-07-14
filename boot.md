@@ -6475,3 +6475,36 @@ on gadget builds); after hot-swapping to the Mac cable: UDC
 cable in") is retired. The left port now behaves like a normal gadget
 port regardless of what is attached at power-on. Next: Stage C (B-19
 host mode, i2c1 FUSB301 Mode=SOURCE) when scheduled.
+
+---
+
+## 2026-07-14 — B-19 Stage C Phase 0: left-port CC + VBUS chain proven live (no flash, build #225 running)
+
+Not a boot attempt — a series of live userspace probes over gadget SSH on
+the already-flashed build #225, using staged self-restoring scripts
+(`/root/phase0.sh` iterations v1–v5) because the serial console is dead on
+#225 (see side-finding below). Logs:
+
+- `logs/2026-07-14-227-b19-phase0-attach-test.log` (v2: first ATTACH proof)
+- `logs/2026-07-14-228-b19-phase0-v3-ethadapter.log` (v3: WD off, CC2 orientation, fault reg clean)
+- `logs/2026-07-14-229-b19-phase0-v4-regdump.log` (v4: full BQ25896 regdumps, VBUS ADC=0 despite OTG bit — pin-gate signature)
+- `logs/2026-07-14-230-b19-phase0-v5-gpio107-vbus.log` (v5: GPIO107 high → **VBUS_STAT=111, VBUS ADC 5.0V, ATTACH+VBUSOK, adapter LEDs lit**)
+
+Results (full detail: research.md §8, blockers.md B-19):
+1. i2c1 FUSB301 Mode=SOURCE detects real sinks (ATTACH=1, Type=0x10, both
+   CC orientations seen across devices).
+2. Charger is a **TI BQ25896 at i2c0 0x6b** (REG14=0x06) — the RT9466@0x53
+   identification was wrong; corrected across hardware.md/CLAUDE.md.
+3. BQ25896 boost requires REG03 OTG bit + watchdog disabled + **GPIO107
+   (`GPIO_OTG_DRVVBUS_PIN`) high** — LK hands it over low; boost fails
+   silently (no fault) without it. With all three: 5.0V at the connector.
+All state self-restored after each run (verified: Mode=0x04, REG03=0x1a,
+REG07=0x9d, GPIO107 low, device charging from Mac).
+
+**Side-finding (B-20 ledger): build #225 has NO working serial console on
+any boot** — the forced session-valid bits keep the PHY pads in USB mode;
+the #226 "FTDI regression" capture actually ends at 0.447s (mtu3 probe).
+Additionally a power-on with the FTDI rig attached appeared to hang at
+`clk: Disabling unused clocks` (stuck on panel too); boot with no cable +
+hot-plug works. Serial capture/serial-login are unavailable until the
+force bits are gated (planned in Stage C Phase 2).

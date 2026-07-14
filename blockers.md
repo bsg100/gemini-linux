@@ -2662,10 +2662,44 @@ live verification, research.md "USB Left-Port PHY & Type-C Harvest"):**
   `usb-otg-vbus-regulator` — clean Phase 2 shape is RT9466 node +
   regulator as `vbus-supply` of ssusb (caveat: driver hard-requires its
   IRQ, the B-11 EINT gap — patch it optional or fix B-11).
-- **Phase 0 zero-kernel live test (next, needs hardware):** on #225 over
+- ~~**Phase 0 zero-kernel live test (next, needs hardware):** on #225 over
   FTDI serial — i2c1 0x25 Mode(0x02)=0x01 SOURCE, RT9466 boost on via
   i2c0 0x53 reg 0x01 bit0, plug real-Type-C sink into left port, read
-  Status(0x11)/Type(0x12) expecting ATTACH=1, and check EINT181 level. — USB gadget enumeration intermittently dead: root cause = U2PHYDTM1 session-valid FORCE bits (RESOLVED 2026-07-14, build #225)
+  Status(0x11)/Type(0x12) expecting ATTACH=1, and check EINT181 level.~~
+  **DONE 2026-07-14 — see below.**
+
+**Update 2026-07-14 — Stage C Phase 0 COMPLETE: full left-port CC+VBUS
+chain proven live, zero kernel changes** (research.md harvest §8, logs
+`2026-07-14-227..230-b19-phase0-*.log`). Run over gadget SSH with staged
+scripts (serial console is unusable on #225 — see B-20 note below). The
+working recipe, all three elements required:
+1. **FUSB301 i2c1 0x25 Mode(0x02)=0x01 SOURCE** → ATTACH=1 + Type=SINK for
+   real devices, both CC orientations verified.
+2. **BQ25896 OTG bit (i2c0 0x6b REG03 bit5) with I2C watchdog disabled**
+   (REG07[5:4]=00; the 40s WD silently resets REG03 otherwise).
+3. **GPIO107 HIGH** (`GPIO_OTG_DRVVBUS_PIN`, aeon dws) — the BQ25896 boost
+   is pin-AND-register gated and fails silently (no fault) when low; LK
+   hands it over low. This was the final missing piece.
+   Result: VBUS_STAT=111, VBUS ADC 5.0V, device LEDs lit.
+- **Charger correction: the device has a TI BQ25896 at i2c0 0x6b
+  (REG14=0x06), NOT an RT9466** — nothing at 0x53 on any bus. All RT9466
+  references in hardware.md/Phase 7 corrected; mainline driver =
+  `bq25890_charger.c` (`ti,bq25896`), which also exposes the boost as a
+  `usb-otg-vbus` regulator.
+- **Remaining for Stage C:** Phase 2 build (host-mode DTS + FUSB301A
+  driver rewrite for i2c1/real regmap + bq25896 node + GPIO107 + gating
+  the B-20 force-b-session-valid in host role), then Gate G1a enumeration
+  test. IDDIG (EINT 181) still untraced — may be unnecessary with
+  role-switch-default host.
+
+**Side-finding 2026-07-14 (belongs to B-20/B-15 ledger):** on build #225
+the serial console is dead on EVERY boot (FTDI protocol included) — the
+forced session-valid bits hold the PHY pads in USB mode; #226's "FTDI
+regression clean" capture actually ends at 0.447s (mtu3 probe). Worse, a
+boot with the FTDI rig attached at power-on appeared to hang at
+`clk: Disabling unused clocks` (panel confirmed stuck, not just serial
+loss); boot with NO cable then hot-plug works. serial-login/serial capture
+are unavailable on #225 until the force bits are gated by role or DTS knob. — USB gadget enumeration intermittently dead: root cause = U2PHYDTM1 session-valid FORCE bits (RESOLVED 2026-07-14, build #225)
 
 **Opened 2026-07-13 (late).** The #175/#177 gadget baseline (verified
 working twice on 2026-07-13: morning #175, and once mid-evening #177 with
