@@ -2646,7 +2646,26 @@ live verification, research.md "USB Left-Port PHY & Type-C Harvest"):**
    retest left-port enumeration; trace how IDDIG is generated on a
    Type-C port before more role-switch DTS work.
 
-## 🟢 B-20 — USB gadget enumeration intermittently dead: root cause = U2PHYDTM1 session-valid FORCE bits (RESOLVED 2026-07-14, build #225)
+**Update 2026-07-14 — Stage C Phase 1 (vendor IDDIG/VBUS harvest) complete
+(research.md harvest §7).** Key facts:
+- Vendor host-mode trigger = pure ID-pin OTG: EINT 181 level-low →
+  debounced `mtk_xhci_mode_switch()` loads xhci and enables VBUS; no CC
+  logic anywhere in the host path. Who drives IDDIG low on a Type-C
+  connector is still unproven (i2c1 FUSB301's eint handler is a stub;
+  FUSB301 has no legacy ID output pin) — to be resolved empirically in
+  Phase 0 by watching EINT181 while attaching a sink with the chip in
+  SOURCE mode.
+- **Left-port host VBUS = RT9466 charger OTG boost** (`set_chr_enable_otg`
+  → CHG_CTRL1 reg 0x01 bit0 OPA_MODE, chip at i2c0 0x53), NOT the MT6351
+  PMIC (`CONFIG_MTK_OTG_PMIC_BOOST_5V` unset in the known-good config).
+  Mainline `rt9467-charger.c` exposes exactly this boost as a
+  `usb-otg-vbus-regulator` — clean Phase 2 shape is RT9466 node +
+  regulator as `vbus-supply` of ssusb (caveat: driver hard-requires its
+  IRQ, the B-11 EINT gap — patch it optional or fix B-11).
+- **Phase 0 zero-kernel live test (next, needs hardware):** on #225 over
+  FTDI serial — i2c1 0x25 Mode(0x02)=0x01 SOURCE, RT9466 boost on via
+  i2c0 0x53 reg 0x01 bit0, plug real-Type-C sink into left port, read
+  Status(0x11)/Type(0x12) expecting ATTACH=1, and check EINT181 level. — USB gadget enumeration intermittently dead: root cause = U2PHYDTM1 session-valid FORCE bits (RESOLVED 2026-07-14, build #225)
 
 **Opened 2026-07-13 (late).** The #175/#177 gadget baseline (verified
 working twice on 2026-07-13: morning #175, and once mid-evening #177 with

@@ -410,3 +410,55 @@ answer for an empty right port. For left-port host mode the chip to
 program is **i2c1 0x25: Mode(0x02)=0x01 (SOURCE)** — and in SINK mode
 (current default) a downstream device presenting Rd is invisible, which
 is consistent with everything G1a observed.
+
+## 7. Stage C Phase 1 harvest (2026-07-14): IDDIG handler + left-port VBUS source
+
+Source: `K/drivers/misc/mediatek/xhci/xhci-mtk-driver.c` (vendor host-mode
+glue) + `K/drivers/misc/mediatek/power/mt6797/rt9466.c/.h`.
+
+**IDDIG (EINT 181) handling** (`xhci-mtk-driver.c`):
+- `mtk_xhci_eint_iddig_init()` (:708) reads the `mediatek,usb_iddig_bi_eint`
+  DTB node and requests the EINT as `IRQF_TRIGGER_LOW`.
+- ISR (:668) just debounces (50ms default) into `mtk_xhci_mode_switch()`
+  delaywork (:600-662): on ID **low** → charger-voltage check (>4V ⇒ a
+  charger, stay device) else load xhci + `switch_int_to_host`, flip EINT to
+  TRIGGER_HIGH to catch unplug; on ID high → unload xhci, back to
+  TRIGGER_LOW. Pure level-triggered ID-pin OTG, no CC logic anywhere in the
+  host path.
+- **Who drives IDDIG low on a Type-C port is still unproven** — the i2c1
+  FUSB301's eint work is a stub (§3), and the FUSB301 pinout has no legacy
+  ID output, so the likeliest candidates are a board-level wiring of the
+  FUSB301 INT_N or a dedicated comparator. Phase 0 live test resolves this
+  empirically (watch GPIO181/EINT181 level while attaching a sink with the
+  chip in SOURCE mode).
+
+**Left-port host VBUS = RT9466 charger OTG boost, NOT the PMIC.**
+`CONFIG_MTK_OTG_PMIC_BOOST_5V` is **not set** in the known-good config
+(:1558) — the `mtk_enable_pmic_otg_mode()` MT6351 sequence is dead code on
+this device. The shipped path is `mtk_enable_otg_mode()` (:425):
+`set_chr_enable_otg(1)` + boost current limit 1500mA → RT9466
+`rt_charger_enable_otg()` (:2073):
+- Enter hidden mode (password sequence), write HIDDEN_CTRL4 (0x23)=0x7c
+  (slew-rate workaround), boost OC limit 500mA,
+- **set CHG_CTRL1 (reg 0x01) bit0 OPA_MODE=1** — this is the actual boost
+  enable, verify-read after 20ms,
+- write HIDDEN_CTRL6 (0x25)=0x00 (workaround), exit hidden mode.
+  Disable = clear bit0, 0x23=0x73, 0x25=0x0F.
+- RT9466 is at **i2c0 0x53** (DTB:3684, same bus as the right-port
+  fusb301a).
+
+**Mainline mapping (excellent fit):** v6.6 `rt9467-charger.c` (covers
+RT9466) registers exactly this boost as a regulator —
+`usb-otg-vbus-regulator` child node → regulator `rt9476-usb-otg-vbus`
+(driver :318-346, binding `richtek,rt9467.yaml`). So Phase 2's clean shape
+is: RT9466 node on i2c0 + `usb-otg-vbus-regulator` child, referenced as the
+`vbus-supply` of the ssusb/mtu3 node. Caveat: the mainline driver
+hard-requires its IRQ (B-11 EINT gap, Phase 7 note) — either patch the IRQ
+optional or fix B-11 first.
+
+**Zero-kernel Phase 0 VBUS test:** `i2cset -f -y 0 0x53 0x01` read-modify-
+write bit0 (i2cget then i2cset value|0x01) turns the boost on without the
+hidden-mode workarounds (they are noise-robustness tweaks, acceptable for a
+bench test); clear bit0 to turn off. Combined with i2c1 FUSB301
+Mode(0x02)=0x01 SOURCE this exercises the full CC-attach + VBUS-source path
+with no kernel changes.
