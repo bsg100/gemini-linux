@@ -2624,7 +2624,7 @@ currently flashed image.
 1.2 (MT7921U dongle) and Gate G1b. Phase 8 networking is otherwise fully
 functional today via gadget SSH (build #175 baseline).
 
-## 🔴 B-20 — USB gadget enumeration intermittently dead: left-port data path stuck, suspected U2-PHY usb2uart (console) mode never clearing
+## 🟡 B-20 — USB gadget enumeration intermittently dead: left-port data path stuck, suspected U2-PHY usb2uart (console) mode never clearing
 
 **Opened 2026-07-13 (late).** The #175/#177 gadget baseline (verified
 working twice on 2026-07-13: morning #175, and once mid-evening #177 with
@@ -2663,3 +2663,16 @@ ordering permanently.
 
 **Blocks:** SSH-over-USB reliability (Phase 8), and any workflow that
 flashes then expects gadget access without a magic boot sequence.
+
+**Update 2026-07-14 (early): WORKING AGAIN + pattern identified as the
+documented cable protocol.** SSH restored end-to-end (#177, UDC
+`configured`, keymap active, rootfs resized to 26G) after: boot with FTDI
+attached (serial dies at 0.454s = PHY switch), then hot-swap the cable to
+the Mac → RNDIS enumerates. This matches the 2026-07-10 session note
+verbatim: "Cable protocol: FTDI in at boot, swap to USB after — booting
+with USB in breaks gadget." So B-20's *operational* face is known,
+reliable behavior, reproduced twice tonight; what remains open is the
+root cause (what LK/U2-PHY/mtu3 do differently when VBUS+host are present
+at power-on) and a software fix so boot-with-host-attached works.
+Downgrading from 🔴 to 🟡. Workaround: never boot with the Mac cable in;
+boot with FTDI (or nothing) in the left port, plug the Mac in after boot.
