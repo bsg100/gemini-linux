@@ -6345,3 +6345,133 @@ weakened as the sole cause. Refined suspect: mtu3's VBUS/role sensing
 (`drd: auto`, no extcon/usb-role-switch wired in our DTS) — the gap is
 between PHY switchover and mtu3 deciding to connect. Next-session step 2
 (PHY DTM devmem dump) stands, now inspecting force-VBUS/role bits too.
+
+---
+
+## 2026-07-14 — Rootfs prep over live SSH (#177 running): run-once harness, gemini user, persistent journal, Mac SSH key
+
+No kernel/flash changes; all rootfs-only, applied live over gadget SSH to
+the running device (#177, `/dev/mmcblk0p29`) and mirrored into
+`scripts/mkrootfs.sh` + `rootfs-files/` so reflashes keep them (B-17
+lesson). **USB gadget config untouched** (usb0.network, g_ether cmdline —
+logged per the standing rootfs/USB rule).
+
+Changes:
+1. **run-once diagnostic harness** — `run-once.service` +
+   `/usr/local/sbin/run-once-exec`: executes `/root/run-once.sh` at boot
+   if present, logs script+output to `/var/log/run-once/<ts>.log`, renames
+   the script `.done-<ts>` (single-shot). Purpose: pre-stage devmem/i2c
+   diagnostics for boots where SSH and serial are both unavailable (B-20
+   broken-gadget boots) — no more panel transcription. Smoke-tested live
+   (`systemctl start`, log written, script consumed). Sources in
+   `rootfs-files/run-once-exec`, `rootfs-files/run-once.service`.
+2. **Persistent journald** (`journald.conf.d/persistent.conf`,
+   `/var/log/journal`) — broken-boot dmesg/journal now survives to the
+   next good boot.
+3. **User `gemini`** (password `gemini`, group `sudo`) recreated — existed
+   before, lost in the scatter-restore rootfs wipe. `sudo` package was
+   missing on the minbase rootfs (device has no internet route): fetched
+   `sudo_1.9.16p2-3+deb13u2_arm64.deb` in the build VM, relayed
+   VM→Mac→device, `dpkg -i`. Added `sudo` to PKGS_TOOLS in mkrootfs.sh.
+4. **Mac SSH key** installed in `/root/.ssh/authorized_keys` —
+   passwordless scripted sessions (verified `BatchMode=yes` login works).
+
+Observed while on: device wall clock is wrong (reads 2026-04-13 — no RTC
+sync); run-once log timestamps inherit this until time is set. Harmless
+but worth remembering when matching logs to sessions.
+
+## 2026-07-14 — Live register verification on #177 (good boot): usb2uart baseline + FUSB301 two-chip identification
+
+Over gadget SSH on the running #177 (UDC `configured`), using the
+vendor-source register map harvested the same day (research.md "USB
+Left-Port PHY & Type-C Harvest"):
+
+- `U2PHYDTM0(0x11290868)=0x52000008`, `U2PHYDTM1(0x1129086C)=0x00043E2E`,
+  `GPIO MISC(0x10005600)=0x80` — i.e. RG_UART_MODE=01 and the AP-side
+  mux still at its "UART" value on a WORKING gadget boot. These bits
+  alone do not block USB; only FORCE_UART_EN/RG_UART_EN (which mainline
+  tphy clears) differ from the vendor's full uart-mode state. This is
+  the good-boot baseline for the B-20 differential.
+- FUSB301 probe on all i2c buses: chips at 0x25 on BOTH i2c0 and i2c1
+  (DeviceID 0x12 each). With the Mac on the LEFT port: i2c1 Status=0x2b
+  (ATTACH/VBUSOK/CC2), i2c0 Status=0x00 → **left port CC controller =
+  the i2c1 chip**; the i2c0 chip (target of all B-19 Stage 1 work) is
+  the right port's. Both chips at power-on defaults Mode=0x04 (SINK),
+  Control=0x03.
+- `/root/run-once.sh` staged with this dump set for the next broken
+  (Mac-cable-at-power-on) boot; results will land in
+  `/var/log/run-once/`.
+
+---
+
+## 2026-07-14 — B-20 ROOT-CAUSED AND PROVEN LIVE: U2 PHY session-valid signals must be software-forced; one devmem write flips a broken boot to `configured`
+
+**The differential (run-once harness, #177, both boots hash-identical
+kernel/rootfs):**
+
+| Register | GOOD boot (FTDI protocol) | BROKEN boot (Mac cable at power-on) |
+|---|---|---|
+| U2PHYDTM0 0x11290868 | 0x52000008 (RG_UART_MODE=01!) | 0x02000000 |
+| U2PHYDTM1 0x1129086C | **0x00043E2E** | **0x00000026** |
+| GPIO MISC 0x10005600 | 0x80 ("UART") | 0x00 ("USB") |
+| FUSB301A (i2c1) Status | 0x2b attach | 0x2b attach |
+| UDC | configured | not attached |
+
+Counter-intuitively the BROKEN boot has the *cleaner* PHY state — the
+stuck-usb2uart theory is dead. The real diff is DTM1 bits 13:9
+(FORCE_VBUSVALID/SESSEND/BVALID/AVALID/IDDIG) + RG values: on good boots
+LK leaves the session signals software-forced; mainline tphy only ever
+sets RG_VBUSVALID/RG_AVALID (inert without FORCE bits) and relies on
+hardware VBUS sensing that this platform doesn't have (vendor mu3d senses
+VBUS via PMIC BC1.2/CHRDET and forces these bits in software —
+mt_usb.c). Boot with a host attached → LK takes a different path, leaves
+FORCE bits clear → mtu3 never sees a valid session → `not attached`
+forever, despite `pullup D+` and a perfect CC attach.
+
+**Causal proof (run-once log `20260413-193810` [device clock resets each
+boot — 195537 is the older smoke test], broken-protocol boot):**
+`devmem 0x1129086C 32 0x3E2E` → UDC `not attached` → **`configured`
+within 5s**, RNDIS enumerated on the Mac, SSH login worked — on the boot
+protocol that had never once enumerated. B-20's cable protocol is
+obsolete once the fix lands.
+
+**Fix (build #225):** `patches/v6.6/phy/0001-phy-mtk-tphy-force-b-
+session-valid-for-mt6797.patch` — new DTS-gated behavior in
+`u2_phy_instance_power_on()`: property `mediatek,force-b-session-valid`
+(added to `u2port0` in dts/0009) sets FORCE_IDDIG/AVALID/BVALID/SESSEND/
+VBUSVALID + RG values for device-role/session-valid (the proven 0x3E2E
+state), cleared symmetrically in power_off. dev_info logs when forcing
+(STANDARDS serial observability). Validated: full patch stack applies on
+pristine v6.6, DTS compiles (dtc, zero errors), phy-mtk-tphy.o compiles
+clean in the VM.
+
+Expected on-hardware outcome: boot with Mac cable attached from power-on
+→ gadget enumerates with no devmem intervention; FTDI-protocol boots
+unchanged. Note en12 on the Mac needed
+`sudo ifconfig en12 alias 10.15.19.1 netmask 255.255.255.0` again this
+session (twice) — recurring post-flash quirk, documented in CLAUDE.md.
+**Build #225 provenance:** `logs/2026-07-14-225-b20-force-session-valid/`,
+image sha256 `78b71ad393c2d0df1c8a62ea03f1021d1da0391b1b30063761bb015afd460255`,
+banner `#225` (verified = build number), DTB spot-check
+`mediatek,force-b-session-valid` present, no debug instrumentation.
+
+## 2026-07-14 — BUILD #225 VERIFIED: B-20 CLOSED — boot-with-host-attached enumerates unaided, 3/3
+
+Flashed to boot2 (`mtk w boot2 logs/2026-07-14-225-b20-force-session-valid/new_kali_boot.img`).
+
+**Mac-cable protocol (previously 100% broken): 3/3 consecutive cold boots
+enumerated unaided.** Each verified over SSH: banner `#225`, dmesg
+`mtk-tphy 11290000.t-phy: u2 phy0: forcing session-valid/device mode`
+at 0.449s, `devmem 0x1129086C` = `0x3E2E`, UDC `configured`, RNDIS + SSH
+working — no run-once intervention, no cable dance.
+
+**FTDI-protocol regression boot: clean.**
+`logs/2026-07-14-226-b20-ftdi-regression-boot.log` — banner #225 on
+serial; serial dies at the ~0.45s PHY switch as always (B-15, expected
+on gadget builds); after hot-swapping to the Mac cable: UDC
+`configured`, SSH working. Display + keyboard unaffected.
+
+**Conclusion:** B-20 🟢. The cable protocol ("never boot with the Mac
+cable in") is retired. The left port now behaves like a normal gadget
+port regardless of what is attached at power-on. Next: Stage C (B-19
+host mode, i2c1 FUSB301 Mode=SOURCE) when scheduled.

@@ -10,7 +10,7 @@ index 2caeca572..da0c101fc 100644
  
  / {
  	model = "Planet Computers Gemini PDA";
-@@ -842,3 +843,79 @@ msdc0: mmc@11230000 {
+@@ -842,3 +843,87 @@ msdc0: mmc@11230000 {
  		status = "okay";
  	};
  };
@@ -49,6 +49,14 @@ index 2caeca572..da0c101fc 100644
 +			clocks = <&clk26m>;
 +			clock-names = "ref";
 +			#phy-cells = <1>;
++			/*
++			 * B-20: MT6797 has no working hardware VBUS/session
++			 * sensing into the U2 PHY; force session-valid/device
++			 * role in software (patches/v6.6/phy/0001). Proven by
++			 * devmem on hardware: DTM1 0x26->0x3E2E flips the UDC
++			 * from "not attached" to "configured".
++			 */
++			mediatek,force-b-session-valid;
 +			status = "okay";
 +		};
 +	};

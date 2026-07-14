@@ -1,0 +1,17 @@
+#!/bin/sh
+# Executes /root/run-once.sh once at boot (if present), logging all output.
+# Used to pre-stage diagnostics for boots where SSH/serial are unavailable
+# (e.g. B-20 broken-gadget boots): stage the script over SSH, flash/boot,
+# read /var/log/run-once/<timestamp>.log back on the next good boot.
+SCRIPT=/root/run-once.sh
+[ -x "$SCRIPT" ] || exit 0
+TS=$(date +%Y%m%d-%H%M%S)
+LOG=/var/log/run-once/$TS.log
+{
+  echo "=== run-once $TS ==="
+  uname -a
+  echo "--- script ---"; cat "$SCRIPT"; echo "--- output ---"
+  "$SCRIPT" 2>&1
+  echo "=== exit=$? ==="
+} > "$LOG" 2>&1
+mv "$SCRIPT" "$SCRIPT.done-$TS"

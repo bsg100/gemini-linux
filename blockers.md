@@ -2624,7 +2624,29 @@ currently flashed image.
 1.2 (MT7921U dongle) and Gate G1b. Phase 8 networking is otherwise fully
 functional today via gadget SSH (build #175 baseline).
 
-## 🟡 B-20 — USB gadget enumeration intermittently dead: left-port data path stuck, suspected U2-PHY usb2uart (console) mode never clearing
+**Update 2026-07-14 — LIKELY EXPLANATION FOUND (vendor-source harvest +
+live verification, research.md "USB Left-Port PHY & Type-C Harvest"):**
+1. **Wrong chip all along.** The Gemini has TWO FUSB301 chips at 0x25:
+   i2c0 (vendor node `fusb301a@25`) serves the RIGHT port and its
+   OTG/HDMI muxes; **i2c1 (`fusb301@25`) is the LEFT port's CC
+   controller** — proven live on #177 by plugging the Mac into the left
+   port: i2c1 Status=0x2b (ATTACH/VBUSOK/CC2), i2c0 Status=0x00. Every
+   Stage 1 experiment read/wrote the i2c0 chip, so "ATTACH never asserts"
+   was the truthful state of the empty right port.
+2. **Real register map recovered** (vendor `fusb301.h`): Mode is reg
+   0x02 (SOURCE=0x01, SINK=0x04, DRP=0x10); the old guessed "0x04 MODE"
+   write hit the Manual register. Both chips power up in Mode=0x04
+   (SINK), so a downstream device presenting Rd is invisible — consistent
+   with zero connect events at G1a.
+3. **Vendor DID ship host mode on this port** (contrary to earlier
+   note): known-good config has `CONFIG_USB_XHCI_MTK=y`, and the DTB's
+   `usb3_xhci@11270000` has an `usb_iddig_bi_eint` (EINT 181) — vendor
+   host/device switching keyed off IDDIG, not CC.
+   **Next steps when resumed:** program i2c1 chip Mode=0x01 (SOURCE),
+   retest left-port enumeration; trace how IDDIG is generated on a
+   Type-C port before more role-switch DTS work.
+
+## 🟢 B-20 — USB gadget enumeration intermittently dead: root cause = U2PHYDTM1 session-valid FORCE bits (RESOLVED 2026-07-14, build #225)
 
 **Opened 2026-07-13 (late).** The #175/#177 gadget baseline (verified
 working twice on 2026-07-13: morning #175, and once mid-evening #177 with
@@ -2676,3 +2698,54 @@ root cause (what LK/U2-PHY/mtu3 do differently when VBUS+host are present
 at power-on) and a software fix so boot-with-host-attached works.
 Downgrading from 🔴 to 🟡. Workaround: never boot with the Mac cable in;
 boot with FTDI (or nothing) in the left port, plug the Mac in after boot.
+
+**Update 2026-07-14 (Stage A/B of USB plan): registers now source-backed,
+good-boot baseline captured, broken-boot diagnostic staged.** Vendor
+harvest (research.md "USB Left-Port PHY & Type-C Harvest") pinned the
+usb2uart registers: U2PHYDTM0=0x11290868, U2PHYDTM1=0x1129086C, plus an
+AP-side mux at 0x10005600 (0x80=UART, 0x00=USB) that mainline never
+touches. Live dump on a WORKING #177 gadget boot: DTM0=0x52000008
+(RG_UART_MODE[31:30]=01 — nominally "uart mode"!), DTM1=0x00043E2E,
+MISC=0x80, UDC=configured — so RG_UART_MODE/MISC alone do NOT block
+gadget; the good-vs-broken differential will isolate the bits that do.
+Vendor gadget attach is PMIC BC1.2 + CHRDET (`mu3d/drv/mt_usb.c`), not
+controller VBUS sensing — supports the mtu3 role/VBUS-sensing suspect.
+A run-once diagnostic harness is now installed in the rootfs
+(`run-once.service`, see boot.md 2026-07-14) and `/root/run-once.sh` is
+staged with the full register/FUSB/dmesg dump.
+
+**ROOT-CAUSED AND PROVEN LIVE 2026-07-14 (same session, boot.md "B-20
+ROOT-CAUSED"):** the broken/good differential is NOT uart mode (broken
+boots have the *cleaner* PHY state) — it is U2PHYDTM1's session-signal
+FORCE bits [13:9]. Good boots inherit LK's software-forced
+"device-role/session-valid" state (DTM1=0x43E2E); broken boots
+(host attached at power-on → different LK path) get DTM1=0x26 with no
+FORCE bits, and mtu3 waits forever on hardware VBUS sensing this
+platform doesn't have (vendor mu3d forces these bits from PMIC BC1.2
+detection — mt_usb.c). Causal proof on a broken boot via the run-once
+harness: `devmem 0x1129086C 32 0x3E2E` flipped UDC `not attached` →
+`configured` in <5s, RNDIS enumerated on the Mac, SSH worked — first
+ever enumeration on the boot-with-host-attached protocol.
+
+**Fix built, awaiting hardware verification:** build #225
+(`logs/2026-07-14-225-b20-force-session-valid/`, sha256 `78b71ad3...`,
+banner #225) = `patches/v6.6/phy/0001-phy-mtk-tphy-force-b-session-valid
+-for-mt6797.patch` (DTS-gated: new `mediatek,force-b-session-valid`
+property on u2port0 in dts/0009; forces the proven 0x3E2E state in
+`u2_phy_instance_power_on`, undone in power_off, dev_info logged).
+Success criterion: boot with Mac cable attached from power-on → gadget
+enumerates unaided, ≥3 consecutive boots; FTDI-protocol boots
+unregressed (keyboard+display+gadget). Then B-20 closes 🟢 and the
+cable protocol is retired.
+
+**VERIFIED ON HARDWARE AND CLOSED 2026-07-14.** Build #225 flashed to
+boot2. Three consecutive cold boots with the Mac cable attached from
+power-on — the protocol that previously failed 100% of the time — all
+enumerated unaided: banner #225, `u2 phy0: forcing session-valid/device
+mode` at 0.449s, DTM1 reads 0x3E2E, UDC `configured`, SSH working.
+FTDI-protocol regression boot also clean
+(`logs/2026-07-14-226-b20-ftdi-regression-boot.log`: banner #225 on
+serial, gadget `configured` + SSH after cable swap; serial still dies at
+the ~0.45s PHY switch — that is B-15, unchanged and expected). The
+cable protocol ("never boot with the Mac cable in") is retired: boot
+with the host attached now just works.

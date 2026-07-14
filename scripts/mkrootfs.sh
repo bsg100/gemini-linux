@@ -34,7 +34,7 @@ PKGS_BASE=systemd,systemd-sysv,udev,dbus,kmod,util-linux,e2fsprogs,ca-certificat
 PKGS_NET=openssh-server,iproute2,ifupdown,isc-dhcp-client
 # busybox-static: loadkmap (gemini-keymap.service) + devmem/base64 debug
 # tools; iputils-ping: basic connectivity checks (was missing on minbase)
-PKGS_TOOLS=i2c-tools,mmc-utils,evtest,usbutils,less,vim-tiny,htop,busybox-static,iputils-ping
+PKGS_TOOLS=i2c-tools,mmc-utils,evtest,usbutils,less,vim-tiny,htop,busybox-static,iputils-ping,sudo
 
 command -v mmdebstrap >/dev/null || apt-get install -y mmdebstrap
 
@@ -57,6 +57,21 @@ EOF
 echo 'root:toor' | chroot "$TARGET" chpasswd
 mkdir -p "$TARGET/etc/ssh/sshd_config.d"
 echo 'PermitRootLogin yes' > "$TARGET/etc/ssh/sshd_config.d/gemini.conf"
+# Mac SSH key for passwordless scripted sessions (installed live 2026-07-14;
+# mirrored here so reflashes keep it — see B-17 for why that matters)
+mkdir -p "$TARGET/root/.ssh"
+chmod 700 "$TARGET/root/.ssh"
+echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAUngFg1mnm1tFGY3CSFe4zgDF0vk0HvDxUgLNwXGX0D benhamilton@mac-studio.local' \
+    > "$TARGET/root/.ssh/authorized_keys"
+chmod 600 "$TARGET/root/.ssh/authorized_keys"
+# Unprivileged user (user request 2026-07-14): gemini/gemini, sudoer
+chroot "$TARGET" useradd -m -s /bin/bash -G sudo gemini
+echo 'gemini:gemini' | chroot "$TARGET" chpasswd
+# Persistent journal: keep dmesg/journal from boots where SSH/serial were
+# unavailable (B-20 diagnosis) readable on the next good boot
+mkdir -p "$TARGET/var/log/journal" "$TARGET/etc/systemd/journald.conf.d"
+printf '[Journal]\nStorage=persistent\n' \
+    > "$TARGET/etc/systemd/journald.conf.d/persistent.conf"
 # The vendor initramfs runs `mdev -s` on the shared devtmpfs before
 # switch_root; busybox mdev's default rule chmods nodes to 0660 root:root,
 # which broke dbus (first unprivileged /dev/null open) until udev coldplug
@@ -92,6 +107,15 @@ cp "$SCRIPT_DIR/../rootfs-files/gemini.bkmap" "$TARGET/etc/gemini.bkmap"
 cp "$SCRIPT_DIR/../rootfs-files/gemini-keymap.service" \
    "$TARGET/etc/systemd/system/gemini-keymap.service"
 chroot "$TARGET" systemctl enable gemini-keymap.service >/dev/null 2>&1
+
+# run-once diagnostic harness: executes /root/run-once.sh at boot if present,
+# logs to /var/log/run-once/ (see rootfs-files/run-once-exec header)
+install -m 755 "$SCRIPT_DIR/../rootfs-files/run-once-exec" \
+    "$TARGET/usr/local/sbin/run-once-exec"
+cp "$SCRIPT_DIR/../rootfs-files/run-once.service" \
+   "$TARGET/etc/systemd/system/run-once.service"
+mkdir -p "$TARGET/var/log/run-once"
+chroot "$TARGET" systemctl enable run-once.service >/dev/null 2>&1
 
 echo "==> [3/5] Install kernel modules from $LINUX_SRC"
 make -C "$LINUX_SRC" ARCH=arm64 modules_install \
