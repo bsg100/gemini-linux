@@ -2699,7 +2699,39 @@ regression clean" capture actually ends at 0.447s (mtu3 probe). Worse, a
 boot with the FTDI rig attached at power-on appeared to hang at
 `clk: Disabling unused clocks` (panel confirmed stuck, not just serial
 loss); boot with NO cable then hot-plug works. serial-login/serial capture
-are unavailable on #225 until the force bits are gated by role or DTS knob. — USB gadget enumeration intermittently dead: root cause = U2PHYDTM1 session-valid FORCE bits (RESOLVED 2026-07-14, build #225)
+are unavailable on #225 until the force bits are gated by role or DTS knob.
+
+**Update 2026-07-14 — Stage C Phase 2 patches drafted (not yet built):**
+- `patches/v6.6/usb/0001` REWRITTEN for the real chip/regmap: binds the
+  **i2c1** left-port FUSB301, Mode reg 0x02 = 0x01 SOURCE, Status
+  0x11/Type 0x12 decode per the live Phase 0 verification. Polling (500ms,
+  B-11 = no EINT), dev_info on CC change, SINK restored in
+  shutdown/remove for vendor-chain handoff.
+- NEW `patches/v6.6/power/0001-power-bq25890-allow-probe-without-irq.patch`:
+  mainline `bq25890_charger.c` hard-fails probe without an IRQ; patched to
+  warn-and-continue (B-11). Driver already disables the 40s watchdog in
+  hw_init (F_WD=0) — matches the Phase 0 recipe.
+- NEW `patches/v6.6/dts/0012-arm64-dts-mediatek-gemini-left-port-host-mode.patch`
+  (applies after dts/0009, keeps 0009 gadget baseline intact for easy
+  revert): (a) i2c0 charger node corrected to `ti,bq25896`@0x6b with the
+  seven required ti,* props (defaults matching live-observed hardware
+  values) and an `otg_vbus: usb-otg-vbus` regulator child; (b) i2c1
+  `typec@25` FUSB301 node enabled; (c) GPIO107 gpio-hog output-high
+  (`otg-drvvbus`); (d) ssusb → dr_mode="otg" + usb-role-switch +
+  role-switch-default-mode="host" + xhci child @0x11270000 SPI 126 (the
+  #142 sysfs-collision and #143 pure-host-mux lessons baked in),
+  vbus-supply=<&otg_vbus>; (e) **B-20 `mediatek,force-b-session-valid`
+  REMOVED from u2port0** in this build — it pins the PHY to device role
+  (and killed serial); serial console should return to normal B-15
+  behaviour. The old GPIO94/sw7226/fusb301a_sw hogs from #144-146 are NOT
+  revived (right-port wiring); FUSB340 GPIO251/252 hogs stay excluded
+  (display regression, #147).
+- `configs/gemini-usb.config` updated: MTU3_DUAL_ROLE, XHCI_MTK,
+  TYPEC_FUSB301A, CHARGER_BQ25890, plus usb-storage/usbnet class drivers
+  so G1a devices bind.
+- Validated: full patch stack applies clean on pristine v6.6; board DTS
+  compiles with dtc. Next: /build-pack, regression-check keyboard+display
+  (+serial return), then Gate G1a (SPI 126 count + lsusb beyond root hub). — USB gadget enumeration intermittently dead: root cause = U2PHYDTM1 session-valid FORCE bits (RESOLVED 2026-07-14, build #225)
 
 **Opened 2026-07-13 (late).** The #175/#177 gadget baseline (verified
 working twice on 2026-07-13: morning #175, and once mid-evening #177 with

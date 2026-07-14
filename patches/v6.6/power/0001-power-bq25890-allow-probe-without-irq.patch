@@ -1,0 +1,46 @@
+diff --git a/drivers/power/supply/bq25890_charger.c b/drivers/power/supply/bq25890_charger.c
+index 03fa11a1c..cd6961219 100644
+--- a/drivers/power/supply/bq25890_charger.c
++++ b/drivers/power/supply/bq25890_charger.c
+@@ -1495,9 +1495,18 @@ static int bq25890_probe(struct i2c_client *client)
+ 	if (client->irq <= 0)
+ 		client->irq = bq25890_irq_probe(bq);
+ 
++	/*
++	 * GEMINI (MT6797): the charger INT pin lands on an MTK EINT and
++	 * mainline pinctrl-mt6797 has no EINT support (blockers.md B-11),
++	 * so no IRQ can be wired up. Run without one: charge-state changes
++	 * are only noticed on power_supply polls, which is acceptable —
++	 * the primary consumer here is the usb-otg-vbus boost regulator
++	 * (left-port USB host VBUS, blockers.md B-19), which is purely
++	 * register-driven. Upstream treats a missing IRQ as fatal.
++	 */
+ 	if (client->irq < 0) {
+-		dev_err(dev, "No irq resource found.\n");
+-		return client->irq;
++		dev_warn(dev, "no irq resource, continuing without (B-11)\n");
++		client->irq = 0;
+ 	}
+ 
+ 	/* OTG reporting */
+@@ -1519,12 +1528,14 @@ static int bq25890_probe(struct i2c_client *client)
+ 	if (ret < 0)
+ 		return dev_err_probe(dev, ret, "registering power supply\n");
+ 
+-	ret = devm_request_threaded_irq(dev, client->irq, NULL,
+-					bq25890_irq_handler_thread,
+-					IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
+-					BQ25890_IRQ_PIN, bq);
+-	if (ret)
+-		return ret;
++	if (client->irq > 0) {
++		ret = devm_request_threaded_irq(dev, client->irq, NULL,
++						bq25890_irq_handler_thread,
++						IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
++						BQ25890_IRQ_PIN, bq);
++		if (ret)
++			return ret;
++	}
+ 
+ 	if (!IS_ERR_OR_NULL(bq->usb_phy)) {
+ 		INIT_WORK(&bq->usb_work, bq25890_usb_work);

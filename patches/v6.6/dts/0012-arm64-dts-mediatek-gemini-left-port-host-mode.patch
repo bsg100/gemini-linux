@@ -1,0 +1,238 @@
+diff --git a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+index 39239e270..b12b51a91 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+@@ -382,10 +382,12 @@ &uart0 {
+ /* --- I2C buses --- */
+ 
+ /*
+- * i2c0: charger RT9466 (0x53) and FUSB301A USB-C CC (0x25).
+- * Confirmed: vendor DTS rt9466.dtsi and aeon6797_6m_n.dts &i2c0 block.
++ * i2c0: charger TI BQ25896 (0x6b) and the RIGHT-port FUSB301 USB-C CC (0x25).
++ * Charger identity CORRECTED 2026-07-14 (research.md §8): the earlier
++ * RT9466@0x53 identification came from a dead vendor config branch —
++ * nothing responds at 0x53 on any bus; the chip at 0x6b answers with
++ * REG14 = 0x06 (PN=000, rev 2 = BQ25896). Live-verified on hardware.
+  * i2c0 mainline pin: SCL=GPIO37, SDA=GPIO38 (mt6797.dtsi i2c0_pins_a).
+- * Gemini may use different i2c0 pins; verify on hardware.
+  */
+ &i2c0 {
+ 	pinctrl-names = "default";
+@@ -394,34 +396,48 @@ &i2c0 {
+ 	status = "okay";
+ 
+ 	/*
+-	 * RT9466 charger (Phase 7). IRQ: vendor DTS rt,intr_gpio_num = <246>.
+-	 * DISABLED: mainline pinctrl-mt6797.c has no EINT support, so
+-	 * interrupt-parent = <&pio> cannot resolve and probe would fail.
+-	 * Vendor EINT controller: eintc@1000b000, GIC SPI 170, 192 lines
+-	 * (docs/vendor-dtb/gemini_kali_boot.dts line 2835). Enable after
+-	 * EINT support is added to pinctrl-mt6797 — see blockers.md B-11.
++	 * TI BQ25896 charger. Live-verified 2026-07-14 (boot.md "B-19
++	 * Stage C Phase 0"): its OTG boost sources 5.0V onto the LEFT
++	 * USB-C connector (REG0B VBUS_STAT=111, REG11 ADC=5.0V, device
++	 * LEDs lit) once REG03 OTG_CONFIG is set AND GPIO107 (vendor
++	 * GPIO_OTG_DRVVBUS_PIN, hogged high below) is high. The mainline
++	 * bq25890 driver disables the chip's 40s I2C watchdog in hw_init
++	 * (F_WD=0), which Phase 0 showed is required or REG03 resets.
++	 * No IRQ: INT pin is on an MTK EINT (B-11); driver patched
++	 * IRQ-optional (patches/v6.6/power/0001).
++	 *
++	 * Charge parameters: conservative values matching the chip's own
++	 * hardware defaults observed live (VREG 4.208V, boost 4.998V /
++	 * 1.4A = REG0A power-on default 0x73) — today's boots charge on
++	 * these defaults anyway; tuning is Phase 7.
+ 	 */
+-	charger: battery-charger@53 {
+-		compatible = "richtek,rt9467";
+-		reg = <0x53>;
+-		interrupt-parent = <&pio>;
+-		interrupts = <246 IRQ_TYPE_LEVEL_LOW>;
+-		interrupt-names = "wdtmri";
+-		richtek,ichg-microamp = <2000000>;
+-		richtek,aicr-microamp = <500000>;
+-		richtek,mivr-microvolt = <4400000>;
+-		richtek,cv-microvolt = <4350000>;
+-		richtek,ieoc-microamp = <250000>;
+-		richtek,safety-timer-hours = <12>;
+-		status = "disabled";
++	charger: charger@6b {
++		compatible = "ti,bq25896";
++		reg = <0x6b>;
++		ti,charge-current = <2048000>;
++		ti,battery-regulation-voltage = <4208000>;
++		ti,termination-current = <256000>;
++		ti,precharge-current = <128000>;
++		ti,minimum-sys-voltage = <3500000>;
++		ti,boost-voltage = <4998000>;
++		ti,boost-max-current = <1400000>;
++
++		/*
++		 * OTG boost as a regulator — consumed by &ssusb as
++		 * vbus-supply for left-port host mode (B-19 Stage C).
++		 */
++		otg_vbus: usb-otg-vbus {
++			regulator-name = "usb_otg_vbus";
++		};
+ 	};
+ 
+ 	/*
+-	 * FUSB301A USB Type-C CC controller at 0x25.
+-	 * Deferred: USB2 host mode works without CC detection.
+-	 * Enable in Phase 4+ once USB role switch is wired up.
++	 * FUSB301 USB Type-C CC controller at 0x25 — RIGHT port / HDMI
++	 * mux (vendor harvest 2026-07-14: there are TWO FUSB301 chips;
++	 * the LEFT-port one is on i2c1, see &i2c1). Right port is served
++	 * by the driverless legacy MUSB controller — stays disabled.
+ 	 */
+-	usb_cc: typec@25 {
++	usb_cc_right: typec@25 {
+ 		compatible = "onsemi,fusb301a";
+ 		reg = <0x25>;
+ 		status = "disabled";
+@@ -446,6 +462,22 @@ touchscreen@5d {
+ 		status = "disabled";
+ 	};
+ 
++	/*
++	 * FUSB301 USB Type-C CC controller — LEFT port (the mtu3/ssusb
++	 * port). Found on i2c1 by the 2026-07-14 vendor harvest and
++	 * live-proven end-to-end in B-19 Stage C Phase 0 (boot.md,
++	 * logs/2026-07-14-227..230): with Mode(0x02)=0x01 SOURCE, real
++	 * sink devices assert Status(0x11) ATTACH with correct
++	 * orientation and Type(0x12)=0x10 on both CC flips. The driver
++	 * (patches/v6.6/usb/0001) programs static SOURCE and polls —
++	 * no IRQ available until B-11 (EINT) is fixed.
++	 */
++	usb_cc_left: typec@25 {
++		compatible = "onsemi,fusb301a";
++		reg = <0x25>;
++		status = "okay";
++	};
++
+ 	/*
+ 	 * TI TPS65132 LCD bias (±5.4 V AVDD/AVEE for the SSD2092 panel).
+ 	 * VPOS/VNEG output registers are volatile — LK reprograms them over
+@@ -572,6 +604,24 @@ pins-rx-tx {
+ 		};
+ 	};
+ 
++	/*
++	 * GPIO107 = vendor GPIO_OTG_DRVVBUS_PIN (aeon6797_6m_n.dws:1561),
++	 * hardware enable gate for the BQ25896 OTG boost. LK hands over
++	 * with it LOW and the boost then fails SILENTLY (no fault bits) —
++	 * live-proven 2026-07-14 (B-19 Stage C Phase 0, run v5): with the
++	 * OTG register bit already set, VBUS only appeared once devmem
++	 * drove DOUT bit 11 high (0x10005134 = 0x800). Hogged high for the
++	 * fixed-host left port: harmless while the boost register bit is
++	 * off (the pin gates, it doesn't enable), so charging from a Mac
++	 * is unaffected when the port is idle.
++	 */
++	otg_drvvbus_hog: otg-drvvbus-hog {
++		gpio-hog;
++		gpios = <107 GPIO_ACTIVE_HIGH>;
++		output-high;
++		line-name = "otg-drvvbus";
++	};
++
+ 	/*
+ 	 * AW9523B SHDN and INT pins.
+ 	 * SHDN: GPIO58 as plain GPIO output (active-low reset).
+@@ -971,11 +1021,12 @@ msdc0: mmc@11230000 {
+  * (CLK_INFRA_SSUSB_* ids 69/75/76). MT6797 scpsys has no USB power domain
+  * (USB sits on the always-on infra fabric), so no power-domains property.
+  *
+- * Peripheral-only (dr_mode): gadget mode needs no XHCI/OTG/extcon, and the
+- * Gemini's left port is the device-role port. High-speed only: u3port is
+- * left unwired until USB3 is needed -- fewer PHY/clock unknowns for first
+- * light. Note the left port is shared with the UART console mux: USB tests
+- * require the FTDI rig unplugged.
++ * THIS BUILD: host mode (B-19 Stage C) — dr_mode="otg" with
++ * role-switch-default-mode="host" and an xhci child; see the node comments
++ * below. High-speed only: u3port is left unwired until USB3 is needed --
++ * fewer PHY/clock unknowns for first light. Note the left port is shared
++ * with the UART console mux: host tests occupy the port, so observation is
++ * panel console (console=tty0) + FTDI serial.
+  */
+ / {
+ 	u3phy: t-phy@11290000 {
+@@ -992,13 +1043,16 @@ u2port0: usb-phy@11290800 {
+ 			clock-names = "ref";
+ 			#phy-cells = <1>;
+ 			/*
+-			 * B-20: MT6797 has no working hardware VBUS/session
+-			 * sensing into the U2 PHY; force session-valid/device
+-			 * role in software (patches/v6.6/phy/0001). Proven by
+-			 * devmem on hardware: DTM1 0x26->0x3E2E flips the UDC
+-			 * from "not attached" to "configured".
++			 * B-20's mediatek,force-b-session-valid (phy/0001)
++			 * is deliberately ABSENT in this host-mode build:
++			 * forcing IDDIG=1/B-session-valid pins the PHY to
++			 * device role and would fight mtu3's host switch.
++			 * Side effect: the forced state also kept the pads
++			 * in USB mode on every boot, killing the serial
++			 * console (blockers.md B-20 side-finding) — serial
++			 * follows the normal B-15 mux behaviour again in
++			 * this build. Gadget builds re-add the property.
+ 			 */
+-			mediatek,force-b-session-valid;
+ 			status = "okay";
+ 		};
+ 	};
+@@ -1035,8 +1089,55 @@ ssusb: usb@11271000 {
+ 		assigned-clocks = <&topckgen CLK_TOP_MUX_SSUSB_TOP_SYS>;
+ 		assigned-clock-parents = <&topckgen CLK_TOP_UNIVPLL3_D2>;
+ 		phys = <&u2port0 PHY_TYPE_USB2>;
+-		dr_mode = "peripheral";
++		/*
++		 * HOST MODE (B-19 Stage C, WiFi plan Stage 1). Build #143
++		 * proved plain dr_mode="host" is a dead end: mtu3_host.c's
++		 * pure-host path never runs switch_port_to_host(), so the
++		 * port0 U2 mux never flips and SPI 126 never fires. "otg" +
++		 * role-switch-default-mode="host" makes ssusb_role_sw_register()
++		 * run the full port-switch sequence at probe (mtu3_dr.c) —
++		 * fixed-host behaviour that actually exercises the mux.
++		 * Needs CONFIG_USB_MTU3_DUAL_ROLE. Gadget SSH is out of
++		 * scope for this build; runtime role switching comes later
++		 * (FUSB301 attach → role, needs B-11 EINT).
++		 *
++		 * VBUS: the BQ25896 OTG boost regulator (usb-otg-vbus on
++		 * i2c0, &otg_vbus) — live-proven 5.0V at the left connector
++		 * in Phase 0 (with GPIO107 hogged high in &pio). The old
++		 * GPIO94/sw7226(GPIO72) VBUS theory from builds #144-146
++		 * was RIGHT-port wiring and is intentionally not revived.
++		 */
++		vbus-supply = <&otg_vbus>;
++		dr_mode = "otg";
++		usb-role-switch;
++		role-switch-default-mode = "host";
+ 		maximum-speed = "high-speed";
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
+ 		status = "okay";
++
++		/*
++		 * xhci host child, per the mediatek,mtu3.yaml dual-role
++		 * example. Build #142 lesson: the child MUST use its own
++		 * MAC-only register window (0x11270000, one page — vendor
++		 * DTB usb3_xhci@11270000) and unit address, NOT the
++		 * parent's mac+ippc block, or platform_device_register()
++		 * collides in sysfs ("cannot create duplicate filename")
++		 * and xhci-mtk never probes. Vendor SPI 126 "xhci" IRQ.
++		 * "mediatek,mtk-xhci" is the generic fallback compatible
++		 * xhci-mtk.c already matches — no mt6797 entry needed.
++		 */
++		xhci: usb@11270000 {
++			compatible = "mediatek,mtk-xhci";
++			reg = <0 0x11270000 0 0x1000>;
++			reg-names = "mac";
++			interrupts = <GIC_SPI 126 IRQ_TYPE_LEVEL_LOW>;
++			clocks = <&infrasys CLK_INFRA_SSUSB_SYS>,
++				 <&infrasys CLK_INFRA_SSUSB_REF>;
++			clock-names = "sys_ck", "ref_ck";
++			vbus-supply = <&otg_vbus>;
++			status = "okay";
++		};
+ 	};
+ };
