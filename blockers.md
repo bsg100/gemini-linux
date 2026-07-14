@@ -2731,7 +2731,33 @@ are unavailable on #225 until the force bits are gated by role or DTS knob.
   so G1a devices bind.
 - Validated: full patch stack applies clean on pristine v6.6; board DTS
   compiles with dtc. Next: /build-pack, regression-check keyboard+display
-  (+serial return), then Gate G1a (SPI 126 count + lsusb beyond root hub). — USB gadget enumeration intermittently dead: root cause = U2PHYDTM1 session-valid FORCE bits (RESOLVED 2026-07-14, build #225)
+  (+serial return), then Gate G1a (SPI 126 count + lsusb beyond root hub).
+
+**Update 2026-07-14 (late) — build #231 flashed and live-debugged: all
+Phase 2 software works, Gate G1a still not passed.** Full session detail
+in boot.md "BUILD #231 flashed". Regression gate passed (boot, display,
+keyboard, FTDI-attached boot no longer hangs); FUSB301 driver, bq25890
+regulator, dual-role mtu3 + xhci root hub all live. Device never
+enumerates: portsc stuck "Powered Not-connected", SPI 126 never fires.
+Four real defects found and worked around by hand (all must be fixed in
+build #232):
+1. bq25890 boost state lost post-boot (REG03/REG07 reset; harden
+   `bq25890_vbus_enable` to rewrite WD-off + OTG each enable);
+2. runtime PM autosuspend clears IPPC HOST_SEL and power-cycles the PHY
+   — with no USB wakeup wired this permanently kills connect detection
+   (disable autosuspend for ssusb/xhci in the build);
+3. U2PHYDTM1 needs explicit host forcing (FORCE_IDDIG|RG_IDDIG=0 =
+   0x200); LK leftovers differ by boot cable (0x43E2E FTDI / 0x0 clean);
+4. U2PHYDTM0 SUSPENDM=0 on clean handover — PHY analog asleep; forced
+   FORCE_SUSPENDM|RG_SUSPENDM.
+Even with all four fixed live, no linestate: ruled out usb2uart mux,
+usb2jtag mux, ACR4 GPIO mode, ACR6 config, GPIO70/71, orientation.
+NEXT: PHY linestate monitor (0x11290870/74) adapter-out vs -in to split
+MAC-side break vs analog-blind; prime remaining suspect = MT6351 PMIC
+PHY rails (VUSB33/VA10, no mainline driver) per vendor
+`usb_phy_recover()`, the canonical host U2-PHY bring-up sequence.
+Debug tooling: `/root/h.sh` + `/root/s.sh` on the rootfs (survive kernel
+reflashes; see boot.md). — USB gadget enumeration intermittently dead: root cause = U2PHYDTM1 session-valid FORCE bits (RESOLVED 2026-07-14, build #225)
 
 **Opened 2026-07-13 (late).** The #175/#177 gadget baseline (verified
 working twice on 2026-07-13: morning #175, and once mid-evening #177 with

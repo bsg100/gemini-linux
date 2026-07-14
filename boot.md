@@ -6508,3 +6508,94 @@ Additionally a power-on with the FTDI rig attached appeared to hang at
 `clk: Disabling unused clocks` (stuck on panel too); boot with no cable +
 hot-plug works. Serial capture/serial-login are unavailable until the
 force bits are gated (planned in Stage C Phase 2).
+
+## 2026-07-14 — BUILD #231: B-19 Stage C Phase 2 host-mode build (not yet flashed)
+
+Provenance: `logs/2026-07-14-231-b19-stage-c-host-mode/` — image sha256
+`2033f9372fe58a3be53223f18646dfe14d10b7f4796a8c11d92f2f036b09ff45`, banner
+`#231` (verified = build number), debug instrumentation absent, DTB
+spot-check `usb-otg-vbus` present. Repo commit `00dc268` (patch set) on
+`driver-review-fixes`.
+
+What changed (vs #225 gadget baseline; full detail blockers.md B-19
+"Phase 2 patches drafted"):
+- `usb/0001` rewritten: FUSB301 driver binds the **i2c1** left-port chip,
+  Mode(0x02)=SOURCE, 500ms polling + dev_info CC logging, SINK restored on
+  shutdown.
+- New `power/0001`: bq25890_charger probes without an IRQ (B-11).
+- New `dts/0012`: ti,bq25896@i2c0-0x6b node + `otg_vbus` usb-otg-vbus
+  regulator; GPIO107 hog high; ssusb dr_mode="otg" +
+  role-switch-default-mode="host" + xhci child (SPI 126);
+  vbus-supply=<&otg_vbus>; **B-20 force-b-session-valid removed** (host
+  role; should also restore serial console).
+- `configs/gemini-usb.config`: MTU3_DUAL_ROLE, XHCI_MTK, TYPEC_FUSB301A,
+  CHARGER_BQ25890, usb-storage/usbnet class drivers.
+
+Expected on next capture (flash boot2, FTDI protocol usable again since
+force bits are gone):
+1. Regression gate first: keyboard + display + serial banner `#231`.
+2. bq25896 probe line (no-IRQ warn ok), fusb301 "SOURCE mode, polling"
+   line, xhci-mtk probe, SPI 126 present in /proc/interrupts.
+3. Gate G1a test: plug SD reader / MediaTek eth adapter into LEFT port →
+   FUSB301 "CC change ... sink-attached" + SPI 126 count increments +
+   lsusb shows device beyond root hub.
+Note: gadget SSH is unavailable in this build (fixed host role) — console
+is serial + panel.
+
+## 2026-07-14 — BUILD #231 flashed: host-mode regression PASS, Gate G1a NOT yet passed — live debug session findings
+
+Flashed by user (`mtk w boot2 .../2026-07-14-231-.../new_kali_boot.img`),
+banner `#231` confirmed on serial and panel. No serial/FTDI capture file —
+early serial worked (banner seen) then died at the B-15 mux as expected for
+an mtu3-active build; all subsequent observation via panel console +
+photos. Debug scripts `/root/h.sh` (host-enable pokes) and `/root/s.sh`
+(status dump) were scp'd to the rootfs via a temporary #225 reflash
+(gadget SSH), then #231 reflashed — both survive kernel reflashes.
+
+**Regression gate: PASS.** Boot with FTDI attached no longer hangs (the
+#225 clk-cleanup hang is gone with the force bits removed), display +
+keyboard fine, banner correct. New-driver evidence, all working:
+- `fusb301a 1-0025: FUSB301 CC controller ready (SOURCE mode, polling)`;
+  live `CC change` lines on every plug/unplug with correct
+  attach/vbusok/orient/sink-type decode. CC layer fully proven in-kernel.
+- bq25890 probes (no-IRQ warn as designed); `usb_otg_vbus` regulator
+  registers and mtu3+xhci both enable it (use_count 2).
+- mtu3 dual-role + xhci: "xhci platform device register success", root hub
+  enumerates (`lsusb` 1d6b:0002), `maxchild=1`, role reports `host`.
+
+**Gate G1a: FAIL so far — device never enumerates.** portsc permanently
+"Powered Not-connected", SPI 126 count 0. Root-caused a CHAIN of real
+defects live (each verified by devmem/i2c on the panel):
+1. **BQ25896 lost its programming after boot** — REG03 OTG bit clear,
+   REG07 read 0xff (not even the 0x9d default) despite regulator
+   use_count=2. Manual rewrite (WD off + OTG on) brought VBUS up (LEDs,
+   REG0B=0xe2 boost-running); vbusok=1 in the FUSB Status confirms 5V at
+   the connector. Driver needs enable-path hardening (re-assert WD-off +
+   OTG on every regulator enable).
+2. **Runtime PM kills the host port**: with no device attached xhci
+   autosuspends -> mtu3 `ssusb_host_disable` clears IPPC U2_CTRL HOST_SEL
+   (read 0x200 = VBUSVALID only) and power-cycles the PHY (wiped our DTM1
+   test writes). `echo on > .../1127{0,1}000.usb/power/control` restores
+   HOST_SEL (0x2CC). No USB wakeup source is wired, so autosuspend is
+   fatal to connect detection — must be disabled in the build.
+3. **U2PHYDTM1 LK leftovers**: FTDI-attached boot hands over 0x43E2E
+   (forced device-role session-valid, the B-20 signature) — wrong for
+   host. Clean no-cable boot hands over 0x0. Manually forced 0x200
+   (FORCE_IDDIG, RG_IDDIG=0 = host).
+4. **SUSPENDM=0 on clean boot**: DTM0 came up 0x02000000 (PHY analog
+   suspended); forced 0x02040008 (FORCE_SUSPENDM|RG_SUSPENDM).
+Ruled out by direct readback: usb2uart pad mux (0x10005600=0=USB),
+usb2jtag infra mux (0x10001F00 bit14 clear), ACR4 GPIO-mode bits (clear),
+ACR6 (vendor host config: VBUSCMP on, BC1.1 off), GPIO70/71 fusb301a_sw
+combos (no effect), connector orientation flip (no effect), pad routing
+theories generally.
+
+**Still failing after all of the above**: portsc Powered/Not-connected,
+zero xhci IRQs, with VBUS live and CC attached. Next diagnostic queued:
+PHY linestate monitor readback (0x11290870/74 and ACR0 0x11290800) with
+adapter out vs in, to split PHY-sees-D+ (MAC-side break) from
+PHY-blind (analog power rails — VUSB33/VA10 are MT6351 PMIC rails with no
+mainline driver; LK-inherited state is unverified in host role).
+Vendor-source finding for the eventual fix: `usb_phy_recover()`
+(mu3phy/mt6797/mtk-phy-asic.c) is the canonical host-side U2 PHY bring-up
+(clear all DTM0 forces, BC11 off, VBUSCMP on, + PMIC VUSB33/VA10 on).
