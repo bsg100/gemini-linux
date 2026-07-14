@@ -6335,3 +6335,13 @@ boot.log` is actually the #176 BOOT — banner #176 inside); a genuine
    inspect the uart-mode bits directly on a broken boot.
 3. If stuck: clear live as proof, then permanent fix (tphy init path /
    probe ordering).
+
+**CORRECTION (2026-07-14, same session):** a genuine #177 FTDI capture DOES
+exist — `logs/2026-07-13-180-b20-177-mux-test.log` (banner #177). It shows
+serial dying at t=0.454s mid-mtu3-probe (classic B-15 switch), NOT running
+to prompt — the "to prompt" observation was the panel console. So on
+broken boots the PHY *does* leave UART mode; "PHY stuck in usb2uart" is
+weakened as the sole cause. Refined suspect: mtu3's VBUS/role sensing
+(`drd: auto`, no extcon/usb-role-switch wired in our DTS) — the gap is
+between PHY switchover and mtu3 deciding to connect. Next-session step 2
+(PHY DTM devmem dump) stands, now inspecting force-VBUS/role bits too.
