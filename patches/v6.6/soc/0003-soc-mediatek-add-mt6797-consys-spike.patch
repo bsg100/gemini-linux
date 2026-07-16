@@ -29,7 +29,7 @@ new file mode 100644
 index 000000000..12aead20d
 --- /dev/null
 +++ b/drivers/soc/mediatek/mtk-consys-spike.c
-@@ -0,0 +1,546 @@
+@@ -0,0 +1,552 @@
 +// SPDX-License-Identifier: GPL-2.0
 +//
 +// MT6797 CONSYS feasibility-spike probe driver (Gemini PDA, Gates G2a+G2b).
@@ -147,7 +147,13 @@ index 000000000..12aead20d
 +
 +/* WMT_QUERY_STP_CMD and its default-ROM event (vendor wmt_ic_soc.c) */
 +static const u8 wmt_query_stp_cmd[] = { 0x01, 0x04, 0x01, 0x00, 0x04 };
-+static const u8 wmt_query_stp_evt[] = { 0x02, 0x04, 0x06, 0x00, 0x00, 0x04 };
++/* Full vendor WMT_QUERY_STP_EVT_DEFAULT (wmt_ic_soc.c) - build #256
++ * source audit found our prior 6-byte constant was missing the
++ * trailing 4 bytes, so a real ROM reply could fail memcmp even when
++ * the MCU answered correctly. */
++static const u8 wmt_query_stp_evt[] = {
++	0x02, 0x04, 0x06, 0x00, 0x00, 0x04, 0x11, 0x00, 0x00, 0x00
++};
 +
 +#define G2B_RX_BUF_SZ		64
 +#define G2B_RX_TIMEOUT_MS	1000
