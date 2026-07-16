@@ -1,0 +1,15 @@
+
+Password: 
+>>> SENT: 'toor'
+toor
+/system/bin/sh: toor: not found
+127|android:/ $ 
+>>> SENT: "PS1='GPROMPT# '"
+PS1=
+
+Login incorrect
+kali login: 
+android:/ $ kali
+Password: kali
+/system/bin/sh: kali: not found
+127|android:/ $ 

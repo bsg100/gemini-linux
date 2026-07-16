@@ -1,0 +1,578 @@
+diff --git a/drivers/soc/mediatek/Kconfig b/drivers/soc/mediatek/Kconfig
+index a88cf04fc..f673ffd78 100644
+--- a/drivers/soc/mediatek/Kconfig
++++ b/drivers/soc/mediatek/Kconfig
+@@ -91,4 +91,12 @@ config MTK_SVS
+ 	  chip process corner, temperatures and other factors. Then DVFS
+ 	  driver could apply SVS bank voltage to PMIC/Buck.
+ 
++config MTK_CONSYS_SPIKE
++	tristate "MediaTek MT6797 CONSYS feasibility spike (Gemini PDA)"
++	depends on HAS_IOMEM
++	help
++	  Throwaway diagnostic driver that runs the vendor CONSYS power-on
++	  sequence on MT6797 and polls the CONSYS chip-ID register (Gate
++	  G2a of the Gemini PDA WiFi plan). Not a production driver.
++
+ endmenu
+diff --git a/drivers/soc/mediatek/Makefile b/drivers/soc/mediatek/Makefile
+index 9d3ce7878..203aaaf0c 100644
+--- a/drivers/soc/mediatek/Makefile
++++ b/drivers/soc/mediatek/Makefile
+@@ -7,3 +7,4 @@ obj-$(CONFIG_MTK_REGULATOR_COUPLER) += mtk-regulator-coupler.o
+ obj-$(CONFIG_MTK_MMSYS) += mtk-mmsys.o
+ obj-$(CONFIG_MTK_MMSYS) += mtk-mutex.o
+ obj-$(CONFIG_MTK_SVS) += mtk-svs.o
++obj-$(CONFIG_MTK_CONSYS_SPIKE) += mtk-consys-spike.o
+diff --git a/drivers/soc/mediatek/mtk-consys-spike.c b/drivers/soc/mediatek/mtk-consys-spike.c
+new file mode 100644
+index 000000000..12aead20d
+--- /dev/null
++++ b/drivers/soc/mediatek/mtk-consys-spike.c
+@@ -0,0 +1,546 @@
++// SPDX-License-Identifier: GPL-2.0
++//
++// MT6797 CONSYS feasibility-spike probe driver (Gemini PDA, Gates G2a+G2b).
++//
++// THROWAWAY DIAGNOSTIC, not a production driver: runs the vendor 3.18
++// CONSYS power-on sequence (mtk_wcn_consys_hw.c, mt6797) using mainline
++// APIs where they exist (regulators, the new CONN scpsys power domain)
++// and documented raw register writes where they don't, then polls the
++// CONSYS chip-ID register. Success criterion (Gate G2a): chip ID 0x0279
++// read back at CONN_MCU_CONFIG_BASE + 0x8 (0x18070008).
++//
++// Stage W2 extension (Gate G2b): after G2a passes, program the CONSYS
++// EMI remap window, initialise the AP<->CONSYS BTIF FIFO (0x1100c000,
++// PIO polling only - no IRQ, no DMA), release the CONSYS MCU from the
++// watchdog swsysrst, and exchange the first WMT command with the MCU
++// boot ROM: WMT_QUERY_STP (01 04 01 00 04) wrapped in STP "mand mode"
++// framing (vendor stp_core.c: 4-byte header 0x80|seq<<3,
++// type<<4|len>>8, len&0xff, 0x00 + payload + 2 zero CRC bytes; WMT task
++// index = 4). Success criterion (Gate G2b): the ROM answers with the
++// WMT event payload 02 04 06 00 00 04 ... (vendor wmt_ic_soc.c
++// WMT_QUERY_STP_EVT_DEFAULT). On G2b failure the driver deliberately
++// leaves CONSYS + BTIF powered and returns 0 so the state can be
++// inspected over gadget SSH with devmem.
++//
++// Every step logs to dmesg BEFORE it executes so a hang identifies the
++// exact stalled step from the serial/panel console (patches/STANDARDS.md
++// serial-observability rule).
++//
++// Raw-poke registers (all vendor-cited, research.md "CONSYS Stage W0
++// harvest"):
++//   0x10001350  CONN2AP sleep mask       |= BIT(8)
++//   0x10007018  AP_RGU swsysrst          |= BIT(12) with key 0x88<<24
++//   0x10006000  SPM PWRON_CONFG_EN       = 0x0b160001 (project code/key)
++// These live inside regions owned by scpsys (0x10006000) and the
++// watchdog (0x10007000), so this driver deliberately uses plain
++// ioremap() on exact 4-byte windows instead of devm_ioremap_resource()
++// (which would request_mem_region() and collide with those drivers).
++
++#include <linux/clk.h>
++#include <linux/delay.h>
++#include <linux/io.h>
++#include <linux/jiffies.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/of_address.h>
++#include <linux/of_reserved_mem.h>
++#include <linux/platform_device.h>
++#include <linux/pm_runtime.h>
++#include <linux/regulator/consumer.h>
++#include <linux/sizes.h>
++
++#define CONSYS_CHIP_ID_PA	0x18070008UL	/* CONN_MCU_CONFIG_BASE + 0x8 */
++#define CONSYS_MCU_ACR_PA	0x18070110UL	/* MCU_CFG_ACR */
++#define CONSYS_CPUPCR_PA	0x18070160UL	/* MCU program counter (RO) */
++#define CONSYS_MCU_ACR_MBIST	BIT(18)
++#define CONSYS_CHIP_ID_EXPECT	0x0279
++
++#define CONN2AP_SLEEP_MASK_PA	0x10001350UL
++#define CONN2AP_SLEEP_MASK_BIT	BIT(8)
++
++#define AP_RGU_SWSYSRST_PA	0x10007018UL
++#define AP_RGU_CONN_MCU_RST	BIT(12)
++#define AP_RGU_KEY		(0x88U << 24)
++
++#define SPM_PWRON_CONFG_EN_PA	0x10006000UL
++#define SPM_PWRON_CONFG_EN_VAL	0x0b160001
++
++#define CHIP_ID_RETRIES		10
++
++/* --- Stage W2 (Gate G2b) --- */
++
++/* CONSYS->AP EMI remap: TOPCKGEN + 0x1340 gets (emi_base & 0xFFF00000)
++ * >> 20, plus BIT(12) = remap enable (vendor mtk_wcn_consys_hw.c). The
++ * 343K window at emi_base + 512K is the fw coredump/ctrl area the
++ * vendor zeroes before releasing the MCU. */
++#define CONSYS_EMI_MAPPING_PA	0x10001340UL
++#define CONSYS_EMI_REMAP_EN	BIT(12)
++#define CONSYS_EMI_COREDUMP_OFF	(SZ_1M / 2)
++#define CONSYS_EMI_COREDUMP_SZ	(343 * SZ_1K)
++
++/* BTIF block (vendor DTB btif@1100c000; register map from vendor
++ * btif_priv.h). PIO polling only. */
++#define BTIF_PA			0x1100c000UL
++#define BTIF_SZ			0x100
++#define BTIF_RBR		0x00	/* RX buffer (RO) */
++#define BTIF_THR		0x00	/* TX holding (WO) */
++#define BTIF_IER		0x04
++#define BTIF_IIR		0x08	/* RO */
++#define BTIF_FIFOCTRL		0x08	/* WO */
++#define BTIF_FAKELCR		0x0c
++#define BTIF_LSR		0x14
++#define BTIF_SLEEP_EN		0x48
++#define BTIF_DMA_EN		0x4c
++#define BTIF_TRI_LVL		0x60
++#define BTIF_WAK		0x64	/* WO: ap_wakeup_consys line */
++#define BTIF_HANDSHAKE		0x6c
++
++#define BTIF_LSR_DR		BIT(0)
++#define BTIF_LSR_TEMT		BIT(6)
++#define BTIF_FIFOCTRL_CLR_TX	BIT(2)
++#define BTIF_FIFOCTRL_CLR_RX	BIT(1)
++#define BTIF_DMA_EN_AUTORST	BIT(2)
++/* Golden values from the working vendor stack (Stage W0b harvest,
++ * boot.md 2026-07-15): TRI_LVL = 0x18 (TX thresh 8, RX thresh 1),
++ * HANDSHAKE = 0x3 -- not the 0x48/0x1 earlier builds used. */
++#define BTIF_TRI_LVL_VAL	(8 | (1 << 4))	/* TX thresh 8, RX thresh 1, loopback off */
++#define BTIF_HANDSHAKE_EN	3
++
++#define BTIF_TX_FIFO_SIZE	16
++
++/* WMT over STP mand-mode framing (vendor stp_core.c / stp_exp.h) */
++#define STP_HDR_SIZE		4
++#define STP_CRC_SIZE		2
++#define WMT_TASK_INDX		4
++
++/* WMT_QUERY_STP_CMD and its default-ROM event (vendor wmt_ic_soc.c) */
++static const u8 wmt_query_stp_cmd[] = { 0x01, 0x04, 0x01, 0x00, 0x04 };
++static const u8 wmt_query_stp_evt[] = { 0x02, 0x04, 0x06, 0x00, 0x00, 0x04 };
++
++#define G2B_RX_BUF_SZ		64
++#define G2B_RX_TIMEOUT_MS	1000
++
++static int consys_poke(unsigned long pa, u32 set_bits, u32 key,
++		       bool overwrite, u32 value, struct device *dev,
++		       const char *what)
++{
++	void __iomem *va;
++	u32 old, new;
++
++	va = ioremap(pa, 4);
++	if (!va) {
++		dev_err(dev, "consys-spike: ioremap(%#lx) for %s failed\n",
++			pa, what);
++		return -ENOMEM;
++	}
++	old = readl(va);
++	if (overwrite)
++		new = value;
++	else
++		new = old | set_bits | key;
++	dev_info(dev, "consys-spike: %s %#lx: %#x -> %#x\n",
++		 what, pa, old, new);
++	writel(new, va);
++	iounmap(va);
++	return 0;
++}
++
++static int consys_poke_clear(unsigned long pa, u32 clr_bits, u32 key,
++			     struct device *dev, const char *what)
++{
++	void __iomem *va;
++	u32 old, new;
++
++	va = ioremap(pa, 4);
++	if (!va) {
++		dev_err(dev, "consys-spike: ioremap(%#lx) for %s failed\n",
++			pa, what);
++		return -ENOMEM;
++	}
++	old = readl(va);
++	new = (old & ~clr_bits) | key;
++	dev_info(dev, "consys-spike: %s %#lx: %#x -> %#x\n", what, pa, old, new);
++	writel(new, va);
++	iounmap(va);
++	return 0;
++}
++
++/* Program the CONSYS->AP EMI remap register and zero the fw ctrl
++ * window inside the reserved region (vendor does both before the MCU
++ * is released). */
++static int consys_emi_setup(struct device *dev)
++{
++	struct device_node *np;
++	struct reserved_mem *rmem;
++	phys_addr_t base;
++	void __iomem *win;
++	u32 map;
++	int ret;
++
++	np = of_parse_phandle(dev->of_node, "memory-region", 0);
++	if (!np) {
++		dev_err(dev, "consys-spike: no memory-region\n");
++		return -ENODEV;
++	}
++	/* The region is a dynamic-allocation reserved-memory node (no
++	 * "reg"), so of_address_to_resource() cannot resolve it; the
++	 * kernel-chosen base is only in the reserved_mem table. */
++	rmem = of_reserved_mem_lookup(np);
++	of_node_put(np);
++	if (!rmem) {
++		dev_err(dev, "consys-spike: memory-region unresolved\n");
++		return -EINVAL;
++	}
++	base = rmem->base;
++
++	map = ((u32)(base & 0xFFF00000) >> 20) | CONSYS_EMI_REMAP_EN;
++	dev_info(dev, "consys-spike: EMI base %pa size %pa, remap word %#x\n",
++		 &base, &rmem->size, map);
++	ret = consys_poke(CONSYS_EMI_MAPPING_PA, map, 0, false, 0, dev,
++			  "CONSYS_EMI_MAPPING");
++	if (ret)
++		return ret;
++
++	dev_info(dev, "consys-spike: zeroing EMI ctrl window (+%#x, %#x bytes)\n",
++		 CONSYS_EMI_COREDUMP_OFF, CONSYS_EMI_COREDUMP_SZ);
++	win = ioremap(base + CONSYS_EMI_COREDUMP_OFF,
++		      CONSYS_EMI_COREDUMP_SZ);
++	if (!win) {
++		dev_err(dev, "consys-spike: EMI window ioremap failed\n");
++		return -ENOMEM;
++	}
++	memset_io(win, 0, CONSYS_EMI_COREDUMP_SZ);
++	iounmap(win);
++	return 0;
++}
++
++/* Vendor hal_btif_hw_init(), PIO subset: normal LCR, new-handshake
++ * mode, FIFO clear, trigger levels + loopback off, DMA off, all IRQs
++ * masked (we poll LSR). */
++static void btif_hw_init(void __iomem *btif)
++{
++	writel(0, btif + BTIF_FAKELCR);
++	writel(BTIF_HANDSHAKE_EN, btif + BTIF_HANDSHAKE);
++	/* The FIFO-clear bits are level-held, not self-clearing: the
++	 * vendor sets then explicitly clears each (build #237/#238
++	 * left them asserted, holding both FIFOs in reset — RX data
++	 * from the ROM was silently discarded). */
++	writel(BTIF_FIFOCTRL_CLR_RX, btif + BTIF_FIFOCTRL);
++	writel(0, btif + BTIF_FIFOCTRL);
++	writel(BTIF_FIFOCTRL_CLR_TX, btif + BTIF_FIFOCTRL);
++	writel(0, btif + BTIF_FIFOCTRL);
++	writel(BTIF_TRI_LVL_VAL, btif + BTIF_TRI_LVL);
++	writel(readl(btif + BTIF_DMA_EN) & ~3, btif + BTIF_DMA_EN);
++	writel(readl(btif + BTIF_DMA_EN) | BTIF_DMA_EN_AUTORST,
++	       btif + BTIF_DMA_EN);
++	writel(0, btif + BTIF_IER);
++	writel(0, btif + BTIF_SLEEP_EN);
++}
++
++/* Vendor hal_btif_send_wakeup_signal(): pulse ap_wakeup_consys low
++ * for longer than one 32k period, then high, before transmitting. */
++static void btif_wakeup_consys(void __iomem *btif)
++{
++	writel(0, btif + BTIF_WAK);
++	usleep_range(64, 96);
++	writel(1, btif + BTIF_WAK);
++}
++
++/* Blocking PIO TX: wait TEMT, burst up to the FIFO size. */
++static int btif_tx(struct device *dev, void __iomem *btif, const u8 *buf,
++		   int len)
++{
++	int i, chunk;
++
++	while (len > 0) {
++		unsigned long t = jiffies + msecs_to_jiffies(100);
++
++		while (!(readl(btif + BTIF_LSR) & BTIF_LSR_TEMT)) {
++			if (time_after(jiffies, t)) {
++				dev_err(dev, "consys-spike: BTIF TX stuck, LSR=%#x\n",
++					readl(btif + BTIF_LSR));
++				return -ETIMEDOUT;
++			}
++			udelay(10);
++		}
++		chunk = min(len, BTIF_TX_FIFO_SIZE);
++		for (i = 0; i < chunk; i++)
++			writel(buf[i], btif + BTIF_THR);
++		buf += chunk;
++		len -= chunk;
++	}
++	return 0;
++}
++
++/* Drain RX for up to timeout_ms into buf; returns bytes read. */
++static int btif_rx_drain(void __iomem *btif, u8 *buf, int max,
++			 unsigned int timeout_ms)
++{
++	unsigned long t = jiffies + msecs_to_jiffies(timeout_ms);
++	int n = 0;
++
++	while (n < max && !time_after(jiffies, t)) {
++		if (readl(btif + BTIF_LSR) & BTIF_LSR_DR)
++			buf[n++] = readl(btif + BTIF_RBR) & 0xff;
++		else
++			usleep_range(200, 500);
++	}
++	return n;
++}
++
++/* Send one WMT command in STP mand-mode framing and scan the reply
++ * bytes for the expected WMT event payload. */
++static int wmt_cmd_evt(struct device *dev, void __iomem *btif, u8 seq,
++		       const u8 *cmd, int cmdlen, const u8 *evt, int evtlen)
++{
++	u8 frame[STP_HDR_SIZE + 16 + STP_CRC_SIZE];
++	u8 rx[G2B_RX_BUF_SZ];
++	int n, i, ret;
++
++	/* Mand-mode byte0 is FIXED 0x80 (vendor stp_send_data_no_ps mand
++	 * branch) -- no tx-seq field; earlier builds' seq<<3 retries were
++	 * malformed. seq is kept only for log correlation. */
++	frame[0] = 0x80;
++	frame[1] = (WMT_TASK_INDX << 4) | ((cmdlen >> 8) & 0x0f);
++	frame[2] = cmdlen & 0xff;
++	frame[3] = 0x00;
++	memcpy(&frame[STP_HDR_SIZE], cmd, cmdlen);
++	frame[STP_HDR_SIZE + cmdlen] = 0x00;
++	frame[STP_HDR_SIZE + cmdlen + 1] = 0x00;
++
++	dev_info(dev, "consys-spike: WMT TX %*ph\n",
++		 STP_HDR_SIZE + cmdlen + STP_CRC_SIZE, frame);
++	btif_wakeup_consys(btif);
++	ret = btif_tx(dev, btif, frame, STP_HDR_SIZE + cmdlen + STP_CRC_SIZE);
++	if (ret)
++		return ret;
++
++	n = btif_rx_drain(btif, rx, sizeof(rx), G2B_RX_TIMEOUT_MS);
++	dev_info(dev, "consys-spike: WMT RX %d bytes: %*ph\n", n, n, rx);
++	if (n < evtlen)
++		return -ETIMEDOUT;
++	for (i = 0; i + evtlen <= n; i++)
++		if (!memcmp(&rx[i], evt, evtlen))
++			return 0;
++	return -EBADMSG;
++}
++
++/* Stage W2: EMI remap + BTIF up + MCU release + first WMT exchange. */
++static int consys_gate_g2b(struct device *dev)
++{
++	void __iomem *btif;
++	struct clk *btif_clk;
++	u8 rx[G2B_RX_BUF_SZ];
++	int n, ret;
++
++	dev_info(dev, "consys-spike: Gate G2b starting\n");
++
++	ret = consys_emi_setup(dev);
++	if (ret)
++		return ret;
++
++	btif_clk = devm_clk_get(dev, "btif");
++	if (IS_ERR(btif_clk)) {
++		dev_err(dev, "consys-spike: no btif clock (%ld)\n",
++			PTR_ERR(btif_clk));
++		return PTR_ERR(btif_clk);
++	}
++	ret = clk_prepare_enable(btif_clk);
++	if (ret) {
++		dev_err(dev, "consys-spike: btif clock enable failed (%d)\n",
++			ret);
++		return ret;
++	}
++
++	btif = ioremap(BTIF_PA, BTIF_SZ);
++	if (!btif) {
++		dev_err(dev, "consys-spike: BTIF ioremap failed\n");
++		return -ENOMEM;
++	}
++	dev_info(dev, "consys-spike: BTIF init (LSR=%#x)\n",
++		 readl(btif + BTIF_LSR));
++	btif_hw_init(btif);
++
++	/* Release the CONSYS MCU: clear swsysrst bit 12 (key 0x88<<24).
++	 * Everything up to here ran with the MCU held in reset. */
++	dev_info(dev, "consys-spike: releasing CONSYS MCU reset\n");
++	ret = consys_poke_clear(AP_RGU_SWSYSRST_PA, AP_RGU_CONN_MCU_RST,
++				AP_RGU_KEY, dev, "AP_RGU_SWSYSRST(release)");
++	if (ret)
++		goto out_unmap;
++
++	/* Let the ROM boot; log anything it sends unsolicited. */
++	msleep(50);
++	n = btif_rx_drain(btif, rx, sizeof(rx), 200);
++	dev_info(dev, "consys-spike: post-release RX %d bytes: %*ph\n",
++		 n, n, rx);
++
++	ret = wmt_cmd_evt(dev, btif, 0, wmt_query_stp_cmd,
++			  sizeof(wmt_query_stp_cmd), wmt_query_stp_evt,
++			  sizeof(wmt_query_stp_evt));
++	if (ret == -ETIMEDOUT) {
++		dev_info(dev, "consys-spike: retrying WMT query once\n");
++		msleep(500);
++		ret = wmt_cmd_evt(dev, btif, 1, wmt_query_stp_cmd,
++				  sizeof(wmt_query_stp_cmd), wmt_query_stp_evt,
++				  sizeof(wmt_query_stp_evt));
++	}
++	if (ret) {
++		void __iomem *pcr = ioremap(CONSYS_CPUPCR_PA, 4);
++
++		if (pcr) {
++			dev_err(dev, "consys-spike: MCU CPUPCR samples: %#x %#x %#x (changing = ROM executing)\n",
++				readl(pcr), readl(pcr), readl(pcr));
++			iounmap(pcr);
++		}
++		dev_err(dev, "consys-spike: BTIF LSR=%#x IIR=%#x\n",
++			readl(btif + BTIF_LSR), readl(btif + BTIF_IIR));
++		dev_err(dev, "consys-spike: GATE G2B FAIL (%d) - state left up for devmem inspection\n",
++			ret);
++		goto out_unmap;
++	}
++
++	dev_info(dev, "consys-spike: *** GATE G2B PASS - CONSYS MCU ROM answers WMT over BTIF ***\n");
++out_unmap:
++	iounmap(btif);
++	return ret;
++}
++
++static int mtk_consys_spike_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct regulator *vcn18, *vcn28;
++	void __iomem *mcu;
++	u32 id = 0;
++	int i, ret;
++
++	dev_info(dev, "consys-spike: Gate G2a probe starting\n");
++
++	/* Step 1: VCN18 on, 240us settle (vendor order: rails first) */
++	vcn18 = devm_regulator_get(dev, "vcn18");
++	if (IS_ERR(vcn18))
++		return dev_err_probe(dev, PTR_ERR(vcn18), "no vcn18\n");
++	vcn28 = devm_regulator_get(dev, "vcn28");
++	if (IS_ERR(vcn28))
++		return dev_err_probe(dev, PTR_ERR(vcn28), "no vcn28\n");
++
++	dev_info(dev, "consys-spike: enabling VCN18\n");
++	ret = regulator_enable(vcn18);
++	if (ret)
++		return dev_err_probe(dev, ret, "VCN18 enable failed\n");
++	udelay(240);
++
++	/* Step 2: VCN28 on (co_clock_flag=0 path; ON_CTRL set by mt6351 drv) */
++	dev_info(dev, "consys-spike: enabling VCN28\n");
++	ret = regulator_enable(vcn28);
++	if (ret) {
++		dev_err(dev, "consys-spike: VCN28 enable failed (%d)\n", ret);
++		goto err_vcn18;
++	}
++
++	/* Step 3: CONN2AP sleep mask */
++	ret = consys_poke(CONN2AP_SLEEP_MASK_PA, CONN2AP_SLEEP_MASK_BIT, 0,
++			  false, 0, dev, "CONN2AP_SLEEP_MASK");
++	if (ret)
++		goto err_vcn28;
++
++	/* Step 4: AP_RGU — keep CONSYS MCU reset asserted across WDT (vendor
++	 * mtk_wdt_swsysret_config(BIT(12), 1); write requires key 0x88<<24) */
++	ret = consys_poke(AP_RGU_SWSYSRST_PA, AP_RGU_CONN_MCU_RST, AP_RGU_KEY,
++			  false, 0, dev, "AP_RGU_SWSYSRST");
++	if (ret)
++		goto err_vcn28;
++
++	/* Step 5: SPM PWRON_CONFG_EN project key */
++	ret = consys_poke(SPM_PWRON_CONFG_EN_PA, 0, 0, true,
++			  SPM_PWRON_CONFG_EN_VAL, dev, "SPM_PWRON_CONFG_EN");
++	if (ret)
++		goto err_vcn28;
++
++	/* Step 6: CONN MTCMOS on via the scpsys power domain (DTS
++	 * power-domains property; runtime PM powers the genpd) */
++	dev_info(dev, "consys-spike: powering CONN domain (scpsys)\n");
++	pm_runtime_enable(dev);
++	ret = pm_runtime_resume_and_get(dev);
++	if (ret) {
++		dev_err(dev, "consys-spike: CONN domain power-on failed (%d)\n",
++			ret);
++		goto err_rpm;
++	}
++
++	/* Step 7: 26M settle, then poll chip ID */
++	udelay(30);
++	mcu = ioremap(CONSYS_CHIP_ID_PA & PAGE_MASK, PAGE_SIZE);
++	if (!mcu) {
++		ret = -ENOMEM;
++		dev_err(dev, "consys-spike: ioremap chip-ID window failed\n");
++		goto err_domain;
++	}
++
++	dev_info(dev, "consys-spike: polling chip ID at %#lx\n",
++		 CONSYS_CHIP_ID_PA);
++	for (i = 0; i < CHIP_ID_RETRIES; i++) {
++		id = readl(mcu + (CONSYS_CHIP_ID_PA & ~PAGE_MASK));
++		dev_info(dev, "consys-spike: chip-ID read %d: %#x\n", i, id);
++		if (id == CONSYS_CHIP_ID_EXPECT)
++			break;
++		msleep(20);
++	}
++
++	if (id != CONSYS_CHIP_ID_EXPECT) {
++		dev_err(dev,
++			"consys-spike: GATE G2A FAIL - chip ID %#x (want %#x)\n",
++			id, CONSYS_CHIP_ID_EXPECT);
++		ret = -ENODEV;
++		iounmap(mcu);
++		goto err_domain;
++	}
++
++	dev_info(dev, "consys-spike: *** GATE G2A PASS - CONSYS chip ID %#x ***\n",
++		 id);
++
++	/* Step 8: MBIST real-speed bit, as vendor does post-ID */
++	writel(readl(mcu + (CONSYS_MCU_ACR_PA & ~PAGE_MASK)) |
++	       CONSYS_MCU_ACR_MBIST,
++	       mcu + (CONSYS_MCU_ACR_PA & ~PAGE_MASK));
++	iounmap(mcu);
++
++	/* Stage W2: MCU release + first WMT exchange over BTIF. A G2b
++	 * failure is reported in dmesg but does NOT fail the probe -
++	 * CONSYS is left powered so the state is devmem-inspectable. */
++	consys_gate_g2b(dev);
++
++	/* Leave the domain and rails ON so the state can be inspected over
++	 * SSH (devmem) after boot. Teardown happens on driver unbind. */
++	return 0;
++
++err_domain:
++	pm_runtime_put_sync(dev);
++err_rpm:
++	pm_runtime_disable(dev);
++err_vcn28:
++	regulator_disable(vcn28);
++err_vcn18:
++	regulator_disable(vcn18);
++	dev_err(dev, "consys-spike: probe failed (%d) - sequence rolled back\n",
++		ret);
++	return ret;
++}
++
++static const struct of_device_id mtk_consys_spike_of_match[] = {
++	{ .compatible = "mediatek,mt6797-consys", },
++	{ /* sentinel */ },
++};
++MODULE_DEVICE_TABLE(of, mtk_consys_spike_of_match);
++
++static struct platform_driver mtk_consys_spike_driver = {
++	.driver = {
++		.name = "mtk-consys-spike",
++		.of_match_table = mtk_consys_spike_of_match,
++	},
++	.probe = mtk_consys_spike_probe,
++};
++module_platform_driver(mtk_consys_spike_driver);
++
++MODULE_DESCRIPTION("MT6797 CONSYS power-on feasibility spike (Gate G2a)");
++MODULE_LICENSE("GPL");

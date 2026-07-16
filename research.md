@@ -172,6 +172,103 @@ BT explicitly out of scope. Corrected measurement: the gen2 WiFi driver is
 ~150 KLOC incl. headers (whole combo ~314 KLOC), larger than the earlier
 "~75–103 KLOC" estimate above.
 
+### CONSYS Stage W0 harvest (2026-07-14 — B-19 parked, CONSYS path activated)
+
+User decision 2026-07-14: B-19 (USB host) is parked; WiFi is now pursued
+via CONSYS directly (SSH-over-WiFi would then give a debug channel
+independent of the left port, making B-19 *easier* to research later).
+Everything below is source-cited from the vendor tree
+(`gemini-android-kernel-3.18/kernel-3.18`, cited `K/`) or measured live
+over SSH on build #225.
+
+**Live state at Linux handoff (measured on #225, devmem):** LK leaves
+CONSYS completely untouched — `SPM_CONN_PWR_CON (0x10006280) = 0x0`
+(in reset, unpowered), `SPM_PWR_STATUS (0x10006180) = 0x2A00005C` /
+`2ND (0x10006184) = 0x2A00004C` (bit 1 CONN clear in both),
+`INFRA_TOPAXI_PROT_EN (0x10001220) = 0x000104B8` (CONN bits 2/8 clear —
+bus protection not asserted either). Our kernel owns the entire power-on
+sequence from cold.
+
+**MTCMOS CONN domain (K/drivers/misc/mediatek/base/power/mt6797/
+mt_spm_mtcmos.c:1803 `spm_mtcmos_ctrl_connsys`):**
+- **`SPM_CONN_PWR_CON = SPM_BASE + 0x32C`** — MEASURED LIVE 2026-07-14
+  (build #234 session): the vendor mt_spm.h:109 define (SPM+0x280) is
+  STALE for this silicon — 0x280 reads 0 and silently rejects writes,
+  while 0x32C idles at 0x112 (ISO|CLK_DIS|SRAM_PDN off-pattern) and the
+  full on-sequence there raises PWR_STATUS bit1 and yields the chip-ID.
+  plan.md's original 0x32C claim (matching consys_hw.c's non-API
+  fallback comments, "0x1000632c [3]") was right after all.
+- sta_mask = **BIT(1)** (`CONN_PWR_STA_MASK`, :1120) in PWR_STATUS
+  0x180/0x184; sram_pdn = **BIT(8)** (`CONN_SRAM_PDN`); **no SRAM ack
+  wait** in the vendor sequence; bus_prot = **bits 2|8** in
+  INFRA_TOPAXI_PROT_EN 0x10001220 / STA1 0x10001228 (`CONN_PROT_MASK`,
+  :1149) — same regs mainline `mtk-infracfg.c` already drives. PWR_* bit
+  layout identical to mainline scpsys. ⇒ the mainline
+  `scp_domain_data_mt6797[]` CONN entry is a straight pattern-copy of the
+  MT2701 one (which even shares ctl_offs 0x280 and sta BIT(1)).
+- Vendor DTS clock `"conn"` = `<&scpsys SCP_SYS_CONN>` — in 3.18 scpsys
+  exposes domains as fake clocks; in mainline this IS the power domain.
+  `"bus"` (infra_connmcu_bus) is compiled out for mt6797
+  (`CONSYS_AHB_CLK_MAGEMENT = 0`, mtk_wcn_consys_hw.h:42). ⇒ **no
+  clk-mt6797 patch needed at all** for power-on.
+
+**Full power-on sequence to chip-ID (K/.../mt6797/mtk_wcn_consys_hw.c
+:290-425, CCF path — known-good config has `CONFIG_MTK_CLKMGR` unset):**
+1. VCN18 regulator on @1.8V; `udelay(240)`.
+2. `co_clock_flag=0` (measured, our `WMT_SOC.cfg`) ⇒ VCN28: set
+   RG_VCN28_ON_CTRL=1 (HW control mode) then enable @2.8V.
+   (VCN33_BT/WIFI are enabled later by WiFi/BT function-on, not needed
+   for chip-ID.)
+3. `TOPCKGEN(0x10000000)+0x1350 |= BIT(8)` (CONN2AP sleep mask).
+4. AP_RGU (`0x10007000`)+0x18: WDT swsysret bit12 with key `0x88<<24`
+   (vendor calls `mtk_wdt_swsysret_config((1<<12),1)`; mainline mtk-wdt
+   has no such API — spike driver pokes `0x10007018` directly).
+5. `SPM+0x0 (PWRON_CONFG_EN) = 0x0b160001` (SPM project code/key).
+6. CONN MTCMOS on (= mainline scpsys domain power_on: prot clear →
+   PWR_ON/2ND → ack in 0x180/0x184 bit1 → clk_dis clear → ISO clear →
+   RST_B set → SRAM_PDN clear → bus prot release).
+7. `udelay(30)`, then poll **chip-ID @ 0x18070008 (CONN_MCU_CONFIG_BASE
+   + 0x8), expect 0x0279** (retry ×N, 20ms) — **this is Gate G2a.**
+   **G2a PROVEN LIVE BY HAND 2026-07-14** on build #234 over SSH: manual
+   devmem MTCMOS sequence at 0x32C (0x116→0x11E→ack in 0x180/0x184 bit1
+   →0x10E→0x10C→0x10D→0x00D) then `devmem 0x18070008` = **0x00000279**,
+   with VCN rails still OFF and none of the sleep-mask/RGU/PWRON_CONFG_EN
+   pokes applied — the MTCMOS + chip-ID path needs none of them.
+8. Post-ID: `0x18070110 (MCU_CFG_ACR) |= BIT(18)` (MBIST real-speed);
+   AFE/WBG analog trim writes (CONSYS_AFE_REG_SETTING) — deferrable.
+
+**EMI region:** vendor reserved-memory is dynamic — 2 MB, 2 MB-aligned,
+`no-map`, alloc-range 0x40000000–0xC0000000 (vendor DTB
+`consys-reserve-memory`); the chosen phys base is programmed as
+`(base & 0xFFF00000) >> 20` OR'd into `TOPCKGEN+0x1340`
+(CONSYS_EMI_MAPPING, consys_hw.c:1035-1041). Coredump view constants:
+AP 0x80080000 / FW 0xf0080000 (+0x80000 offset), 343 KB. Not needed for
+G2a; needed before MCU firmware download (G2b).
+
+**MT6351 VCN LDO registers (K/.../mt6797/include/mach/upmu_hw.h)** for
+the minimal regulator driver (pwrap regmap): `LDO_VCN28_CON0 = 0x0A0C`,
+`LDO_VCN18_CON0 = 0x0A52`, `LDO_VCN33_CON0 = 0x0A92`; per-CON0 layout:
+ON_CTRL bit0, **EN bit1**, MODE_CTRL/etc. above. Voltages are
+fixed-by-strap for VCN18/VCN28 at the values we need (vendor only
+set_voltage's them to their nominal 1.8/2.8V); VCN33 vosel checked at
+implementation time.
+
+**Firmware extracted 2026-07-14** from the device's Android system
+partition (p27, mounted ro over SSH on #225) to `docs/firmware-consys/`:
+- `ROMv3_patch_1_0_hdr.bin` 211908 B sha256 `d858642...ff05c57a8`
+- `ROMv3_patch_1_1_hdr.bin` 46472 B sha256 `8982bba...105399784`
+- `WIFI_RAM_CODE_6797` 451904 B sha256 `c28c50e...a88d840a6`
+- `WMT_SOC.cfg` 80 B (`coex_wmt_ant_mode=1`, `wmt_gps_lna_*=0`,
+  `co_clock_flag=0`)
+- `wmt_launcher` (33296 B) + `wmt_loader` (11064 B) from
+  `/system/vendor/bin` — Android bionic binaries, reference only.
+No `wifi_fw.cfg` exists on this device. Full hashes:
+`shasum -a 256 docs/firmware-consys/*`.
+
+**wifi@180f0000 node (vendor mt6797.dtsi:3768):** IRQ SPI 283 level-low,
+clock `<&infrasys INFRA_AP_DMA>` `"wifi-dma"` — relevant at the gen2-port
+stage, not for G2a/G2b.
+
 ---
 
 # Battery & Charging Research (2026-07-12, for Phase 7 — queued AFTER keyboard completion)
@@ -513,3 +610,126 @@ plumbed); the mainline driver must not leave the 40s watchdog armed
 still unknown who drives it; may be unnecessary if we use
 `role-switch-default-mode="host"` or wire the FUSB301A driver as the
 role-switch source.
+
+## Golden-reference extra harvest (vendor Kali 3.18, WiFi up) — 2026-07-15
+
+Opportunistic capture while the vendor stack was live for the B-21 W0b
+CONSYS harvest (user suggestion). Raw files:
+`logs/2026-07-15-243-goldharvest-extra/` (u2phy dump, i2c device map,
+input devices, /proc/interrupts, gpio, pinmux-pins, regulator summary,
+USB/touch dmesg grep). Highlights:
+
+### USB (B-19/B-20 reference)
+- **U2 PHY u2port0 golden gadget-mode: U2PHYDTM0 (0x11290868) =
+  0x56BE00D4, U2PHYDTM1 (0x1129086C) = 0x00053E1A** — the vendor's
+  BC1.2-driven session-valid state while enumerated. Compare with our
+  phy/0001 forced value (0x3E2E pattern) — full 128-byte block dump in
+  `usb-u2phy-u2port0.txt` for any future PHY tuning.
+- AP UART/USB mux 0x10005600 = 0x80 (USB mode) — same value we see.
+
+### Full I2C device inventory (vendor bus numbering)
+```
+i2c0: 0x25 fusb301a (right port CC), 0x31 speaker_amp, 0x53 rt9466(*),
+      0x63 strobe_main, 0x6b sw_charger (BQ25896), 0x70 buck_boost
+i2c1: 0x25 fusb301 (LEFT port CC), 0x30 msensor_mmc3530, 0x3e lcd_bias
+      (TPS65132), 0x48 alsps, 0x5f humidity, 0x68/0x69 bmi160 acc/gyro,
+      0x6a/0x6b gsensor/gyro (alt), 0x77 barometer
+i2c2: 0x2d camera_main, 0x72 camera_main_af
+i2c3: 0x0c camera_sub_af, 0x2c aw9120_led, 0x36 camera_sub,
+      0x39 sii9022_hdmi, 0x50 siiedid
+i2c4: 0x53 solomon_touch (TOUCHSCREEN), 0x62 cap_touch
+i2c5: 0x28 nfc, 0x5b aw9523_key (keyboard GPIO expander)
+i2c6: 0x68 vproc_buck   i2c7: 0x1c rt5735-regulator, 0x60 vgpu_buck
+i2c8: 0x36 camera_main_hw
+```
+(*) rt9466@0-0053 is REGISTERED by the vendor kernel but our live scans
+found no chip at 0x53 — vendor registers both charger candidates and
+lets probe decide; the real charger is sw_charger/BQ25896 at 0x6b.
+NOTE vendor bus numbers differ from our DTS numbering (our aw9523b is
+"i2c-3" in our numbering = vendor i2c5).
+
+### Touchscreen (Phase 9)
+- Controller: **solomon_touch, vendor i2c4 addr 0x53** (Solomon — pairs
+  with the SSD2092 panel), plus a cap_touch node at 0x62. Input device
+  "mtk-tpd" + raw node under `4-0053`. Probe details in
+  `dmesg-usb-touch.txt`, IRQ/EINT in `interrupts.txt`.
+
+### Misc
+- HDMI: sii9022 at vendor i2c3 0x39 with EDID EEPROM at 0x50.
+- Keyboard LED controller: aw9120 at vendor i2c3 0x2c.
+- Sensors (Phase 9): BMI160 acc+gyro, MMC3530 mag, ALSPS, humidity,
+  barometer — all vendor i2c1.
+- `/sys/class/udc` = musb-hdrc (vendor gadget on right port musb).
+- Vendor regulator debugfs was empty (78 bytes) — MTK legacy PMIC
+  framework, not the regulator core; VCN rail states not visible there.
+
+### Right-port USB host — vendor architecture (2026-07-15, live on vendor Kali)
+
+**The right port is the Gemini's only working host port on the vendor
+stack, and it is served by a SECOND USB controller, not xhci/ssusb:**
+`usb1@11200000` (MUSB "FSH" dual-role, banner `MUSBFSH HDRC host driver`,
+IRQ GIC 105) with its own PHY SIF at `usb1p_sif@11210000`. Verified live:
+SD-reader (`349c:0418`) enumerated at **480 Mbps** on bus 1 (musbfsh),
+`sda1` auto-mounted (`/media/root/SDCARD`, FAT). Log:
+`logs/2026-07-15-245-vendor-rightport-host-enum.log`.
+
+**Left port host mode is BROKEN even on the vendor kernel:** on ID/CC
+attach, `otg_state`→1 and xhci registers (buses 2+3), but the sequence
+aborts at `Cannot find usb pinctrl drvvbus_high` (missing pinctrl state =
+GPIO107 driver) and — decisively — **U2PHYDTM1 stays 0x00053E2E**, the
+forced *device*-session pattern (B-20's value), so xhci can never see a
+connect. VBUS chr-det fired once GPIO107 was forced high manually
+(`[upmu_is_chr_det] Charger exist but USB is host`) but the charger ADC
+read 0 and no enumeration followed. So there is no vendor golden
+reference for left-port host mode; the vendor product evidently only
+ever supported host on the right port via musbfsh.
+
+**B-19 consequence / new option:** mainline v6.6 has a MediaTek MUSB
+glue (`drivers/usb/musb/mediatek.c`, mt8516). Enabling right-port host
+via musb@11200000 may be far easier than the left-port ssusb/xhci path,
+and leaves the left port free for gadget SSH/serial. Right-port CC is
+the i2c0 fusb301a@25. Vendor DT nodes to harvest timing/clock details
+from: `usb1@11200000`, `usb1p_sif@11210000` in
+`docs/vendor-dtb/gemini_kali_boot.dts`.
+
+**Vendor kernel crash rule (reconfirmed):** reading
+`/sys/devices/platform/bq25890-user/bq25890_access` rebooted the device
+— never touch vendor `*_access` sysfs nodes (see also pmic_access).
+
+**Right-port live results (same session):** SD reader `349c:0418` →
+sda1 FAT mounted; then the USB ethernet adapter — **Realtek RTL8156**
+(`0bda:8156`) — enumerated on musbfsh, bound by `cdc_ncm` (its
+fallback ECM/NCM interface; the 3.18 kernel has no r8152/8156 driver),
+link up 100 Mbit, DHCP lease 192.168.100.138/24. So the "dark LEDs"
+earlier were purely the left-port no-VBUS/no-connect issue. For our
+6.6 kernel the same dongle would use the mainline `r8152` driver (real
+2.5GbE mode) or cdc_ncm. Evidence appended to
+`logs/2026-07-15-245-vendor-rightport-host-enum.log`.
+
+### Touchscreen golden harvest (vendor Kali 3.18, live) — 2026-07-15
+
+Raw log: `logs/2026-07-15-246-vendor-touch-harvest.log`.
+
+- **IC/firmware ident (driver `version` sysfs):** IC = SSD **2092** (same
+  TDDI chip as the display), panel AUO "599", resolution **1080 x 2160**,
+  sense matrix 32 x 18, **10-point** touch, Display Version 0x16,
+  vendor driver `ssd20xx` v1.10.
+- **Attachment:** vendor i2c4, addr **0x53** (`solomon_touch`); second
+  node `cap_touch@0x62` exists but has NO driver bound — ignore it.
+  Driver sysfs dir: esdtime/gesture/mptest/ssdtouch/testing/touchmode/
+  version + `/proc/AEON_TPD`, `/proc/AEON_TP_FW`.
+- **Input path:** events are delivered via the **virtual `mtk-tpd`
+  input device** (tpd framework), not the `4-0053/input/input9` node.
+- **Protocol (live trace, taps + swipes):** MT **type A** style frames —
+  per contact: ABS_MT_TOUCH_MAJOR(48)=1, ABS_MT_POSITION_X(53),
+  ABS_MT_POSITION_Y(54), ABS_MT_TRACKING_ID(57)=0, SYN_MT_REPORT;
+  BTN_TOUCH(330) 1/0 at contact start/end. No ABS_MT_SLOT seen.
+  Observed X values up to ~1862 with Y ~600s — X runs along the LONG
+  (2160) axis in the vendor's portrait frame; remap needed for our
+  landscape fbcon orientation.
+- **Porting notes:** vendor source = `ssd20xx` driver under the 3.18
+  reference tree (drivers/input/touchscreen/mediatek/ or similar) — the
+  I2C protocol authority. IRQ is an EINT (B-11 gap applies); check if
+  polled operation is viable like the keyboard, else wait for Stage B
+  EINT support. A mainline `solomon,ssd20xx` driver does not exist in
+  v6.6 — this will be a vendor port or new driver (Phase 9).

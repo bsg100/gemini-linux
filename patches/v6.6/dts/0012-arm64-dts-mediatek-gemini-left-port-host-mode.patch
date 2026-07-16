@@ -169,13 +169,13 @@ index 39239e270..b12b51a91 100644
 +			 * is deliberately ABSENT in this host-mode build:
 +			 * forcing IDDIG=1/B-session-valid pins the PHY to
 +			 * device role and would fight mtu3's host switch.
-+			 * Side effect: the forced state also kept the pads
-+			 * in USB mode on every boot, killing the serial
-+			 * console (blockers.md B-20 side-finding) — serial
-+			 * follows the normal B-15 mux behaviour again in
-+			 * this build. Gadget builds re-add the property.
++			 * Instead force the HOST role (phy/0001): mtu3 never
++			 * calls phy_set_mode(), so without this DTM1=0 leaves
++			 * the MAC in device role and the PHY analog suspended
++			 * (boot.md build #231 defects 3+4, devmem-verified).
  			 */
 -			mediatek,force-b-session-valid;
++			mediatek,force-usb-host;
  			status = "okay";
  		};
  	};

@@ -1,0 +1,114 @@
+diff --git a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+index 9b911e3b3..1c2f3a4b5 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+@@ -1229,3 +1229,109 @@
+ 		memory-region = <&consys_mem>;
+ 	};
+ };
++
++/*
++ * --- Right-hand USB-C port: MUSB host (B-19 right-port workstream) ---
++ *
++ * The right port is driven by a SEPARATE legacy controller, not the
++ * mtu3/xhci stack on the left port: vendor `usb1@11200000`
++ * (`mediatek,mt6797-usb11`, vendor driver misc/mediatek/usb11
++ * "musbfsh" — a host-only MUSB instance). Mainline's mtk-musb glue
++ * (drivers/usb/musb/mediatek.c, MT2701/MT8516) drives the same IP;
++ * only the "mcu"/"univpll" clocks don't exist on MT6797
++ * (patches/v6.6/usb/0002 makes them optional). Vendor DTB: reg
++ * 0x11200000 + PHY SIF 0x11210000, IRQ SPI 73 level-low, clocks
++ * infra_icusb (+ ssusb ref).
++ *
++ * PHY: the usb11 PHY register bank (SIF+0x800) matches the tphy-v1 U2
++ * layout byte-for-byte (vendor musbfsh_mt65xx.c pokes 0x6C bit1 =
++ * RG_IDDIG / 0x6D bit1 = force_iddig = mainline U3P_U2PHYDTM1
++ * BIT(1)/BIT(9)), so it is a second generic-tphy-v1 instance, DTS
++ * only. `mediatek,force-usb-host` (phy/0001) applies unchanged: MUSB
++ * host role wants IDDIG=0 forced just like the vendor driver does.
++ *
++ * VBUS: proven live 2026-07-15 with zero kernel changes (boot.md):
++ * GPIO94 (usb1_drvvbus) + GPIO72 (SW7226 load switch) high = adapter
++ * powers up, fully independent of the BQ25896 boost — so right-port
++ * host coexists with left-port charging (the vendor behaviour).
++ * GPIO70/71 are the OTG/HDMI lane mux (vendor fusb302/usb_typec.c
++ * fusb300_eint_work): USB-OTG position = sw_en(70) HIGH + sw_sel(71)
++ * LOW (70 goes low only for HDMI alt-mode). All four are static
++ * gpio-hogs for bring-up; NOTE this makes the right port host-only —
++ * do not plug a charger into it while these hogs are active.
++ */
++/ {
++	usb1phy: t-phy@11210000 {
++		compatible = "mediatek,generic-tphy-v1";
++		reg = <0 0x11210000 0 0x800>;
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++		status = "okay";
++
++		u2port1: usb-phy@11210800 {
++			reg = <0 0x11210800 0 0x100>;
++			clocks = <&clk26m>;
++			clock-names = "ref";
++			#phy-cells = <1>;
++			mediatek,force-usb-host;
++			status = "okay";
++		};
++	};
++
++	usb1: usb@11200000 {
++		/*
++		 * mt6797-musb (usb/0002) selects the musbfsh hardware config:
++		 * 6 EPs, non-multipoint, EP1-5 512B single-buffered FIFOs
++		 * (vendor musbfsh_config_mt65xx). The generic mtk-musb config
++		 * (8 EP multipoint) enumerates but bulk never flows (TX stuck
++		 * TXPKTRDY csr 2003, ep2 RX three-strikes — B-22).
++		 */
++		compatible = "mediatek,mt6797-musb";
++		reg = <0 0x11200000 0 0x1000>;
++		interrupts = <GIC_SPI 73 IRQ_TYPE_LEVEL_LOW>;
++		interrupt-names = "mc";
++		phys = <&u2port1 PHY_TYPE_USB2>;
++		clocks = <&infrasys CLK_INFRA_ICUSB>;
++		clock-names = "main";
++		dr_mode = "host";
++		/*
++		 * High-speed bulk through the SW7226/FUSB301 mux chain fails
++		 * (three-strikes RX errors + babble, builds #249-#251);
++		 * full-speed keeps the link inside what the pad chain
++		 * carries. 12 Mbps is SSH-grade, not a file-transfer port.
++		 */
++		maximum-speed = "full-speed";
++		status = "okay";
++	};
++};
++
++&pio {
++	usb1_drvvbus_hog: usb1-drvvbus-hog {
++		gpio-hog;
++		gpios = <94 GPIO_ACTIVE_HIGH>;
++		output-high;
++		line-name = "usb1-drvvbus";
++	};
++
++	sw7226_en_hog: sw7226-en-hog {
++		gpio-hog;
++		gpios = <72 GPIO_ACTIVE_HIGH>;
++		output-high;
++		line-name = "sw7226-en";
++	};
++
++	fusb301a_sw_en_hog: fusb301a-sw-en-hog {
++		gpio-hog;
++		gpios = <70 GPIO_ACTIVE_HIGH>;
++		output-high;
++		line-name = "fusb301a-sw-en";
++	};
++
++	fusb301a_sw_sel_hog: fusb301a-sw-sel-hog {
++		gpio-hog;
++		gpios = <71 GPIO_ACTIVE_HIGH>;
++		output-low;
++		line-name = "fusb301a-sw-sel";
++	};
++};

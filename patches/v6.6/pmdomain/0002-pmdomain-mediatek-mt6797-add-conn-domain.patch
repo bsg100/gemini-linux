@@ -1,0 +1,89 @@
+diff --git a/drivers/pmdomain/mediatek/mtk-scpsys.c b/drivers/pmdomain/mediatek/mtk-scpsys.c
+index d7b686a0d..e8cb91069 100644
+--- a/drivers/pmdomain/mediatek/mtk-scpsys.c
++++ b/drivers/pmdomain/mediatek/mtk-scpsys.c
+@@ -25,6 +25,7 @@
+ 
+ #define MTK_SCPD_ACTIVE_WAKEUP		BIT(0)
+ #define MTK_SCPD_FWAIT_SRAM		BIT(1)
++#define MTK_SCPD_KEEP_DEFAULT_OFF	BIT(2)
+ #define MTK_SCPD_CAPS(_scpd, _x)	((_scpd)->data->caps & (_x))
+ 
+ #define SPM_VDE_PWR_CON			0x0210
+@@ -551,6 +552,18 @@ static void mtk_register_power_domains(struct platform_device *pdev,
+ 		if (!scpd->data)
+ 			continue;
+ 
++		/*
++		 * Domains whose power-on has external preconditions the
++		 * bootloader has not met (e.g. CONN needs the PMIC VCN18
++		 * rail enabled first) must not be blindly powered here;
++		 * register them off and let their consumer power them on
++		 * once the preconditions hold.
++		 */
++		if (MTK_SCPD_CAPS(scpd, MTK_SCPD_KEEP_DEFAULT_OFF)) {
++			pm_genpd_init(genpd, NULL, true);
++			continue;
++		}
++
+ 		/*
+ 		 * Initially turn on all domains to make the domains usable
+ 		 * with !CONFIG_PM and to get the hardware in sync with the
+@@ -837,6 +850,46 @@ static const struct scp_domain_data scp_domain_data_mt6797[] = {
+ 		.sram_pdn_ack_bits = GENMASK(12, 12),
+ 		.clk_id = {CLK_NONE},
+ 	},
++	/*
++	 * CONN (CONSYS WiFi/BT/GPS block). Register layout from the vendor
++	 * 3.18 spm_mtcmos_ctrl_connsys() EXCEPT ctl_offs: the vendor
++	 * mt_spm.h SPM_CONN_PWR_CON define (SPM+0x280) is stale for this
++	 * silicon -- 0x280 reads 0 and rejects writes on hardware, while
++	 * SPM+0x32C idles at 0x112 (ISO|CLK_DIS|SRAM_PDN, the off pattern)
++	 * and running the full on-sequence there raises PWR_STATUS bit 1
++	 * and yields the CONSYS chip-ID 0x0279 readback (proven live over
++	 * SSH, boot.md 2026-07-14 build #234 session). 0x32C also matches
++	 * the vendor consys_hw.c non-API fallback comments. Status BIT(1) in
++	 * both PWR_STATUS regs, SRAM_PDN untouched, TOPAXI bus
++	 * protection bits 17|18: three different CONN masks exist in the
++	 * vendor tree and only clk-mt6797-pg.c's (the file actually compiled
++	 * into the runtime power path, and the one whose CONN_PWR_CON 0x032c
++	 * carries a "correct" comment) is real -- mt_spm_mtcmos.c's 2|8 and
++	 * mtk_wcn_consys_hw.h's 18|19 are both stale. Proven live (build
++	 * #239 session): with 2|8 used here, TOPAXI_PROT_STA1 bit 18 stays
++	 * asserted after CONN powers on and every BTIF byte toward CONSYS
++	 * stalls in the shifter (LSR TEMT stuck low). sram_pdn_bits must be
++	 * 0, not BIT(8): the vendor runtime path (clk-mt6797-pg.c
++	 * spm_mtcmos_ctrl_conn) never touches the SRAM_PDN field, and the
++	 * working vendor stack runs WiFi with CONN_PWR_CON = 0x10D -- bit 8
++	 * still SET (golden harvest, boot.md 2026-07-15 Stage W0b). Clearing
++	 * it (as the generic scpsys sequence does when sram_pdn_bits is
++	 * populated) is a divergence from every known-good boot. The vendor
++	 * sequence requires the PMIC VCN18 rail up before the MTCMOS, so the
++	 * domain must stay off until a consumer that has enabled VCN18 takes
++	 * it — hence MTK_SCPD_KEEP_DEFAULT_OFF instead of the driver's usual
++	 * power-on-everything-at-probe behavior.
++	 */
++	[MT6797_POWER_DOMAIN_CONN] = {
++		.name = "conn",
++		.sta_mask = BIT(1),
++		.ctl_offs = 0x32C,
++		.sram_pdn_bits = 0,
++		.sram_pdn_ack_bits = 0,
++		.clk_id = {CLK_NONE},
++		.bus_prot_mask = BIT(17) | BIT(18),
++		.caps = MTK_SCPD_KEEP_DEFAULT_OFF,
++	},
+ };
+ 
+ #define SPM_PWR_STATUS_MT6797		0x0180
+diff --git a/include/dt-bindings/power/mt6797-power.h b/include/dt-bindings/power/mt6797-power.h
+index bd451d860..3ab973800 100644
+--- a/include/dt-bindings/power/mt6797-power.h
++++ b/include/dt-bindings/power/mt6797-power.h
+@@ -19,5 +19,6 @@
+ #define MT6797_POWER_DOMAIN_MFG_CORE2		9
+ #define MT6797_POWER_DOMAIN_MFG_CORE3		10
+ #define MT6797_POWER_DOMAIN_MJC		11
++#define MT6797_POWER_DOMAIN_CONN		12
+ 
+ #endif /* _DT_BINDINGS_POWER_MT6797_POWER_H */

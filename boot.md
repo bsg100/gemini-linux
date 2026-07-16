@@ -6599,3 +6599,1070 @@ mainline driver; LK-inherited state is unverified in host role).
 Vendor-source finding for the eventual fix: `usb_phy_recover()`
 (mu3phy/mt6797/mtk-phy-asic.c) is the canonical host-side U2 PHY bring-up
 (clear all DTM0 forces, BC11 off, VBUSCMP on, + PMIC VUSB33/VA10 on).
+
+## 2026-07-14 — BUILD #233: CONSYS spike Gate G2a (B-19 PARKED, WiFi pivots to internal CONSYS path)
+
+**Decision (user):** B-19 (left-port USB host) is parked after build #231
+exhausted the GPIO/mux/PHY-forcing candidates without a connect event.
+WiFi is now pursued via the internal MT6797 CONSYS block (plan.md Phase 8
+Stage 2, promoted from "feasibility spike only" to "make WiFi work if the
+gates pass") — working SSH-over-WiFi would give a debug channel
+independent of the left port, making B-19 easier to attack later.
+
+**Provenance:** `logs/2026-07-14-233-consys-spike-g2a/`, sha256
+`7e85ce0359548eca8299bc05a44d1bb78650db082c41eaaf3dc5fe505118ad93`,
+banner `#233`. DTB spot-check: `consys@18070000` +
+`consys-reserve-memory` present.
+
+**Stage W0 groundwork (same day, no flash — see research.md "CONSYS
+Stage W0 harvest"):** live devmem on #225 proved LK leaves CONSYS fully
+cold (CONN_PWR_CON=0x0, PWR_STATUS bit1 clear, bus-prot clear); firmware
+blobs (ROMv3 patches, WIFI_RAM_CODE_6797, WMT_SOC.cfg) + wmt_launcher/
+wmt_loader pulled from the device's Android p27 into
+`docs/firmware-consys/` with sha256s; full vendor power-on sequence
+source-harvested — headline corrections: SPM_CONN_PWR_CON is **0x280**
+(plan.md's 0x32C was wrong), the "raw poke 0x10006280 bit4" is just
+PWR_CLK_DIS inside the standard MTCMOS sequence, and **no clk-mt6797
+change is needed** (vendor "conn" clock = the power domain itself;
+"bus" gate compiled out on mt6797).
+
+**What's in the build (all new, B-19 host overlay retired):**
+- `patches/v6.6/pmdomain/0002`: CONN domain in mtk-scpsys mt6797 table
+  (ctl 0x280, sta BIT(1), sram_pdn BIT(8) no-ack, TOPAXI prot bits 2|8 =
+  MT2701 defines) + new `MTK_SCPD_KEEP_DEFAULT_OFF` cap so scpsys does
+  NOT blind-power CONN at probe (vendor requires VCN18 first) +
+  `MT6797_POWER_DOMAIN_CONN` dt-binding.
+- `patches/v6.6/regulator/0002`: minimal MT6351 regulator driver — VCN
+  rails only (vcn18/vcn28/vcn33_bt/vcn33_wifi; register addrs from
+  vendor upmu_hw.h), binds the pwrap "mediatek,mt6351" child, parent
+  regmap, mt6380 pattern. First Linux-side PMIC access in this project.
+- `patches/v6.6/soc/0003`: `mtk-consys-spike.c` throwaway probe driver —
+  vendor power-on order (VCN18 → 240µs → VCN28 → CONN2AP sleep mask →
+  AP_RGU key'd bit12 → SPM PWRON_CONFG_EN 0x0b160001 → CONN domain via
+  runtime PM → 30µs → poll chip-ID 0x18070008). Every step dev_info'd
+  before execution; full rollback on failure. **Gate G2a pass = dmesg
+  line `GATE G2A PASS - CONSYS chip ID 0x279`.**
+- `patches/v6.6/dts/0013`: pwrap@1000d000 (mt6797-pwrap, IRQ SPI 178,
+  clocks pmicspi_sel + infra_pmic_ap) + mt6351 child with the 4 VCN
+  regulators + consys@18070000 node (power-domain CONN, vcn18/vcn28
+  supplies) + dynamic 2MB no-map consys EMI reserved-memory.
+- `configs/gemini-consys.config` (PWRAP + MT6351 + spike =y).
+- **Parked:** `patches/v6.6/dts/0012` → `.disabled` (host-mode overlay);
+  `configs/gemini-usb.config` restored to the gadget/g_ether version
+  (5a5d553). usb/0001 + power/0001 remain but are config-inert.
+  Config verified: `USB_MTU3_GADGET=y`, `USB_ETH=y`, no host/dual-role.
+
+**Expected on hardware:** boot indistinguishable from #225 (display,
+keyboard, gadget SSH) + pwrap/mt6351 probe lines + the consys-spike
+step-by-step dmesg ending in G2A PASS/FAIL. Failure modes are
+step-labelled; a hang identifies the stalled step by the last logged
+line. Verification is possible entirely over SSH (`dmesg | grep
+consys-spike`) — FTDI not required.
+
+**Flash:**
+```
+~/gemini-build/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 /Volumes/extdata/github/gemini_linux/logs/2026-07-14-233-consys-spike-g2a/new_kali_boot.img
+```
+
+## 2026-07-14 — BUILD #233 flashed: boots clean, gadget SSH restored, but pwrap probe fails -ENOENT → spike deferred; BUILD #234 = one-line pwrap fix
+
+**#233 on hardware (verified over SSH, banner #233):** boot clean, gadget
+SSH working again (B-19 park confirmed good), consys reserved-memory
+allocated at 0x42600000. But `mt-pmic-pwrap: probe of 1000d000.pwrap
+failed with error -2` and `platform 18070000.consys: deferred probe
+pending` — the spike never ran.
+
+**Root cause (source-confirmed):** mainline `pwrap_mt6797` carries
+`PWRAP_CAP_RESET`, making probe hard-require a `resets = <...>; 
+reset-names = "pwrap"` property — but MT6797 has NO mainline reset
+provider (clk-mt6797 registers no reset controller), so the property is
+unsatisfiable and `devm_reset_control_get()` returns -ENOENT. The reset
+is only used inside `pwrap_init()`, which is skipped when LK has already
+initialised the wrapper (INIT_DONE2), so it is safe to make optional.
+
+**Fix:** `patches/v6.6/soc/0004-soc-mediatek-pwrap-optional-reset.patch`
+— `devm_reset_control_get()` → `devm_reset_control_get_optional()`
+(NULL rstc; `reset_control_reset(NULL)` is a no-op even if init runs).
+
+**Build #234:** identical to #233 + soc/0004. Provenance
+`logs/2026-07-14-234-consys-spike-g2a-pwrap-fix/`, banner `#234`, DTB
+consys spot-check OK. Expected: pwrap probes, mt6351 VCN regulators
+register, consys-spike runs → G2A PASS/FAIL dmesg line. Verify over SSH:
+`dmesg | grep -iE "consys|mt6351|pwrap"`.
+
+**Flash:**
+```
+~/gemini-build/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 /Volumes/extdata/github/gemini_linux/logs/2026-07-14-234-consys-spike-g2a-pwrap-fix/new_kali_boot.img
+```
+
+## 2026-07-14 — GATE G2A PASSED LIVE (manual, build #234): CONSYS chip-ID 0x0279; root cause of scpsys failure = stale vendor CONN_PWR_CON offset; BUILD #236 carries the fix
+
+**#234 on hardware (banner #234, SSH):** pwrap + MT6351 VCN regulators
+probe cleanly (soc/0004 fix confirmed), but `mtk-scpsys ... Failed to
+power on domain conn` ×N and the consys spike stayed deferred (genpd
+attach powers the domain before the driver's probe runs, so the spike's
+own logs never appeared).
+
+**Live root-cause session (all devmem over SSH, no flash):**
+- `PWRON_CONFG_EN` unlock made no difference; `CONN_PWR_CON@0x280` reads
+  0x0 and **silently rejects writes**, while MJC's PWR_CON at 0x310
+  accepts them → not global SPM protection, wrong offset.
+- SPM block scan found **0x1000632C = 0x112** (ISO|CLK_DIS|SRAM_PDN —
+  the canonical powered-off PWR_CON pattern). The vendor mt_spm.h 0x280
+  define is stale for this silicon; consys_hw.c's fallback comments
+  ("0x1000632c [3]") and plan.md's original claim were right.
+- Manual vendor on-sequence at 0x32C: 0x116 → 0x11E → **PWR_STATUS
+  0x…5C→5E / 0x…4C→4E (bit1 ack)** → 0x10E → 0x10C → 0x10D → 0x00D.
+- `devmem 0x18070008` → **0x00000279. GATE G2A PASSED.** Notably with
+  VCN18/VCN28 still off and no sleep-mask/RGU/PWRON pokes — the
+  MTCMOS+chip-ID path needs none of them.
+
+**Build #236** = #234 with `pmdomain/0002` ctl_offs corrected to 0x32C
+(comment documents the live proof). Provenance
+`logs/2026-07-14-236-consys-g2a-ctloffs-32c/`, sha256
+`980b6d0f6cce5d102d6322c8806f1b62994947b57603123adc6a44414665f454`,
+banner `#236`. Expected: scpsys powers CONN at attach, spike probe runs
+its full sequence and logs `GATE G2A PASS - CONSYS chip ID 0x279`;
+display/keyboard/gadget-SSH unchanged. MJC PWR_CON was restored to its
+boot value (0x1F12) after the write-stick test; device rebooted before
+flashing anyway.
+
+**Flash:**
+```
+~/gemini-build/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 /Volumes/extdata/github/gemini_linux/logs/2026-07-14-236-consys-g2a-ctloffs-32c/new_kali_boot.img
+```
+
+## 2026-07-14 — BUILD #236 VERIFIED: GATE G2A PASSED AT DRIVER LEVEL — Stage W1 COMPLETE
+
+Banner #236 confirmed over SSH. The consys-spike probe ran the full
+sequence at 0.578-0.588s (11ms): VCN18 → VCN28 → sleep mask → RGU →
+PWRON_CONFG_EN → CONN domain via scpsys (ctl_offs 0x32C fix working —
+no "Failed to power on domain conn") → chip-ID **0x279 on the first
+read** → `*** GATE G2A PASS - CONSYS chip ID 0x279 ***`.
+
+Regression check: CONN genpd `on`, systemd `running`, mediatekdrmfb
+present, gadget SSH working (this session), keyboard unchanged; only
+pre-existing warnings in the log (aw9523b group-87 pinconf, gce-client,
+EINT, regulatory.db). **Stage W1 complete; W2 (MCU firmware handshake,
+Gate G2b) is next.**
+
+## 2026-07-14 — BUILD #237: Stage W2 spike — MCU release + first WMT handshake (Gate G2b)
+
+Provenance: `logs/2026-07-14-237-consys-w2-g2b-mcu-handshake/`, boot.img
+sha256 `c646178ae209591c07408edaaacd3541c12352d327ae331b8ed7205ba09bc1b5`,
+banner `#237`.
+
+What changed (all desk-sourced from the vendor 3.18 tree this session):
+
+- **soc/0003 extended** (`mtk-consys-spike.c`): after the G2a chip-ID
+  pass + ACR MBIST bit, the driver now runs Stage W2: (1) programs the
+  CONSYS→AP **EMI remap** — `TOPCKGEN+0x1340 |= ((emi_base &
+  0xFFF00000) >> 20) | BIT(12)` — and zeroes the 343K fw ctrl window at
+  `emi_base + 512K` (vendor `mtk_wcn_consys_hw.c` order: before MCU
+  release); (2) enables `CLK_INFRA_BTIF` (gate exists in mainline
+  clk-mt6797, ICG0 bit 31) and initialises the **BTIF** FIFO at
+  0x1100c000 in pure PIO-polling mode (FAKELCR=0, new-handshake mode,
+  FIFO clear, TRI_LVL 8/4, DMA off, IER=0 — register map from vendor
+  `btif_priv.h`); (3) **releases the CONSYS MCU** by clearing WDT
+  swsysrst BIT(12) with key `0x88<<24` at 0x10007018 — builds ≤#236
+  deliberately left the MCU held in reset; (4) drains + hex-dumps any
+  unsolicited ROM bytes, then sends **WMT_QUERY_STP** (`01 04 01 00
+  04`) wrapped in STP *mand-mode* framing (`80 40 05 00` hdr + payload
+  + `00 00` CRC; WMT task index 4 — vendor `stp_core.c`/`stp_exp.h`)
+  and scans 1s of RX for the ROM-default event payload `02 04 06 00 00
+  04` (vendor `wmt_ic_soc.c` `WMT_QUERY_STP_EVT_DEFAULT`).
+- **dts/0013 extended**: `clocks = <&infrasys CLK_INFRA_BTIF>;
+  clock-names = "btif";` on the consys node.
+- **Gate G2b criterion**: dmesg line `*** GATE G2B PASS - CONSYS MCU
+  ROM answers WMT over BTIF ***`. On failure the driver logs `GATE G2B
+  FAIL` with the errno plus full RX hex dumps and leaves
+  CONSYS/BTIF/EMI state up for devmem inspection over gadget SSH; the
+  probe still returns 0 so the rest of boot is unaffected.
+
+Key protocol discovery (desk): at ROM stage the chip's STP is NOT in
+full mode — the vendor sends its first init-table commands in mand
+mode (header + zero CRC, no retransmission), so the 3.5-KLOC STP core
+is not needed for the G2b gate. The full ROM-patch download
+(`WMT_PATCH_ADDRESS_CMD` opcode 0x08 + ≤1000-byte `WMT_PATCH_CMD`
+opcode 0x01 fragments over the same channel) is deferred until the
+query handshake is proven.
+
+Expected outcome: boot #237, check dmesg for the G2B PASS/FAIL line and
+the RX hex dumps. Either result advances W2 — a FAIL's hex dump tells
+us whether the ROM speaks at all (electrical/clock issue vs framing
+issue).
+
+## 2026-07-14 — BUILD #237 RESULT + BUILD #238: G2b EMI lookup fix
+
+**Build #237 booted and verified over gadget SSH** (banner `#237`,
+`logs/2026-07-14-237-consys-w2-g2b-mcu-handshake/`). Gate G2a still
+passes (chip-ID 0x279 at 0.58s). **Gate G2b failed at its very first
+step**, before any BTIF/MCU work:
+
+```
+mtk-consys-spike 18070000.consys: consys-spike: Gate G2b starting
+mtk-consys-spike 18070000.consys: consys-spike: memory-region unresolved (-22)
+```
+
+Root cause (code bug, not hardware): `consys_mem` is a **dynamic**
+reserved-memory node (`size`/`alignment`/`alloc-ranges`, no `reg`), so
+`of_address_to_resource()` on it returns -EINVAL — dynamic regions have
+no address in the DT; the kernel allocates one at early boot (this boot:
+`0x42600000..0x427fffff`, visible in the `OF: reserved mem` line). The
+correct API is `of_reserved_mem_lookup()`, which returns the
+kernel-chosen base from the reserved_mem table.
+
+**Build #238 (`consys-g2b-emi-lookup-fix`)** changes only that:
+`consys_emi_setup()` now uses `of_reserved_mem_lookup()` (+
+`linux/of_reserved_mem.h` include) and logs base + size. soc/0003
+regenerated (note to future self: the driver file is untracked in the
+kernel tree — `git add -N` it before `git diff` or the patch silently
+loses the whole driver, as almost happened this session).
+
+- Provenance: `logs/2026-07-14-238-consys-g2b-emi-lookup-fix/`
+- sha256: `1766aeb3f91011bb02599fee9e61a4434b2d61cacba63ef69a7597c2727ba16a`
+- Banner `#238` verified; dtb-grep `consys-reserve` OK.
+
+Expected: EMI remap programmed with the runtime base, then the MCU
+release + WMT_QUERY_STP handshake actually runs — first real G2b data.
+
+## 2026-07-14 — BUILD #238 RESULT (live-debug session) + BUILD #239: BTIF FIFO pulse + wakeup
+
+**Build #238 booted (banner verified).** EMI fix worked: remap word
+0x1426 programmed (base 0x42600000), ctrl window zeroed, BTIF up,
+MCU released — but **G2b FAIL (-110)**: WMT query TX went out, 0 RX
+bytes.
+
+**Live SSH debugging (the big result): the CONSYS MCU ROM IS RUNNING.**
+CONSYS_CPUPCR (0x18070160, MCU program counter, harvested from vendor
+`wmt_plat_read_cpupcr`) returns a different value on every read
+(0x458, 0x435A, 0x130B2 …) — power, clocks, EMI and the reset release
+are all correct. Gate G2b's remaining problem is purely the BTIF
+channel.
+
+Root cause found by re-reading vendor `hal_btif_hw_init`: the BTIF
+FIFOCTRL clear bits are **level-held, not self-clearing** — the vendor
+sets then explicitly clears each; build #237/#238 wrote
+`CLR_TX|CLR_RX` once and left them asserted, holding both FIFOs in
+reset. LSR evidence agrees: at first TX the FIFO drained (THRE=1) with
+the last byte stuck in the shifter (TEMT=0), and any ROM reply was
+discarded by the held RX clear. Attempts to un-wedge the block live
+(FIFOCTRL release, full re-init, old-handshake mode, BTIF_WAK pulse,
+bus-protect pokes) did not recover it — needs a clean boot.
+
+Also harvested: `hal_btif_send_wakeup_signal` — BTIF_WAK (+0x64) must
+be pulsed low >1/32kHz then high before TX (ap_wakeup_consys line);
+never done in #237/#238. Side-finding: vendor SPM CONN_PROT_MASK is
+bits 2|8 (mt_spm_mtcmos.c:1149) — same as MT2701, so our scpsys entry
+is correct; the 18|19 mask in mtk_wcn_consys_hw.h belongs to a
+compiled-out branch (CONSYS_PWR_ON_OFF_API_AVAILABLE=1).
+
+**Build #239 (`consys-g2b-btif-fifo-wakeup`)**, soc/0003 changes:
+1. FIFO clear bits pulsed (set RX, clear; set TX, clear) per vendor.
+2. `btif_wakeup_consys()` BTIF_WAK pulse before every WMT TX.
+3. One 500ms-delayed retry of the query on timeout.
+4. FAIL path now logs 3 CPUPCR samples + LSR/IIR (ROM-executing
+   evidence in the log itself).
+
+- Provenance: `logs/2026-07-14-239-consys-g2b-btif-fifo-wakeup/`
+- sha256: `d18973f8ebbfc21ef715cf0f9702577922b91c5cafaa98601895ab74e3ef4848`
+- Banner `#239` verified.
+
+Expected: RX FIFO now actually retains the ROM's reply — best shot yet
+at the G2B PASS line.
+
+## 2026-07-14 — BUILD #239 RESULT (live-debug) + BUILD #240: real CONN bus-protect mask (bits 17|18)
+
+**Build #239 booted (banner verified).** FIFO pulse + BTIF_WAK helped
+the evidence but not the outcome: first WMT TX drained fully, RX 0
+bytes; retry TX jammed (LSR TEMT stuck). FAIL-path diagnostics worked:
+CPUPCR samples in the log (0x55aa55d6/da/de) prove the ROM executing.
+
+**Root cause found (live SSH + vendor cross-check): wrong TOPAXI
+bus-protect mask on the CONN domain.** Three CONN_PROT_MASK values
+exist in the vendor tree:
+- `mt_spm_mtcmos.c`: bits 2|8 (what our scpsys entry copied, via the
+  MT2701 defines) — STALE, that file is not the runtime path;
+- `mtk_wcn_consys_hw.h`: bits 18|19 — STALE, compiled-out branch;
+- `clk-mt6797-pg.c` line 193: **bits 17|18** — the REAL one: this file
+  implements `clk_scp_conn_main` (the vendor's actual runtime CONN
+  power path, CONSYS_PWR_ON_OFF_API_AVAILABLE=1) and its CONN_PWR_CON
+  0x032c define carries a literal "correct" comment, independently
+  matching our live-proven 0x32C discovery.
+
+Live signature: INFRA_TOPAXI_PROTECTEN reads 0x104B8 = exactly
+MD1_PROT_MASK (modem off, expected), CONN bits 17|18 clear in EN, but
+**PROTECTSTA1 bit 18 stuck asserted** — the CONN slave-side protection
+was never released in-sequence, so every BTIF byte toward CONSYS
+stalls (LSR TEMT stuck low) and the ROM's BTIF is unreachable, while
+chip-ID/CPUPCR reads use a different path and work. Late manual
+17|18 pulses can't clear the stuck ack (wedged outstanding BTIF
+transaction); it must be released in the scpsys power-on sequence
+(vendor order: PWR_RST_B, then release protect) on a clean boot.
+
+**Build #240 (`consys-conn-busprot-17-18`)**: pmdomain/0002 CONN
+`.bus_prot_mask` changed from the MT2701 bits (2|8) to `BIT(17) |
+BIT(18)`, comment block updated with the three-mask provenance story.
+No other changes.
+
+- Provenance: `logs/2026-07-14-240-consys-conn-busprot-17-18/`
+- Banner `#240` verified.
+
+Expected: scpsys now releases the real CONN protection right after the
+domain powers on — first boot where the BTIF↔CONSYS path is actually
+open. If the ROM answers, G2B PASS.
+
+## 2026-07-14 — BUILD #240 RESULT: bus-protect fix verified (protection releases), but ROM still silent — G2B FAIL (-110); exhaustive live session points off-AP
+
+Log: SSH session on build #240 (banner verified). G2a PASS again (chip-ID
+0x279 @0.59s). G2b FAIL (-110), but the failure signature CHANGED —
+the bits 17|18 bus-protect fix is confirmed working:
+
+- `TOPAXI_PROTECTEN` 0x10001220 = 0x104B8 (MD1 bits only) and
+  `PROTECTSTA1` 0x10001228 **bit 18 now CLEAR** (was stuck set on #239).
+- Proof of open path: the FIRST 11-byte WMT_QUERY_STP frame TXed
+  completely (LSR drained; on #239 no frame ever drained). The retry
+  frame then wedged (LSR 0x20 → 0x00) and no RX byte ever arrived.
+
+Live-debug findings (all over SSH devmem):
+1. **The CONSYS MCU ROM runs but never services BTIF.** CPUPCR samples
+   alternate 0x55AA55xx (suspected idle/WFI marker pattern) with real ROM
+   addresses (0x428, 0x3538, 0x435A). Interpretation: the first frame's
+   bytes were swallowed by the CONSYS-side BTIF link FIFO (never drained
+   by the ROM); once full, all later TX stalls — matches every observed
+   LSR state.
+2. Re-asserting + releasing the MCU reset (0x10007018 swsysrst bit12) live
+   and re-querying 10ms after release: peer accepts nothing (its FIFO
+   still full; CPU reset does not clear the link FIFO).
+3. AP2CONN_OSC_EN (0x10001f00 bit9) wakeup pulse and BTIF_WAK pulses: no
+   effect.
+4. EMI ctrl window (0x42680000): still all zeros — the ROM writes nothing
+   there (so no evidence it even runs its normal boot path beyond the
+   idle loop).
+5. Host BTIF now matches vendor `hal_btif_hw_init` bit-for-bit (FAKELCR=0,
+   HANDSHAKE=1 new-handshake mode, TRI_LVL=0x48, DMA_EN=0x4, sleep off,
+   FIFOs pulse-cleared). Frame format verified correct against vendor
+   `stp_send_data_no_ps` mand-mode branch (hdr `80 40 05 00`, 2 zero
+   "CRC" bytes; note byte0 is FIXED 0x80 in mand mode — the seq<<3 retry
+   variants #239/#240 send are technically malformed, fix in driver).
+6. MCU config block healthy: HW_VER 0x8A00 (exact vendor table match for
+   MT6797 E1), FW_VER 0x8A00, chip-ID 0x279, ACR 0x340002 (MBIST bit18
+   already set — vendor step 14 satisfied), CONN_PWR_CON=0xD, PWR_STATUS
+   bit1 set, 0x10006280=0.
+7. PMIC clock-buffer check: MT6351 DCXO_CW00 (0x7000) reads 0x6b6d — 
+   XO_EXTBUF2/WCN enable bit5 IS set (vendor init would write 0x4DFD;
+   mode-field differs, bits 3-4 = 01 vs vendor 11 — the only AP-visible
+   delta left). Vendor also programs the pwrap DCXO_CONN bridge
+   (pwrap+0x190..0x19C + DCXO_ENABLE bit1) so hardware toggles CW00 bit5
+   on CONSYS 26M requests — we never program that bridge.
+
+Conclusion: every register the vendor 3.18 power-on sequence touches now
+matches, yet the ROM ignores BTIF. Remaining hypothesis space (DCXO
+mode/bridge, an invisible CONSYS-internal prerequisite, or "0x55AA55xx =
+wedged not idle") is NOT resolvable from source reading — this is
+exactly the Stage W0b golden-reference case: boot the vendor Kali 3.18
+stack with working WiFi and harvest the same registers (CPUPCR pattern
+when healthy-idle, CW00/DCXO regs, BTIF peer behavior, EMI ctrl window
+contents after ROM boot). Decision pending user (requires ~5.5GB
+linux.img reflash + restore).
+
+## 2026-07-15 — Stage W0b GOLDEN HARVEST COMPLETE (vendor Kali 3.18, WiFi working) + BUILD #244: three golden-reference fixes
+
+The user's suggested golden-reference harvest paid off decisively. Vendor
+Kali stack booted (boot2 = planet/kali_boot.img, linux = planet/linux.img),
+WiFi associated (wlan0, -52 dBm), and the full register set was harvested
+over SSH (kali/kali) with a python /dev/mem devmem (vendor kernel has
+CONFIG_STRICT_DEVMEM unset; the vendor /proc/driver/wmt_dbg interface also
+mapped: 0x17 ap-vaddr read, 0x1b cpupcr poll — pr_debug-gated, unused).
+
+Artifacts:
+- `logs/2026-07-15-242-w0b-kali-golden-wifi-on.txt` — full harvest, WiFi on
+- `logs/2026-07-15-243-w0b-kali-fresh-boot-dmesg.txt` — fresh-boot dmesg
+  with the complete WMT bring-up timeline
+- `logs/2026-07-15-243-w0b-kali-crash-capture.log` — serial boot capture
+
+Golden values vs our build #240 state (deltas marked ★):
+
+| Register | Golden (WiFi on) | Ours (#240) |
+|---|---|---|
+| CPUPCR 0x18070160 | 0x0009997A steady (occasional 0x7FD08/0x24A0) | 0x55AA55xx pattern ★ |
+| CONN_PWR_CON 0x1000632C | **0x10D — bit 8 (SRAM_PDN) SET** | 0xD (we clear bit 8) ★ |
+| AP2CONN_OSC_EN 0x10001f00 | 0x6D403A00 (bit 11 set) | 0x11403200 ★ (watch item) |
+| BTIF HANDSHAKE +0x6C | 0x3 | 0x1 ★ |
+| BTIF TRI_LVL +0x60 | 0x18 | 0x48 ★ |
+| BTIF DMA_EN/RTOCNT/WAT_TIME | 0x7 / 0x40 / 0x12 | PIO / default / default |
+| pwrap DCXO_CONN bridge 0x1000D18C-19C | ALL ZERO | n/a — clock-buffer theory dead |
+| MCU_CFG_ACR 0x18070110 | 0x340002 (0x334 transient) | 0x340002 same |
+| HW_VER/FW_VER/0x114/0x120 | identical to ours | — |
+| CONN2AP_SLEEP_MASK / EMI remap encoding | identical scheme (golden EMI base 0xBFA00000) | — |
+
+Timeline from the fresh-boot dmesg: power-on finishes 11.550s, btif_open
+11.551s, chip-id hwcheck 11.552s, first WMT query (init_table_1_2) succeeds
+~11.60s, both ROM patches downloaded by 11.94s (frag 47+211), STP ready
+12.86s, "co-clock disabled." So on working hardware the ROM answers the
+query ~50ms after reset release — our 263ms delay was never the issue, and
+0x55AA55xx CPUPCR is now proven ABNORMAL (wedged/bus artifact, not idle).
+
+Incident: the first harvest run crashed the vendor kernel (panic → WDT →
+Android-slot fallback) at its last two probes — the pmic_access poke or the
+EMI-window read at 0xBFA80000. Those reads are removed from future harvests.
+One reboot later Kali came back (a middle boot was actually the Android slot
+— serial log proved it — and one Kali boot stopped short of the UI at the
+getty; second attempt fully recovered, WiFi reconnected as .135).
+
+**BUILD #244** (`consys-g2b-golden-fixes`, sha256 `7d681d06...`, banner
+verified #244) applies every safe match-the-golden-reference change:
+1. pmdomain/0002: CONN `.sram_pdn_bits` GENMASK(8,8) → **0** — the top
+   suspect. Vendor never touches the SRAM_PDN field; golden runs WiFi with
+   bit 8 still set; the off-state reset value (0x112) also has it set. Our
+   generic scpsys sequence was clearing it — the single known divergence
+   in the power-on sequence itself.
+2. soc/0003: BTIF TRI_LVL 0x48→0x18, HANDSHAKE 0x1→0x3 (golden values).
+3. soc/0003: mand-mode frame byte0 fixed at 0x80 (vendor
+   stp_send_data_no_ps mand branch has no tx-seq field; our seq<<3
+   retries were malformed).
+Held in reserve (not in this build): 0x10001f00 bit 11 delta.
+
+Expected: CONN_PWR_CON reads 0x10D after power-on and the ROM answers
+WMT_QUERY_STP → G2B PASS. If still -110, next single variable =
+0x10001f00 bit 11.
+
+## 2026-07-15 — B-19 golden-reference attempt on vendor Kali 3.18: vendor left-port host mode is BROKEN TOO (no flash; live SSH session, ended by crash)
+
+Opportunistic host-mode test while the vendor stack was flashed for W0b.
+User plugged a USB memory stick (and earlier an ethernet dongle) into the
+LEFT port. Findings (all over kali@192.168.100.135 SSH, sshpass):
+
+1. **ID-pin/role-switch path works on the vendor kernel:** on attach,
+   `otg_state` switch → 1 and xhci registers (`xhci-hcd
+   11270000.usb3_xhci` — buses 2+3, incl. a USB 3.0 root hub). The
+   earlier dongle "3 lsusb entries" were ONLY these root hubs.
+2. **VBUS is never driven — vendor host mode fails at the same point ours
+   does.** dmesg: `xhci-hcd 11270000.usb3_xhci: Cannot find usb pinctrl
+   drvvbus_high` — this Halium DTS lacks the drvvbus pinctrl state (=
+   GPIO107 driver). No device ever enumerated; dongle/stick LEDs dark on
+   vendor kernel too. So the vendor Kali image is NOT a working host-mode
+   golden reference, and dark LEDs on our kernel were never evidence
+   against our VBUS chain.
+3. GPIO107 forced high live (`devmem 0x10005134 32 0x800`, DOUT verified
+   1 via mtgpio) — still no enumeration, consistent with the BQ25896
+   REG03 OTG bit not being set (charger reported idle: battery
+   `Not charging`, ac/usb online=0).
+4. Attempting to READ BQ25896 registers via the vendor
+   `/sys/devices/platform/bq25890-user/bq25890_access` node **rebooted
+   the device** — same class of failure as the pmic_access crash. RULE:
+   never touch any vendor `*_access` sysfs node on the 3.18 kernel,
+   read or write.
+
+Consequence for B-19: the vendor 3.18 Kali stack cannot demonstrate
+left-port host mode, so there is no golden register state to harvest
+there. Host mode must be proven on OUR kernel (build #231 patch set:
+FUSB301-i2c1 SOURCE + bq25890 usb-otg-vbus + GPIO107 hog + xhci), where
+Phase 0 already proved the full VBUS chain from userspace.
+
+## 2026-07-15 — Right-port host mode WORKS on vendor Kali: musbfsh (usb1@11200000), SD reader enumerated + mounted
+
+Follow-up to the left-port entry above (device rebooted after the
+bq25890_access read; Kali back at 192.168.100.137). User moved the SD
+reader to the RIGHT port: enumerated immediately — `349c:0418`, 480 Mbps,
+on **bus 1 = MUSBFSH HDRC** (`usb1@11200000`, IRQ GIC 105, PHY
+`usb1p_sif@11210000`), `sda1` FAT auto-mounted. Left-port PHY stuck at
+DTM1=0x00053E2E (forced device session) even in "host" state — the
+vendor host switch aborts at the missing `drvvbus_high` pinctrl.
+Evidence: `logs/2026-07-15-245-vendor-rightport-host-enum.log`; analysis
+in research.md "Right-port USB host — vendor architecture". B-19 gains a
+candidate easy path: mainline musb mediatek glue on usb1@11200000.
+
+## 2026-07-15 — BUILD #247 (consys-g2b-spike-kconfig-fix): #244 was a silent no-op — spike driver never built; Kconfig hunk restored
+
+Post-detour, the user restored the Debian rootfs and flashed build #244
+(G2b golden fixes). Verification over gadget SSH: banner `#244` correct,
+MT6351 VCN regulators registered — but **zero CONSYS/BTIF/spike output in
+dmesg**. Root cause: `CONFIG_MTK_CONSYS_SPIKE` was absent from #244's
+built config (not even as a comment). The `config MTK_CONSYS_SPIKE`
+Kconfig entry existed only as an uncommitted edit in the Mac kernel
+tree; when `patches/v6.6/soc/0003` was regenerated for the golden-fixes
+build, the Kconfig hunk was lost (and `mtk-consys-spike.c`, being an
+untracked new file, is invisible to plain `git diff HEAD`). In the VM's
+clean tree the symbol didn't exist, so `olddefconfig` silently dropped
+the fragment's `CONFIG_MTK_CONSYS_SPIKE=y` and the driver was never
+compiled. **Build #244 therefore tested nothing — its G2b outcome is
+void, and the golden fixes (scpsys sram_pdn_bits=0, golden BTIF config,
+mand-mode byte0=0x80) remain unexercised.**
+
+Fix: regenerated soc/0003 with all three files (Kconfig + Makefile +
+full mtk-consys-spike.c via `git diff --no-index /dev/null`). Verified
+in #247's provenance config: `CONFIG_MTK_CONSYS_SPIKE=y` present,
+`mtk_consys_spike_probe` in System.map. Lesson for patch regeneration:
+**new files and new Kconfig entries must be explicitly included —
+`git diff HEAD -- <file.c>` alone silently omits untracked files.**
+
+- Provenance: `logs/2026-07-15-247-consys-g2b-spike-kconfig-fix/`
+- sha256: `3810bd14a84ff8dc1b2563b04e40191d8403f3f482d8fd695416e01ad4a7d1a1`
+- Banner: `#247 SMP PREEMPT Wed Jul 15 06:11:07 UTC 2026`
+- Flash: `mtk w boot2 logs/2026-07-15-247-consys-g2b-spike-kconfig-fix/new_kali_boot.img`
+- Expected: dmesg `consys-spike: *** GATE G2B PASS ***` (or a FAIL line
+  naming the stalled step, state left up for devmem inspection).
+
+## 2026-07-15 — BUILD #247 live G2b debug: G2a PASS again, G2b FAIL (-110) — MCU ROM runs but never services BTIF; all harvested golden deltas eliminated live
+
+Flashed #247 (banner verified). Spike ran fully this time: **G2a PASS**
+(chip-ID 0x279 at 0.59s), then G2b fails at WMT_QUERY — 0 RX bytes, and
+the tell is on the TX side: **BTIF LSR sticks at 0x20** (THRE set, TEMT
+never) — one byte parked in the TX shifter forever. FIFO-clear (FCR
+0x06) restores LSR=0x60; the very next TX byte re-sticks at 0x20. A UART
+shifter drains regardless of the peer unless internally flow-gated, so
+the CONN-side BTIF peer is never accepting — consistent with the CONSYS
+MCU ROM crashing/parking early. CPUPCR samples mix real ROM PCs
+(0x19A0/0x41C/0x3540/0x4308/0x435A/0x130C0) with 0x55AA55xx
+(sleep/gated indicator); golden post-firmware CPUPCR is 0x0009997A.
+
+Live-eliminated variables (each written on the running system, MCU
+reset-cycled where relevant, no change to the stuck-TX symptom):
+1. `AP_RGU_SWSYSRST` bit16 cleared (golden 0x0; ours had 0x10000 since
+   boot).
+2. `MCU_CFG_ACR` 0x18070110 topped up to golden 0x03340002 (bits 24/25).
+3. `AP2CONN_OSC_EN` 0x10001f00 set to full golden 0x6D403A00.
+4. Vendor AFE/WBG analog table (0x180B6000, step 15 of
+   `mtk_wcn_consys_hw.c`, missing from the spike) written with MCU held
+   in reset, then released.
+5. BTIF HANDSHAKE=1 (vendor value; spike used 3) + manual WAK pulse
+   (0x64: 0→64µs→1) + FIFO clear.
+6. **EMI-MPU hypothesis tested and weakened:** CONSYS_EMI_MAPPING
+   remapped to golden 0x180E1BFA (vendor window 0xBFA00000) with MCU
+   reset-cycled — same stuck TX, so the preloader's EMI MPU permitting
+   only the vendor window is not (alone) the explanation.
+7. Confirmed already-correct: CONN_PWR_CON=0x10D, SPM_CONN_PWR_CON
+   0x10006280=0 (golden), CONN2AP_SLEEP_MASK=0x11D (golden),
+   infra0 CG bit15 (CONNMCU_BUS) and bit31 (BTIF) both ungated,
+   TOPAXI CONN_PROT bits 2|8 clear, MCU_HW_VER 0x8A00 = golden.
+
+Also decoded from vendor source this session: `MT_CG_INFRA_CONNMCU_BUS`
+= infra0 CG bit 15; CONN_PROT_MASK = TOPAXI bits 2|8 (build #240's
+bits 17/18 were wrong); BTIF_WAK = base+0x64 bit0 (write-only pulse);
+BTIF_HANDSHAKE = base+0x6C, vendor EN=1.
+
+Open hypothesis space for next session: (a) golden *pre-patch* ROM state
+was never harvested — vendor golden numbers are all post-firmware, so we
+don't know what a healthy ROM-idle CPUPCR/BTIF looks like; (b) something
+in the vendor CCF `clk_scp_conn_main` (scpsys 3.18) enable path beyond
+our scpsys CONN domain sequence; (c) conn-side co-clock/XO setup
+(`co_clock_type=0` path pokes `MT6351_PMIC_RG_VCN28_ON_CTRL=1` HW-mode
+before VCN28 enable — our regulator driver may differ); (d) ROM may
+require the 32k/26M co-clock routing from PMIC (DCXO_CONN bridge regs
+all 0 in golden though). Device left safe: MCU in reset, EMI mapping
+restored to 0x42600000.
+
+## 2026-07-15 — BUILD #248: B-19 RESUMED (user decision, W2/G2b parked) — host mode with all four #231 defects fixed; target = USB ethernet adapter → SSH
+
+**Context:** user parked the CONSYS G2b hunt and pivoted back to B-19: get a
+USB ethernet adapter enumerating on the left port in host mode, then use
+SSH-over-ethernet as the debug channel for the WiFi work (frees the
+gadget/serial tangle entirely).
+
+**New evidence before building (live on #247 over gadget SSH):** the MT6351
+**VUSB33/VA10 PHY rails are ON** — pwrap regmap debugfs (exposed by the W1
+regulator driver) reads LDO_VUSB33_CON0 0x0A16=0xda62 (EN bit1=1),
+LDO_VA10_CON0 0x0A6E=0xda62 (EN=1), VA10_ANA_CON0 0x0B10=0x0100. This
+weakens #231's "PHY-blind analog rails" suspect (register addresses from
+vendor upmu_hw.h). Also root-caused #231 defect 2's mechanism: both mtu3
+and xhci-mtk already pm_runtime_forbid() at probe — the autosuspend came
+from Debian's /lib/udev/rules.d/60-autosuspend.rules (hwdb ID_AUTOSUSPEND)
+writing power/control=auto. And defect 3's mechanism: mtu3 NEVER calls
+phy_set_mode(), so tphy's host-role IDDIG code is dead code on this SoC.
+
+**Provenance:** `logs/2026-07-15-248-b19-host-mode-defect-fixes/`, sha256
+`99bf2c1aa53a46348a55e0e43e1f898f594435dd99370dd7c4559450e2b76edb`, banner
+`#248 SMP PREEMPT Wed Jul 15 06:57:30 UTC 2026`. DTB spot-check:
+`mediatek,force-usb-host` present. Config verified (per the #244 lesson):
+MTU3_DUAL_ROLE/XHCI_MTK/TYPEC_FUSB301A/CHARGER_BQ25890 + usbnet drivers
+all =y; System.map has bq25890/fusb301a/xhci_mtk symbols.
+
+**What's in the build (all four #231 defects baked in):**
+- `phy/0001` extended: new DTS-gated `mediatek,force-usb-host` on u2port0
+  — in u2_phy power_on force DTM1 FORCE_IDDIG with RG_IDDIG=0 (host) and
+  DTM0 FORCE_SUSPENDM|RG_SUSPENDM (defects 3+4); undone in power_off;
+  survives PHY power cycles, unlike #231's hand pokes.
+- `power/0001` extended: `bq25890_vbus_enable` re-asserts F_WD=0 before
+  every OTG enable + dev_info (defect 1 — chip observed losing probe-time
+  programming, REG07=0xff).
+- `dts/0012` re-enabled from `.disabled` (dr_mode=otg +
+  role-switch-default host + xhci child + bq25896/otg_vbus + GPIO107 hog +
+  fusb301a i2c1), with force-b-session-valid comment block replaced by
+  `mediatek,force-usb-host;`. **dts/0013 second hunk context regenerated**
+  — it was written against a tree without 0012 and its EOF context no
+  longer matched (first #248 build attempt failed at the patch step;
+  fixed and stack pre-validated in the VM).
+- `configs/gemini-usb.config` restored to the 00dc268 host build + extra
+  usbnet drivers (AX8817X, RNDIS_HOST, SMSC95XX on top of CDCETHER/
+  RTL8152/AX88179_178A).
+- CONSYS W1/W2 patch set stays in (spike will log G2B FAIL -110 at boot —
+  expected, harmless).
+
+**Rootfs changes (staged live over #247 SSH, survive kernel reflashes) —
+flagged per the rootfs-USB-change rule:**
+- `/etc/udev/rules.d/99-gemini-usb-host-pm.rules` — pins power/control=on
+  for 11270000.usb/11271000.usb and all USB devices (defect 2 fix).
+- `/etc/systemd/network/usb-host-ether.network` — DHCP on `en*/eth*`
+  except usb0 (gadget usb0 keeps static 10.15.19.82; it is inert in this
+  host build anyway).
+- `/root/h.sh` (manual host-enable pokes, fallback) and `/root/s.sh`
+  (status dump incl. the queued PHY **linestate monitor** 0x11290870/74 +
+  ACR0 0x11290800, bq25896 + fusb301 register dumps) re-staged — the old
+  copies were gone from the rootfs.
+
+**Expected on hardware:** boot clean (serial dies at the B-15 mux as on
+#231 — panel console is the observation channel), fusb301a SOURCE +
+bq25890 + xhci root hub probe lines, then plugging the ethernet adapter
+into the LEFT port should fire SPI 126, enumerate, bind a usbnet driver,
+DHCP via systemd-networkd, and be SSH-able from the Mac over the LAN.
+If still "Powered Not-connected": run `/root/s.sh` at the physical
+console with adapter out vs in and compare the linestate words — that
+splits MAC-side break vs PHY-analog-blind, the #231 queued diagnostic.
+
+**Flash (user, device in preloader mode):**
+```
+~/gemini-build/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 /Volumes/extdata/github/gemini_linux/logs/2026-07-15-248-b19-host-mode-defect-fixes/new_kali_boot.img
+```
+
+## 2026-07-15 — BUILD #248 flashed: 🟢 GATE G1a PASSED — first USB host-mode enumeration + SSH-over-ethernet-adapter working end-to-end
+
+**Result: B-19 resolved.** Realtek RTL8156 USB-C 2.5G ethernet adapter
+(0bda:8156, the same unit proven under vendor Kali) enumerates on the left
+port, binds r8152, gets DHCP (192.168.100.144) and is SSH-able from the
+Mac over the LAN. Verified TWICE: once after manual recovery pokes, then
+the clincher — a **cold boot with zero manual intervention**: tphy
+`forcing host role` 2.96s → bq25890 `enabling OTG boost` 3.12s →
+vbusok 3.55s → FUSB301 `attach=1 sink-attached` (CC1) 22.5s →
+`new high-speed USB device` 22.8s → SPI 126 firing (774+) → DHCP → SSH.
+REG0B=0xe2 (boost running), FUSB Status=0x19.
+
+**The two live root causes found this session (on top of #248's baked-in
+fixes, which all worked as designed):**
+1. **External charge power suppresses the OTG boost** — with a charger
+   present the BQ2589x hardware enters charge mode (REG0B=0x36
+   VBUS_STAT=001 + fast-charging), drops/ignores the OTG bit (REG03 read
+   0x1a) and never sources VBUS: adapter dead, FUSB attach=0. This is
+   chip behaviour, not a driver bug. The #231 session was very likely
+   fighting this the whole time too (device usually charging during
+   debug). CAVEAT: plugging a charger while in host mode will cut the
+   adapter; after charger removal the boost does NOT self-resume
+   (/root/h.sh re-asserts it). Driver hardening (re-enable OTG when
+   input removed) is a follow-up.
+2. That was the only remaining blocker — with power actually flowing,
+   CC attach, linestate, IDDIG, SUSPENDM and enumeration all just worked.
+
+**Known rough edges (not blockers):**
+- One unexplained kernel panic during the first SSH-initiated `reboot`
+  (panel showed a backtrace; pstore came up EMPTY next boot — ramoops
+  capture didn't record it, worth wiring up properly before chasing).
+  Subsequent cold boot clean.
+- `r8152: unable to load firmware patch rtl_nic/rtl8156b-2.fw` — works
+  without; add linux-firmware blob to the rootfs sometime.
+- `r8152: exports duplicate symbol` — stale module on the rootfs
+  colliding with the now-builtin driver; cosmetic.
+- s.sh's FUSB "vbusok" read 1 even with boost off earlier in the session
+  — that bit's decode may lag/latch; don't use it as a VBUS meter.
+
+**Consequence for the WiFi plan:** SSH now works over the ethernet
+adapter with the gadget path unused — serial (FTDI) and SSH are no longer
+mutually exclusive once serial returns (host build serial still dies at
+the B-15 mux; next serial-capable build can drop mtu3 if ever needed).
+B-21 CONSYS G2b debugging can resume with a live SSH channel + the panel.
+
+## 2026-07-15 — Right-port VBUS proven live (zero kernel changes): GPIO94+GPIO72 alone power the right port — independent of the BQ25896 boost
+
+**Motivation:** left-port ethernet means the device runs on battery (host
+mode and charging are mutually exclusive on the shared left connector +
+BQ boost). Under Kali, charge-on-left + host-on-right worked
+simultaneously, implying the right port has its own VBUS source.
+
+**Proven live over SSH on #248:** GPIO decode verified against the
+GPIO107 hog (MTK v1 pio: DOUT bank base 0x10005100+bank*0x10, +4=SET,
++8=RST — earlier reads of the SET regs return 0, don't be fooled). LK
+already leaves GPIO70/71/72/94 configured as outputs driving 0. One
+write `devmem 0x10005124 32 0x40000100` (GPIO94 usb1_drvvbus + GPIO72
+SW7226 load switch high) → the same RTL8156 adapter's LEDs lit in the
+RIGHT port, with the BQ boost busy elsewhere. So the #144-146 GPIO
+harvest was correct all along — right port power is just those two pins.
+
+**What remains for right-port host under mainline (new workstream):**
+1. Controller: `usb1@11200000` (`mediatek,mt6797-usb11`) = MUSB
+   host-only instance (vendor driver drivers/misc/mediatek/usb11/
+   "musbfsh"). Mainline glue `drivers/usb/musb/mediatek.c`
+   ("mediatek,mtk-musb", MT2701/MT8516) is the same IP family — needs a
+   DTS node + clock-name adaptation (CLK_INFRA_ICUSB exists in
+   clk-mt6797).
+2. PHY at 0x11210000 (`usb1p_sif`) — NOT in mainline mtk-tphy. Best
+   case: register layout matches generic-tphy-v1 and it's a DTS-only
+   addition; else small PHY driver from vendor musbfsh phy code.
+3. DTS gpio-hogs for GPIO94+72 (+70/71 OTG-mux idle values from #146).
+4. FUSB301 i2c0 (right-port CC chip) node → SOURCE mode via the existing
+   usb/0001 driver (second instance).
+Payoff: ethernet/host on the right + charging (and serial) on the left.
+
+## 2026-07-15 — BUILD #249: right-port MUSB host (first attempt, not yet flashed)
+
+**Goal:** host on the RIGHT port so the left port is free for charging —
+under Kali charge-on-left + host-on-right worked simultaneously; VBUS
+independence proven live earlier today (GPIO94+72 only, boot.md above).
+
+**Provenance:** `logs/2026-07-15-249-b19-right-port-musb-host/`, sha256
+`97ab102b87652d9fdb9d55e0e35727aeb6889502c174a8f61104b12d03572377`,
+banner `#249 SMP PREEMPT Wed Jul 15 08:01:19 UTC 2026`. DTB spot-check:
+`usb@11200000` present. Config verified: USB_MUSB_HDRC/MEDIATEK/
+DUAL_ROLE + NOP_USB_XCEIV + MUSB_PIO_ONLY =y; System.map has mtk_musb/
+musb_core symbols.
+
+**New pieces:**
+- `usb/0002`: mtk-musb glue `devm_clk_bulk_get` → `_optional` — MT6797
+  usb11 only has the infra icusb gate ("main"); no "mcu"/"univpll".
+- `dts/0014`: (a) second `generic-tphy-v1` instance at 0x11210000 with
+  u2port1@11210800 + `mediatek,force-usb-host` — vendor musbfsh PHY
+  pokes map byte-for-byte onto tphy-v1 U2 bank (0x6C/0x6D = U2PHYDTM1),
+  so the PHY needs NO new driver; (b) `usb1@11200000` on
+  `mediatek,mtk-musb` (SPI 73 level-low, CLK_INFRA_ICUSB as "main",
+  dr_mode="host", phys=u2port1); (c) four gpio-hogs: GPIO94
+  usb1-drvvbus HIGH + GPIO72 sw7226-en HIGH (VBUS chain) + GPIO70
+  fusb301a-sw-en HIGH / GPIO71 sw-sel LOW (vendor USB-OTG mux position,
+  70 goes low only for HDMI alt-mode — vendor fusb302/usb_typec.c
+  fusb300_eint_work harvest). No FUSB301-i2c0 node yet: vendor host
+  path never used CC (pure ID-pin), and today's live test proved the
+  adapter powers + the left-port RTL8156 enumerated without any CC
+  negotiation.
+- `configs/gemini-usb.config`: musb options appended (PIO-only for
+  bring-up; DMA later). musb mode = default DUAL_ROLE; dr_mode="host"
+  in DT fixes the role.
+
+**CAVEAT while these hogs are active: the right port is host-only — do
+NOT plug a charger into the right port** (VBUS contention against the
+SW7226 output). Charge on the left port.
+
+**Expected on hardware:** left-port behaviour identical to #248
+(ethernet+SSH). New: musb probe lines, then a device in the RIGHT port
+should enumerate on a second USB bus (`lsusb` Bus 002; SPI 73 in
+/proc/interrupts). Test = LED ethernet adapter in the right port +
+second `enx...` interface, while the no-LED adapter keeps SSH on the
+left. Failure modes: musb probe clk/phy errors (dmesg), or bus up but
+no connect (would implicate the GPIO70/71 mux or PHY linestate — same
+debug pattern as B-19 left).
+
+**Flash (user, preloader mode):**
+```
+~/gemini-build/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 /Volumes/extdata/github/gemini_linux/logs/2026-07-15-249-b19-right-port-musb-host/new_kali_boot.img
+```
+
+## 2026-07-15 — BUILD #249 flashed + BUILD #250: right-port musb probes but VBUS_ERROR; session-valid forcing extended to host role
+
+**#249 on hardware (banner #249, verified over left-port SSH):**
+- Left port unchanged: adapter enumerated on xhci (bus 2), SSH working —
+  no regression from the musb/tphy additions.
+- Right port: PARTIAL — musb-hdrc probes ("MUSB HDRC host driver", bus
+  1), the second tphy instance runs force-usb-host at 0.47s, the hogs
+  power the adapter (LEDs lit), but the MAC loops at
+  `VBUS_ERROR in a_idle (80, <SessEnd), retry #0, port1 00000104` and
+  never enumerates: the PHY isn't reporting VBUS-valid to the MUSB OTG
+  state machine. Vendor musbfsh_mt65xx.c confirms the fix: on host
+  enable it FORCES avalid/bvalid/vbusvalid and clears sessend on this
+  PHY — the host-side twin of B-20.
+
+**BUILD #250** (`logs/2026-07-15-250-b19-right-port-musb-session-force/`,
+sha256 `ce644b71f90e7a8494b889b1c70fa1a6c389d2d253d1f48c698ebc61c5cdca45`,
+banner `#250`): phy/0001's `mediatek,force-usb-host` extended to the full
+vendor host state — IDDIG=0 + P2C_FORCE_SESS_MSK + RG vbusvalid/avalid/
+bvalid set + RG_SESSEND cleared + SUSPENDM forced; symmetric clear in
+power_off. New dmesg string "session forced valid" verified present in
+the packed kernel. NOTE: u2port0 (left) shares the property, so the left
+port inherits the forced session bits in host role — regression check of
+left-port SSH is mandatory on this build.
+
+**Flash:** `mtk w boot2 .../2026-07-15-250-b19-right-port-musb-session-force/new_kali_boot.img`
+
+## 2026-07-15 — BUILDS #250/#251 on hardware + BUILD #252: right-port session-force works, bulk still dead, DMA crashes the SoC → PIO + full-speed cap
+
+**#250 flashed:** session-valid forcing fixed the VBUS_ERROR — musb
+enumerates devices now. New failure layer: cdc bulk-IN dies with
+`ep2 RX three-strikes error` ×N then `Babble`; after babble the OTG FSM
+falls to b_idle (DEVCTL 0x99) and never re-enumerates. **Vendor babble
+recovery replayed live over devmem WORKS**: DTM1 0x3E10 (sessend pulse)
+→ 0x3E2C (session restore) flips DEVCTL back to 0x5D and the device
+re-enumerates instantly (vendor musbfsh_mt65xx.c
+mac_phy_babble_clear/recover). Also: mainline glue UNBIND OOPSES in
+devm_usb_phy_release (NULL deref) — never unbind musb; noted, not chased.
+
+**#251 (Inventra DMA) flashed:** enumeration fast/clean, BUT zero bulk
+completions (TX counter frozen at 0 with urbs submitted; MAC state
+textbook-healthy: DEVCTL 0x5D, all INTRTXE/RXE + DMA channels unmasked)
+AND the system hard-crashed twice within minutes (green-screen panic,
+then a hang) with both adapters active. pstore/ramoops IS bound and
+mounted (44410000.ramoops, driver linked — earlier "pstore not wired"
+theory wrong) yet records nothing → crashes are hard bus lockups with no
+panic path, consistent with a rogue DMA master starving/corrupting the
+interconnect. The glue's "mcu" clock (absent on MT6797) may be the DMA
+engine's bus path. DMA = off until understood.
+
+**Addressing cleanup (rootfs):** RTL8156 = 192.168.100.145 static,
+Naxiang = 192.168.100.146 static, one IP each, matched by MAC (the
+earlier "both IPs on one adapter" confusion was Linux ARP-flux + the
+static file following the RTL's MAC). No default route on these — LAN
+SSH only. Vendor-source babble recovery + these facts belong in the
+FUSB/h.sh tooling notes.
+
+**BUILD #252** (`logs/2026-07-15-252-b19-right-port-musb-pio-fullspeed/`,
+sha256 below, banner `#252`): musb back to MUSB_PIO_ONLY (no crashes on
+PIO builds) + mtk-musb glue now honors DT `maximum-speed` (usb/0002,
+musb_dsps precedent) + dts/0014 sets `maximum-speed = "full-speed"` on
+usb1. Theory under test: the three-strikes/babble is HS signal integrity
+through the SW7226/FUSB301a mux chain; FS (12 Mbps, SSH-grade) should
+carry bulk cleanly. Verified in artifacts: CONFIG_MUSB_PIO_ONLY=y,
+"capping port to full-speed" string in Image, DTB usb@11200000 has
+full-speed. Success = Naxiang on the right port passes real traffic
+(ping/SSH via 192.168.100.146 with the left adapter's route removed from
+the test path).
+
+## 2026-07-15 — BUILD #252 flashed and verified (banner #252, SSH over .146); right-port FS test NOT yet run — session ends, state parked as B-22
+
+- #252 boots clean; `musb-mtk 11200000.usb: capping port to full-speed`
+  present; left port (xhci) carries SSH fine (Naxiang adapter,
+  192.168.100.146 static-by-MAC).
+- The decisive experiment — a device in the RIGHT port at full speed,
+  checking whether bulk finally flows (no three-strikes/babble) — was
+  NOT run this session; right port was empty at wrap-up.
+- Side anomaly to keep in mind: earlier on this #252 boot the RTL8156 on
+  the left had UP + IP (.145) but passed NO traffic either direction.
+  New variable since it last worked: rtl_nic/rtl8156b-2.fw was installed
+  on the rootfs (loads now). If the RTL misbehaves again, remove
+  /lib/firmware/rtl_nic/rtl8156b-2.fw to revert that variable. The
+  Naxiang on the same port works, so the port itself is exonerated.
+- Full right-port state, findings and resume plan recorded in
+  blockers.md **B-22** (new).
+
+## 2026-07-16 — #252 FS test result read live + ROOT-CAUSE CANDIDATE: mainline glue config ≠ musbfsh hardware → BUILD #253 (6-EP non-multipoint config)
+
+**#252 full-speed result (read over SSH from the running device,
+dmesg of boot #252):** the decisive experiment ran — Naxiang cdc_ether
+on the RIGHT port enumerated at **full speed** (`usb 1-1: new full-speed
+USB device number 2 using musb-hdrc`), registered `enxec9a0c162365`,
+got its IP, then bulk STILL failed:
+`NETDEV WATCHDOG: transmit queue 0 timed out` (zero TX completions),
+`Could not flush host TX2 fifo: csr: 2003` (TXPKTRDY stuck — packet
+loaded into the FIFO, never transmitted on the wire) +
+musb_h_tx_flush_fifo WARN, then `ep2 RX three-strikes error` and
+unregister. **The HS-signal-integrity theory is falsified** — control
+(EP0) works, bulk moves nothing in either direction at any speed →
+MAC/glue layer.
+
+**Root-cause candidate (vendor source vs mainline):** mainline
+`drivers/usb/musb/mediatek.c` hardcodes the MT8516 OTG controller
+config — `num_eps=8`, `multipoint=true`, EP1–7 FIFO table (EP6=1024).
+The vendor MT6797 usb11 driver (`musbfsh_core.c`,
+`musbfsh_config_mt65xx` + `epx_cfg`) says this hardware is the cut-down
+musbfsh IP: **`num_eps=6` (EP0+5), `multipoint=false`, EP1–5 all 512B
+BUF_SINGLE** ("fits in 4KB"). Consequences match the symptoms exactly:
+multipoint=true makes musb_core address bulk transfers via per-EP
+TXFUNCADDR/busctl registers this hardware doesn't implement (EP0
+enumeration survives because the FADDR path still works during setup),
+and num_eps=8 programs FIFO size/address through the INDEX register for
+EPs 6–7 that don't exist. May also explain the #250 HS babble and the
+#251 DMA lockups (unprogrammed/aliased FIFO addressing).
+
+**BUILD #253** (`logs/2026-07-16-253-b22-right-port-musbfsh-config/`,
+sha256 `7a46773a32ed334460eaaba293f109362428783b53c3831d1d7f526c8146baeb`,
+banner `#253`): usb/0002 extended — adds `mediatek,mt6797-musb`
+compatible with `.data` → new `mt6797_musb_hdrc_config` (6 EPs,
+multipoint=false, EP1–5 512B single-buffered fifo table); probe now
+takes the config from `of_device_get_match_data()` (falls back to the
+stock config) and the FS-cap kmemdup dups the selected config.
+dts/0014: usb1 compatible switched to `mediatek,mt6797-musb`.
+Single-variable: **full-speed cap kept**, PIO only kept
+(CONFIG_MUSB_PIO_ONLY=y verified in merge output), DTB grep
+`mediatek,mt6797-musb` present.
+
+**Expected next capture:** Naxiang in RIGHT port → full-speed
+enumeration, NO watchdog/three-strikes, real traffic on
+192.168.100.146 with the right interface's own RX/TX counters moving.
+Then the B-22 success gate: charger LEFT + ethernet RIGHT
+simultaneously. If it still fails: vendor musbfsh_host.c CSR/IRQ-ack
+comparison, then the missing "mcu"/AHB bus-clock hunt.
+
+Flash:
+`~/gemini-build/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 /Volumes/extdata/github/gemini_linux/logs/2026-07-16-253-b22-right-port-musbfsh-config/new_kali_boot.img`
+
+## 2026-07-16 — BUILD #253 flashed and tested: REGRESSION, worse than #252 → isolating the variable for BUILD #254
+
+**Result (read live over SSH, banner confirmed #253):** neither adapter
+enumerates on the right port at all now — both the RTL8156 and the
+Naxiang, tried in turn, produce an endless retry loop that never
+succeeds even at the control-transfer stage:
+```
+usb 1-1: new full-speed USB device number N using musb-hdrc
+usb 1-1: device descriptor read/all, error -71   (EPROTO)
+[repeats ~20+ times over 2+ minutes, never settles]
+```
+This is a regression from #252, where the Naxiang got all the way
+through enumeration (interface bound, cdc_ether registered, IP
+assigned) and only failed later at the bulk-data stage. #253 fails
+earlier — before an interface even exists — meaning the musbfsh config
+change made things worse, not better.
+
+**Left port unaffected, confirming the fault is right-port-specific:**
+on the SAME boot/build, both the RTL8156 (192.168.100.145) and Naxiang
+(192.168.100.146) were swapped into the LEFT port and worked flawlessly
+(SSH confirmed to both IPs, banner #253). This proves the left
+(xhci-mtk/mtu3) and right (usb11/MUSB) controllers are fully
+independent silicon with zero interaction — see blockers.md B-22 "Why
+the two ports must be treated as fully separate problems" for the full
+writeup (added this session).
+
+**Diagnosis:** build #253 changed TWO things in one step —
+`multipoint: true→false` AND `num_eps: 8→6` + trimmed FIFO table. Since
+the result is worse (control transfers now fail, not just bulk), one of
+these two changes is wrong for this hardware, or they need to be
+combined differently. Isolating: **BUILD #254** reverts `multipoint`
+back to `true`, keeping only the `num_eps=6`/trimmed EP1–5 FIFO table,
+to determine which half broke enumeration.
+
+## BUILD #254 — multipoint reverted to true, num_eps=6/trimmed FIFO kept (isolating the #253 regression)
+
+**Change:** `mt6797_musb_hdrc_config` now has `.multipoint = true` (only
+`num_eps=6` + the trimmed EP1-5 512B FIFO table stay from #253).
+`logs/2026-07-16-254-b22-right-port-multipoint-revert/`, sha256
+`8352b0b01262a70688f95b6d0cea12c22467f25abd05dae371ffc399f0458e5c`,
+banner `#254` verified, DTB grep `mediatek,mt6797-musb` present.
+
+**Purpose:** #253 combined `multipoint=false` + `num_eps=6` in one step
+and REGRESSED right-port enumeration itself (both adapters stuck in
+endless `device descriptor read/all, error -71` retries — worse than
+#252's 8-EP/multipoint=true baseline, which at least enumerated fully
+before dying on bulk). This build isolates which half broke it: if
+enumeration succeeds again (matching #252's behavior) with multipoint
+reverted, the FIFO/num_eps trim was safe and multipoint=false was the
+regression; if it still fails, num_eps=6/FIFO trim itself is the
+problem and multipoint isn't involved.
+
+**Expected next capture:** flash boot2, test both adapters in the RIGHT
+port (left port confirmed working for both, build #253, unaffected —
+see blockers.md B-22 "why the two ports must be treated separately").
+If enumeration succeeds: repeat the bulk-data test from #252 to see if
+num_eps=6/trimmed FIFO alone fixes the TX-stuck/three-strikes failure.
+If it still fails to enumerate: multipoint isn't the culprit, look
+harder at the FIFO table/ram_bits interaction.
+
+Flash:
+`~/gemini-build/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 /Volumes/extdata/github/gemini_linux/logs/2026-07-16-254-b22-right-port-multipoint-revert/new_kali_boot.img`
+
+## 2026-07-16 (later) — BUILD #254 flashed and tested: RIGHT-PORT BULK DATA WORKS — B-22 root cause fixed
+
+Confirmed on hardware, banner `#254`: RTL8156 in the RIGHT port enumerated
+full-speed (`usb 1-1: new full-speed USB device number 2 using musb-hdrc`),
+bound `cdc_ether` cleanly, got a DHCP/static lease
+(`192.168.100.146/enxec9a0c162365`), and **this exact SSH session was
+conducted over that interface** — `ip -br link` on the device shows `usb0`
+(left-port gadget) is `DOWN`/no-carrier, so there is no ambiguity about
+which port carried the traffic. `ip -s link` counters: RX 43510B/279pkts,
+TX 22182B/78pkts, **zero errors/drops** — no watchdog timeout, no
+`three-strikes`, no babble, no TXPKTRDY-stuck (`csr: 2003`) anywhere in
+dmesg. This is the first time the right port has passed bulk data
+end-to-end.
+
+**Root cause confirmed:** `multipoint=false` (introduced in #253) was the
+regression — MUSB's multipoint addressing mode (per-endpoint
+TXFUNCADDR/HUBADDR "busctl" registers for routing to downstream hub
+ports) doesn't exist on this musbfsh IP; forcing it off broke control
+transfers entirely (`error -71` on every descriptor read). Reverting
+`multipoint` to `true` (mainline default — the MT6797 musbfsh apparently
+tolerates the field being set even though it doesn't route through a
+hub) while keeping `num_eps=6` + the trimmed EP1-5 512B FIFO table (the
+actual vendor-hardware-accurate fix) resolved the original TX-stuck/
+three-strikes bulk failure from #252. So: **`num_eps`/FIFO trim was the
+real fix; `multipoint=false` was an incorrect extra change that broke
+enumeration.**
+
+Left port (RTL8156/Naxiang, build #253) was previously confirmed still
+fully working; not retested this build but no shared state exists
+between the two controllers (blockers.md B-22 "why the two ports must be
+treated separately"), so no regression is expected there.
+
+**Not yet tested:** battery was "Discharging"/`online=0` during this
+capture — no charger was plugged into the left port. The B-22 success
+gate (Step 3 of the plan) — charger on LEFT + ethernet on RIGHT
+simultaneously, confirmed via `power_supply` sysfs — is the next and
+final validation step.
+
+## 2026-07-16 (later still) — charger plugged in but NOT charging: root cause found — LEFT port still forced host, blocking BQ25896 input → BUILD #255
+
+With build #254 confirmed working (right-port ethernet, previous entry),
+the user plugged a charger into the LEFT port to test the actual B-22
+goal (charge left + ethernet right). `power_supply` sysfs still read
+`Discharging`/`online=0` with the charger connected. dmesg showed, at
+3.156s into every boot:
+```
+bq25890-charger 0-006b: enabling OTG boost (watchdog re-disabled)
+```
+— i.e. the BQ25896 is put into **OTG boost/source mode** unconditionally
+at boot, regardless of whether a charger is plugged in. Traced to
+`patches/v6.6/dts/0012` (left-port host-mode overlay, written for the
+now-superseded B-19 Stage C left-port-host workstream): the `ssusb` node
+still carries `dr_mode = "otg"` + `role-switch-default-mode = "host"` +
+`vbus-supply = <&otg_vbus>`, so `mtu3`'s role-switch probe calls
+`regulator_enable()` on the `usb-otg-vbus` regulator at every boot —
+`bq25890_vbus_enable()` fires unconditionally, putting the charger IC
+into source mode. A chip in source mode cannot simultaneously act as a
+sink for an external charger, so the "enabling OTG boost" line and the
+"Discharging" reading were the same root cause, not two separate bugs.
+
+This was pure leftover: B-22's host duty moved to the RIGHT port
+(usb1/MUSB, dts/0014) once build #248 established right-port dongles
+work, but the LEFT port's host-mode DTS was never reverted back to
+peripheral-only.
+
+**Fix (BUILD #255):** new patch `patches/v6.6/dts/0015` (applies after
+0014) reverts the LEFT port (`ssusb`/`u2port0`) back to its original
+peripheral role:
+- `mediatek,force-usb-host` → `mediatek,force-b-session-valid` on
+  `u2port0` (B-20's original device-role force — this PHY still has no
+  hardware VBUS/session sensing, so *some* force is still required, just
+  the device-role one instead of the host-role one).
+- `ssusb` node: `dr_mode = "otg"` + `usb-role-switch` +
+  `role-switch-default-mode = "host"` + `vbus-supply = <&otg_vbus>` +
+  `#address-cells`/`#size-cells`/`ranges` + the `xhci@11270000` child
+  node all removed; `dr_mode = "peripheral"` restored.
+- `otg_vbus` regulator node and the GPIO107 hog in `&pio` are left in
+  place (harmless — no consumer left to auto-enable the regulator; the
+  hog only gates the boost enable path, per its own comment, so it
+  doesn't source anything by itself).
+
+Banner `#255` verified (`SMP PREEMPT Thu Jul 16 01:08:16 UTC 2026`), DTB
+grep confirms `dr_mode = "peripheral"` (line 1025, left port) alongside
+`dr_mode = "host"` (line 1110, right MUSB port — dts/0014, untouched).
+`logs/2026-07-16-255-b22-left-port-drop-host-mode/new_kali_boot.img`.
+
+**Expected next capture:** flash boot2, confirm no more "enabling OTG
+boost" line at boot, then plug the charger into the LEFT port and check
+`/sys/class/power_supply/bq25890-charger-0/status` — expect `Charging`
+(or `Full`) and `online=1` instead of `Discharging`/`0`. With an ethernet
+adapter simultaneously in the RIGHT port, this is the actual B-22
+success-gate test.
+
+Flash:
+`~/gemini-build/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 /Volumes/extdata/github/gemini_linux/logs/2026-07-16-255-b22-left-port-drop-host-mode/new_kali_boot.img`
+
+## 2026-07-16 (final) — BUILD #255 flashed and tested: B-22 SUCCESS GATE PASSED
+
+Charger in LEFT port + RTL8156 ethernet in RIGHT port, same boot, banner
+`#255`:
+```
+root@gemini:~# cat /sys/class/power_supply/bq25890-charger-0/status
+Charging
+root@gemini:~# cat /sys/class/power_supply/bq25890-charger-0/online
+1
+```
+`enxec9a0c162365` (right port) live with clean RX/TX counters (391/145
+pkts, 0 errors), and the user confirmed the charging LED lit on the
+device itself. `usb0` (left-port RNDIS gadget) also came up automatically
+— a side effect of `dts/0015` restoring `mediatek,force-b-session-valid`,
+which makes the left port auto-enumerate as a gadget whenever a host is
+present, exactly as it did before the B-19 host-mode detour.
+
+**B-22 is closed.** See blockers.md for the full fix chain across builds
+#252-#255.

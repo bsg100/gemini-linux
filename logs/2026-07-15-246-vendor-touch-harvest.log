@@ -1,0 +1,303 @@
+Warning: Permanently added '192.168.100.137' (ED25519) to the list of known hosts.
+===
+/sys/bus/i2c/devices/0-0025
+/sys/bus/i2c/devices/0-0031
+/sys/bus/i2c/devices/0-0053
+/sys/bus/i2c/devices/0-0063
+/sys/bus/i2c/devices/0-006b
+/sys/bus/i2c/devices/0-0070
+/sys/bus/i2c/devices/1-0025
+/sys/bus/i2c/devices/1-0030
+/sys/bus/i2c/devices/1-003e
+/sys/bus/i2c/devices/1-0048
+/sys/bus/i2c/devices/1-005f
+/sys/bus/i2c/devices/1-0068
+/sys/bus/i2c/devices/1-0069
+/sys/bus/i2c/devices/1-006a
+/sys/bus/i2c/devices/1-006b
+/sys/bus/i2c/devices/1-0077
+/sys/bus/i2c/devices/2-002d
+/sys/bus/i2c/devices/2-0072
+/sys/bus/i2c/devices/3-000c
+/sys/bus/i2c/devices/3-002c
+/sys/bus/i2c/devices/3-0036
+/sys/bus/i2c/devices/3-0039
+/sys/bus/i2c/devices/3-0050
+/sys/bus/i2c/devices/4-0053
+/sys/bus/i2c/devices/4-0062
+/sys/bus/i2c/devices/5-0028
+/sys/bus/i2c/devices/5-005b
+/sys/bus/i2c/devices/6-0068
+/sys/bus/i2c/devices/7-001c
+/sys/bus/i2c/devices/7-0060
+/sys/bus/i2c/devices/8-0036
+/sys/bus/i2c/devices/i2c-0
+/sys/bus/i2c/devices/i2c-1
+/sys/bus/i2c/devices/i2c-2
+/sys/bus/i2c/devices/i2c-3
+/sys/bus/i2c/devices/i2c-4
+/sys/bus/i2c/devices/i2c-5
+/sys/bus/i2c/devices/i2c-6
+/sys/bus/i2c/devices/i2c-7
+/sys/bus/i2c/devices/i2c-8
+/sys/bus/i2c/devices/i2c-9
+===
+/proc/AEON_TP_FW
+/proc/AEON_TPD
+/proc/otp
+/proc/otp/otp_debug_status
+/proc/otp/otp_history_temp
+/proc/otp/otp_curr_temp
+/proc/otp/otp_debug_data
+/proc/otp/otp_score_data
+/proc/otp/otp_ctrl_data
+/proc/otp/otp_config_data
+===
+1
+Warning: Permanently added '192.168.100.137' (ED25519) to the list of known hosts.
+I: Bus=0019 Vendor=0000 Product=0000 Version=0000
+N: Name="ACCDET"
+P: Phys=
+S: Sysfs=/devices/virtual/input/input0
+U: Uniq=
+H: Handlers=kbd gpufreq_ib event0 
+B: PROP=0
+B: EV=23
+B: KEY=40 0 0 0 0 0 0 1000000000 c000000000018 0
+B: SW=1
+
+I: Bus=0019 Vendor=2454 Product=6500 Version=0010
+N: Name="mtk-kpd"
+P: Phys=
+S: Sysfs=/devices/soc/10010000.keypad/input/input1
+U: Uniq=
+H: Handlers=kbd gpufreq_ib event1 
+B: PROP=0
+B: EV=3
+B: KEY=1000000 0 0 8000000000 0 4000000000000 2
+
+I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+N: Name="Integrated keyboard"
+P: Phys=
+S: Sysfs=/devices/virtual/input/input2
+U: Uniq=
+H: Handlers=kbd gpufreq_ib event2 
+B: PROP=0
+B: EV=3
+B: KEY=1000000000000 0 2000168000000000 35ff57ff3ffcffc
+
+I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+N: Name="hwmdata"
+P: Phys=
+S: Sysfs=/devices/virtual/input/input3
+U: Uniq=
+H: Handlers=gpufreq_ib event3 
+B: PROP=0
+B: EV=5
+B: REL=6
+
+I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+N: Name="m_alsps_input"
+P: Phys=
+S: Sysfs=/devices/virtual/input/input4
+U: Uniq=
+H: Handlers=gpufreq_ib event4 
+B: PROP=0
+B: EV=d
+B: REL=6
+B: ABS=101
+
+I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+N: Name="m_acc_input"
+P: Phys=
+S: Sysfs=/devices/virtual/input/input5
+U: Uniq=
+H: Handlers=gpufreq_ib event5 
+B: PROP=0
+B: EV=d
+B: REL=c1
+B: ABS=107
+
+I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+N: Name="m_gyro_input"
+P: Phys=
+S: Sysfs=/devices/virtual/input/input6
+U: Uniq=
+H: Handlers=gpufreq_ib event6 
+B: PROP=0
+B: EV=d
+B: REL=c1
+B: ABS=107
+
+I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+N: Name="m_step_c_input"
+P: Phys=
+S: Sysfs=/devices/virtual/input/input7
+U: Uniq=
+H: Handlers=gpufreq_ib event7 
+B: PROP=0
+B: EV=d
+B: REL=7
+B: ABS=100
+
+I: Bus=0018 Vendor=0000 Product=0000 Version=0000
+N: Name=""
+P: Phys=
+S: Sysfs=/devices/soc/11011000.i2c/i2c-4/4-0053/input/input9
+U: Uniq=
+H: Handlers=gpufreq_ib event8 
+B: PROP=2
+B: EV=b
+B: KEY=420 0 0 0 0 0
+B: ABS=460000000000000
+
+I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+N: Name="mtk-tpd"
+P: Phys=
+S: Sysfs=/devices/virtual/input/input8
+U: Uniq=
+H: Handlers=kbd gpufreq_ib event9 
+B: PROP=2
+B: EV=b
+B: KEY=400 0 0 100040008800 10168000000000 4500181460000
+B: ABS=263000001000003
+
+===
+4-0053: solomon_touch driver=ssd20xx
+4-0062: cap_touch driver=
+===
+[  620.893401] mtk-tpd: fb_notify(blank=4)
+[  620.893410] mtk-tpd: LCD OFF Notify
+[  620.893426] mtk-tpd: cancel touch_resume_workqueue err = 0
+[  640.903756] mtk-tpd: fb_notify(blank=0)
+[  640.903759] mtk-tpd: LCD ON Notify
+Warning: Permanently added '192.168.100.137' (ED25519) to the list of known hosts.
+0x0
+===
+driver
+esdtime
+fail_reason
+gesture
+input
+modalias
+mptest
+name
+power
+ssdtouch
+subsystem
+testing
+touchmode
+uevent
+version
+===
+/sys/class/input/input9/capabilities/abs: 460000000000000
+/sys/class/input/input9/capabilities/ev: b
+/sys/class/input/input9/capabilities/ff: 0
+/sys/class/input/input9/capabilities/key: 420 0 0 0 0 0
+/sys/class/input/input9/capabilities/led: 0
+/sys/class/input/input9/capabilities/msc: 0
+/sys/class/input/input9/capabilities/rel: 0
+/sys/class/input/input9/capabilities/snd: 0
+/sys/class/input/input9/capabilities/sw: 0
+solomon_touch
+Warning: Permanently added '192.168.100.137' (ED25519) to the list of known hosts.
+version: ################################ Display Version : 0x00000016 Driver Version : 1.10 Product ID : 0x41554f00( AUO) 0x35393900( 599) IC Name : 0x53534400( SSD) 0x32303932(2092) Resolution : 1080 X 2160 Node Info : 32 X 18 Point Count : 10 #################################
+name: solomon_touch
+touchmode:
+gesture:
+esdtime:
+Warning: Permanently added '192.168.100.137' (ED25519) to the list of known hosts.
+[sudo] password for kali: EVENT8:
+EVENT9:
+Warning: Permanently added '192.168.100.137' (ED25519) to the list of known hosts.
+[sudo] password for kali: EVENT8:
+EVENT9:
+Warning: Permanently added '192.168.100.137' (ED25519) to the list of known hosts.
+[sudo] password for kali: CAPTURE_DONE
+Warning: Permanently added '192.168.100.137' (ED25519) to the list of known hosts.
+Traceback (most recent call last):
+  File "/tmp/evread.py", line 20, in <module>
+    sec, usec, etype, code, val = struct.unpack_from('<QHHi', data, i)
+ValueError: not enough values to unpack (expected 5, got 4)
+Warning: Permanently added '192.168.100.137' (ED25519) to the list of known hosts.
+{'/dev/input/event9': 2544}
+/dev/input/event9 type=1 code=330 val=0
+/dev/input/event9 type=3 code=48 val=1
+/dev/input/event9 type=3 code=53 val=1862
+/dev/input/event9 type=3 code=54 val=610
+/dev/input/event9 type=1 code=330 val=1
+/dev/input/event9 type=3 code=57 val=0
+/dev/input/event9 type=3 code=48 val=1
+/dev/input/event9 type=3 code=53 val=1862
+/dev/input/event9 type=3 code=54 val=610
+/dev/input/event9 type=3 code=57 val=0
+/dev/input/event9 type=3 code=48 val=1
+/dev/input/event9 type=3 code=53 val=1862
+/dev/input/event9 type=3 code=54 val=610
+/dev/input/event9 type=3 code=57 val=0
+/dev/input/event9 type=3 code=48 val=1
+/dev/input/event9 type=3 code=53 val=1862
+/dev/input/event9 type=3 code=54 val=610
+/dev/input/event9 type=3 code=57 val=0
+/dev/input/event9 type=3 code=48 val=1
+/dev/input/event9 type=3 code=53 val=1862
+/dev/input/event9 type=3 code=54 val=610
+/dev/input/event9 type=3 code=57 val=0
+/dev/input/event9 type=3 code=48 val=1
+/dev/input/event9 type=3 code=53 val=1862
+/dev/input/event9 type=3 code=54 val=610
+/dev/input/event9 type=3 code=57 val=0
+/dev/input/event9 type=3 code=48 val=1
+/dev/input/event9 type=3 code=53 val=1862
+/dev/input/event9 type=3 code=54 val=610
+/dev/input/event9 type=3 code=57 val=0
+/dev/input/event9 type=1 code=330 val=0
+/dev/input/event9 type=3 code=48 val=1
+/dev/input/event9 type=3 code=53 val=1793
+/dev/input/event9 type=3 code=54 val=663
+/dev/input/event9 type=1 code=330 val=1
+/dev/input/event9 type=3 code=57 val=0
+/dev/input/event9 type=3 code=48 val=1
+/dev/input/event9 type=3 code=53 val=1793
+/dev/input/event9 type=3 code=54 val=663
+/dev/input/event9 type=3 code=57 val=0
+/dev/input/event9 type=3 code=48 val=1
+/dev/input/event9 type=3 code=53 val=1793
+/dev/input/event9 type=3 code=54 val=663
+/dev/input/event9 type=3 code=57 val=0
+/dev/input/event9 type=3 code=48 val=1
+/dev/input/event9 type=3 code=53 val=1793
+/dev/input/event9 type=3 code=54 val=663
+/dev/input/event9 type=3 code=57 val=0
+/dev/input/event9 type=3 code=48 val=1
+/dev/input/event9 type=3 code=53 val=1793
+/dev/input/event9 type=3 code=54 val=663
+/dev/input/event9 type=3 code=57 val=0
+/dev/input/event9 type=1 code=330 val=0
+/dev/input/event9 type=3 code=48 val=1
+/dev/input/event9 type=3 code=53 val=1794
+/dev/input/event9 type=3 code=54 val=665
+/dev/input/event9 type=1 code=330 val=1
+/dev/input/event9 type=3 code=57 val=0
+/dev/input/event9 type=3 code=48 val=1
+/dev/input/event9 type=3 code=53 val=1794
+/dev/input/event9 type=3 code=54 val=665
+/dev/input/event9 type=3 code=57 val=0
+/dev/input/event9 type=3 code=48 val=1
+/dev/input/event9 type=3 code=53 val=1794
+/dev/input/event9 type=3 code=54 val=665
+/dev/input/event9 type=3 code=57 val=0
+/dev/input/event9 type=3 code=48 val=1
+/dev/input/event9 type=3 code=53 val=1794
+/dev/input/event9 type=3 code=54 val=665
+/dev/input/event9 type=3 code=57 val=0
+/dev/input/event9 type=3 code=48 val=1
+/dev/input/event9 type=3 code=53 val=1794
+/dev/input/event9 type=3 code=54 val=665
+/dev/input/event9 type=3 code=57 val=0
+/dev/input/event9 type=1 code=330 val=0
+/dev/input/event9 type=3 code=48 val=1
+/dev/input/event9 type=3 code=53 val=1792
+/dev/input/event9 type=3 code=54 val=656
+/dev/input/event9 type=1 code=330 val=1
+/dev/input/event9 type=3 code=57 val=0

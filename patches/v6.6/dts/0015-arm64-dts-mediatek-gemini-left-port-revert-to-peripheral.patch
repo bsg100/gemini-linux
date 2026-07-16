@@ -1,0 +1,101 @@
+diff --git a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+index 000000000..000000000 100644
+@@ -1044,16 +1044,22 @@
+ 			clock-names = "ref";
+ 			#phy-cells = <1>;
+ 			/*
+-			 * B-20's mediatek,force-b-session-valid (phy/0001)
+-			 * is deliberately ABSENT in this host-mode build:
+-			 * forcing IDDIG=1/B-session-valid pins the PHY to
+-			 * device role and would fight mtu3's host switch.
+-			 * Instead force the HOST role (phy/0001): mtu3 never
+-			 * calls phy_set_mode(), so without this DTM1=0 leaves
+-			 * the MAC in device role and the PHY analog suspended
+-			 * (boot.md build #231 defects 3+4, devmem-verified).
++			 * GEMINI B-22 (2026-07-16): LEFT port reverted to its
++			 * native peripheral/charge role now that host duty
++			 * moved to the RIGHT port (usb1/MUSB, dts/0014). The
++			 * B-19 Stage C host-mode forcing on THIS port (host
++			 * PHY force + otg/xhci below) was left enabled after
++			 * B-19 was superseded, which kept the BQ25896 in OTG
++			 * boost/source mode at every boot -- silently blocking
++			 * charging even with a charger plugged in (the "enabling
++			 * OTG boost" bq25890_vbus_enable() call fires from
++			 * mtu3's host-role-switch probe path, not anything
++			 * charge-related). Back to B-20's original
++			 * force-b-session-valid (device role forced in
++			 * software, since this PHY has no hardware VBUS/session
++			 * sensing either way).
+ 			 */
+-			mediatek,force-usb-host;
++			mediatek,force-b-session-valid;
+ 			status = "okay";
+ 		};
+ 	};
+@@ -1091,55 +1097,20 @@
+ 		assigned-clock-parents = <&topckgen CLK_TOP_UNIVPLL3_D2>;
+ 		phys = <&u2port0 PHY_TYPE_USB2>;
+ 		/*
+-		 * HOST MODE (B-19 Stage C, WiFi plan Stage 1). Build #143
+-		 * proved plain dr_mode="host" is a dead end: mtu3_host.c's
+-		 * pure-host path never runs switch_port_to_host(), so the
+-		 * port0 U2 mux never flips and SPI 126 never fires. "otg" +
+-		 * role-switch-default-mode="host" makes ssusb_role_sw_register()
+-		 * run the full port-switch sequence at probe (mtu3_dr.c) —
+-		 * fixed-host behaviour that actually exercises the mux.
+-		 * Needs CONFIG_USB_MTU3_DUAL_ROLE. Gadget SSH is out of
+-		 * scope for this build; runtime role switching comes later
+-		 * (FUSB301 attach → role, needs B-11 EINT).
+-		 *
+-		 * VBUS: the BQ25896 OTG boost regulator (usb-otg-vbus on
+-		 * i2c0, &otg_vbus) — live-proven 5.0V at the left connector
+-		 * in Phase 0 (with GPIO107 hogged high in &pio). The old
+-		 * GPIO94/sw7226(GPIO72) VBUS theory from builds #144-146
+-		 * was RIGHT-port wiring and is intentionally not revived.
++		 * GEMINI B-22 (2026-07-16): back to peripheral-only. The
++		 * B-19 Stage C "otg"+role-switch-default-mode="host"+xhci
++		 * child setup is retired -- host duty for this device now
++		 * belongs to the RIGHT port (usb1/MUSB, dts/0014), which is
++		 * architecturally independent (blockers.md B-22 "why the two
++		 * ports must be treated separately"). Leaving the left port
++		 * forced into its host role kept mtu3's role-switch probe
++		 * auto-enabling the BQ25896 OTG boost regulator on every
++		 * boot, which put the charger IC into source mode and
++		 * silently blocked charging even with a cable plugged in.
+ 		 */
+-		vbus-supply = <&otg_vbus>;
+-		dr_mode = "otg";
+-		usb-role-switch;
+-		role-switch-default-mode = "host";
++		dr_mode = "peripheral";
+ 		maximum-speed = "high-speed";
+-		#address-cells = <2>;
+-		#size-cells = <2>;
+-		ranges;
+ 		status = "okay";
+-
+-		/*
+-		 * xhci host child, per the mediatek,mtu3.yaml dual-role
+-		 * example. Build #142 lesson: the child MUST use its own
+-		 * MAC-only register window (0x11270000, one page — vendor
+-		 * DTB usb3_xhci@11270000) and unit address, NOT the
+-		 * parent's mac+ippc block, or platform_device_register()
+-		 * collides in sysfs ("cannot create duplicate filename")
+-		 * and xhci-mtk never probes. Vendor SPI 126 "xhci" IRQ.
+-		 * "mediatek,mtk-xhci" is the generic fallback compatible
+-		 * xhci-mtk.c already matches — no mt6797 entry needed.
+-		 */
+-		xhci: usb@11270000 {
+-			compatible = "mediatek,mtk-xhci";
+-			reg = <0 0x11270000 0 0x1000>;
+-			reg-names = "mac";
+-			interrupts = <GIC_SPI 126 IRQ_TYPE_LEVEL_LOW>;
+-			clocks = <&infrasys CLK_INFRA_SSUSB_SYS>,
+-				 <&infrasys CLK_INFRA_SSUSB_REF>;
+-			clock-names = "sys_ck", "ref_ck";
+-			vbus-supply = <&otg_vbus>;
+-			status = "okay";
+-		};
+ 	};
+ };
+ 

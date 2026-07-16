@@ -1,0 +1,118 @@
+diff --git a/drivers/usb/musb/mediatek.c b/drivers/usb/musb/mediatek.c
+index 0a35aab3a..e027cdeb2 100644
+--- a/drivers/usb/musb/mediatek.c
++++ b/drivers/usb/musb/mediatek.c
+@@ -11,6 +11,7 @@
+ #include <linux/dma-mapping.h>
+ #include <linux/module.h>
+ #include <linux/of.h>
++#include <linux/of_device.h>
+ #include <linux/of_platform.h>
+ #include <linux/platform_device.h>
+ #include <linux/usb/role.h>
+@@ -60,7 +61,15 @@ static int mtk_musb_clks_get(struct mtk_glue *glue)
+ 	glue->clks[1].id = "mcu";
+ 	glue->clks[2].id = "univpll";
+ 
+-	return devm_clk_bulk_get(dev, MTK_MUSB_CLKS_NUM, glue->clks);
++	/*
++	 * GEMINI (MT6797 usb11 right port, blockers.md B-19): this MUSB
++	 * instance only has the infra "icusb" bus gate (mapped to "main");
++	 * there are no separate "mcu"/"univpll" gates on this SoC. The
++	 * optional variant leaves missing entries as NULL clks, which the
++	 * bulk enable/disable helpers skip, so platforms that do provide
++	 * all three clocks are unaffected.
++	 */
++	return devm_clk_bulk_get_optional(dev, MTK_MUSB_CLKS_NUM, glue->clks);
+ }
+ 
+ static int mtk_otg_switch_set(struct mtk_glue *glue, enum usb_role role)
+@@ -391,6 +400,42 @@ static const struct musb_hdrc_config mtk_musb_hdrc_config = {
+ 	.ram_bits = MTK_MUSB_RAM_BITS,
+ };
+ 
++/*
++ * GEMINI (MT6797 usb11 right port, blockers.md B-22): MT6797's second USB
++ * controller is the cut-down "musbfsh" host-only IP, not the full OTG
++ * controller this glue was written for. Per the vendor driver
++ * (musbfsh_core.c: musbfsh_config_mt65xx + epx_cfg) it has 6 endpoints
++ * (EP0 + 5) and its dynamic FIFO holds EP1-5 at 512 bytes
++ * single-buffered. The vendor config also has multipoint=false, but
++ * build #253 combining that with num_eps=6 REGRESSED enumeration itself
++ * (device descriptor reads failing with -71, worse than the 8-EP
++ * multipoint baseline where bulk at least dead-ended after a clean
++ * enumeration) — so multipoint is left at the mainline default (true)
++ * here to isolate which half of the vendor config mismatch actually
++ * explains the bulk failure (num_eps/fifo vs multipoint).
++ */
++static struct musb_fifo_cfg mt6797_musb_mode_cfg[] = {
++	{ .hw_ep_num = 1, .style = FIFO_TX, .maxpacket = 512, },
++	{ .hw_ep_num = 1, .style = FIFO_RX, .maxpacket = 512, },
++	{ .hw_ep_num = 2, .style = FIFO_TX, .maxpacket = 512, },
++	{ .hw_ep_num = 2, .style = FIFO_RX, .maxpacket = 512, },
++	{ .hw_ep_num = 3, .style = FIFO_TX, .maxpacket = 512, },
++	{ .hw_ep_num = 3, .style = FIFO_RX, .maxpacket = 512, },
++	{ .hw_ep_num = 4, .style = FIFO_TX, .maxpacket = 512, },
++	{ .hw_ep_num = 4, .style = FIFO_RX, .maxpacket = 512, },
++	{ .hw_ep_num = 5, .style = FIFO_TX, .maxpacket = 512, },
++	{ .hw_ep_num = 5, .style = FIFO_RX, .maxpacket = 512, },
++};
++
++static const struct musb_hdrc_config mt6797_musb_hdrc_config = {
++	.fifo_cfg = mt6797_musb_mode_cfg,
++	.fifo_cfg_size = ARRAY_SIZE(mt6797_musb_mode_cfg),
++	.multipoint = true,
++	.dyn_fifo = true,
++	.num_eps = 6,
++	.ram_bits = MTK_MUSB_RAM_BITS,
++};
++
+ static const struct platform_device_info mtk_dev_info = {
+ 	.name = "musb-hdrc",
+ 	.id = PLATFORM_DEVID_AUTO,
+@@ -425,7 +470,9 @@ static int mtk_musb_probe(struct platform_device *pdev)
+ 	if (ret)
+ 		return ret;
+ 
+-	pdata->config = &mtk_musb_hdrc_config;
++	pdata->config = of_device_get_match_data(dev);
++	if (!pdata->config)
++		pdata->config = &mtk_musb_hdrc_config;
+ 	pdata->platform_ops = &mtk_musb_ops;
+ 	pdata->mode = usb_get_dr_mode(dev);
+ 
+@@ -452,6 +499,26 @@ static int mtk_musb_probe(struct platform_device *pdev)
+ 		return -EINVAL;
+ 	}
+ 
++	/*
++	 * GEMINI (MT6797 usb11 right port, blockers.md B-19): honor the DT
++	 * "maximum-speed" property, same as musb_dsps does. High-speed bulk
++	 * through this port's external SW7226/FUSB301 mux chain fails with
++	 * "three-strikes" RX errors and babble; capping the port to
++	 * full-speed keeps the link within what the pad chain can carry.
++	 * Only USB_SPEED_FULL is honored — anything else keeps the default.
++	 */
++	if (usb_get_maximum_speed(dev) == USB_SPEED_FULL) {
++		struct musb_hdrc_config *cfg;
++
++		cfg = devm_kmemdup(dev, pdata->config,
++				   sizeof(*cfg), GFP_KERNEL);
++		if (!cfg)
++			return -ENOMEM;
++		cfg->maximum_speed = USB_SPEED_FULL;
++		pdata->config = cfg;
++		dev_info(dev, "capping port to full-speed (DT maximum-speed)\n");
++	}
++
+ 	glue->phy = devm_of_phy_get_by_index(dev, np, 0);
+ 	if (IS_ERR(glue->phy)) {
+ 		dev_err(dev, "fail to getting phy %ld\n",
+@@ -521,6 +588,7 @@ static void mtk_musb_remove(struct platform_device *pdev)
+ #ifdef CONFIG_OF
+ static const struct of_device_id mtk_musb_match[] = {
+ 	{.compatible = "mediatek,mtk-musb",},
++	{.compatible = "mediatek,mt6797-musb", .data = &mt6797_musb_hdrc_config,},
+ 	{},
+ };
+ MODULE_DEVICE_TABLE(of, mtk_musb_match);

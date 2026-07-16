@@ -1,0 +1,123 @@
+[sudo] password for kali: === consys-golden-harvest Wed Jul 15 01:00:55 UTC 2026 ===
+Linux kali 3.18.41-kali+ #12 SMP PREEMPT Wed Apr 3 19:04:09 AEDT 2019 aarch64 GNU/Linux
+--- AP-side (always safe) ---
+0x10006000 SPM_PWRON_CONFG_EN = 0x00000001
+0x10006180 SPM_PWR_STATUS = 0x3A000057
+0x10006184 SPM_PWR_STATUS_2ND = 0x3A000047
+0x10006280 SPM_CONN_PWR_CON = 0x00000000
+0x10001220 INFRA_TOPAXI_PROT_EN = 0x00A00006
+0x10001228 INFRA_TOPAXI_PROT_STA1 = 0xE0E05826
+0x10001340 CONSYS_EMI_MAPPING = 0x180E1BFA
+0x10001350 CONN2AP_SLEEP_MASK = 0x0000011D
+0x10007018 AP_RGU_SWSYSRST = 0x00000000
+--- CONN domain state check ---
+PWR_STATUS=0x3A000057
+CONN powered: 1
+--- CONN-side (powered) ---
+0x18070008 CONSYS_CHIP_ID = 0x00000279
+0x18070110 MCU_CFG_ACR    = 0x03340002
+--- PMIC VCN rails (vendor sysfs, best effort) ---
+found: /sys/devices/platform/mt-pmic/pmic_access
+--- vendor WMT / WiFi state ---
+Module                  Size  Used by
+[45795.297617] [WMT-DEV][I]wmt_dbg_write:x(0x00000003), y(0x00000000), z(0x00000000)
+[45795.297639] [WMT-DEV][I]wmt_dbg_hwver_get:query chip version
+[45796.300248] [WMT-DEV][I]wmt_dbg_write:write parameter len = 14
+[45796.300268] [WMT-DEV][I]wmt_dbg_write:write parameter data = 0x1b 0x8 0x10
+[45796.300298] [WMT-DEV][I]wmt_dbg_write:y = 0x00000008
+[45796.300311] [WMT-DEV][I]wmt_dbg_write:x(0x0000001b), y(0x00000008), z(0x00000010)
+[45796.300337] [WMT-DEV][I]wmt_dbg_poll_cpupcr:polling count[8],polling sleep[1],toaee[0]
+[45814.092135] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306c43)
+[45821.211592] [HIF-SDIO][W]wmt_fb_notifier_callback:@@@@@@@@@@wmt enter early POWERDOWN @@@@@@@@@@@@@@
+[45821.211626] [HIF-SDIO][I]mtk_wcn_wmt_func_ctrl:wmt-exp: OPID(4) type(9) start
+[45821.211805] [Power/PPM] sys boost by WIFI: req_core = 0, target_boost_core = 0
+[45821.212315] [Power/PPM] sys boost by WIFI: req_freq = 0, target_boost_freq = 0
+[45821.231928] [WMT-CORE][I]wmt_core_dump_func_state:[AF FUNC OFF]status(b:2 f:0 g:0 w:2 lpbk:0 coredump:0 wmt:2 ant:0 sd1:0 sd2:0 stp:0)
+[45821.232071] [HIF-SDIO][I]mtk_wcn_wmt_func_ctrl:OPID(4) type(9) ok
+[45827.191843] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306c60)
+[45827.481180] [WMT-DEV][I]wmt_dbg_write:write parameter len = 12
+[45827.481221] [WMT-DEV][I]wmt_dbg_write:write parameter data = 0xa 0x3 0x0
+[45827.481256] [WMT-DEV][I]wmt_dbg_write:y = 0x00000003
+[45827.481268] [WMT-DEV][I]wmt_dbg_write:x(0x0000000a), y(0x00000003), z(0x00000000)
+[45827.481309] [WMT-DEV][I]wmt_dbg_stp_dbg_level:set stp log level to 3
+[45828.485137] [WMT-DEV][I]wmt_dbg_write:write parameter len = 15
+[45828.485184] [WMT-DEV][I]wmt_dbg_write:write parameter data = 0x1b 0x10 0x30
+[45828.485239] [WMT-DEV][I]wmt_dbg_write:y = 0x00000010
+[45828.485260] [WMT-DEV][I]wmt_dbg_write:x(0x0000001b), y(0x00000010), z(0x00000030)
+[45828.485306] [WMT-DEV][I]wmt_dbg_poll_cpupcr:polling count[16],polling sleep[3],toaee[0]
+[45834.121819] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306c7d)
+[45844.021624] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306c9a)
+[45863.381560] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306cb7)
+[45863.601879] [WMT-DEV][I]wmt_dbg_write:write parameter len = 15
+[45863.601913] [WMT-DEV][I]wmt_dbg_write:write parameter data = 0x1b 0x10 0x31
+[45863.601940] [WMT-DEV][I]wmt_dbg_write:y = 0x00000010
+[45863.601950] [WMT-DEV][I]wmt_dbg_write:x(0x0000001b), y(0x00000010), z(0x00000031)
+[45863.601970] [WMT-DEV][I]wmt_dbg_poll_cpupcr:polling count[16],polling sleep[3],toaee[1]
+[45873.501500] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306cd4)
+[45904.081451] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306cf1)
+[45910.571599] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306d0e)
+[45934.011814] [HIF-SDIO][I]wmt_dev_tm_temp_query:It is long time (> 300 sec) not to query, we must query temp temperature..
+[45934.042199] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45934.042678] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_READ_CMD command OK!
+[45934.043129] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45934.043211] [HIF-SDIO][I]wmt_dev_tm_temp_query:[Thermal] current_temp = 0x10
+[45940.601829] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306d2b)
+[45945.113015] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306d48)
+[45945.392779] [WMT-DEV][I]wmt_dbg_read:no data available, please run echo 15 xx > /proc/driver/wmt_psm first
+[45956.551949] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306d65)
+[45969.972687] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306d82)
+[45982.841976] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306d9f)
+[45984.122319] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45984.122966] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_READ_CMD command OK!
+[45984.123443] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45984.123525] [HIF-SDIO][I]wmt_dev_tm_temp_query:[Thermal] current_temp = 0x10
+[45999.891940] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306dbc)
+[46005.171958] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306dd9)
+[46034.202403] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[46034.202906] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_READ_CMD command OK!
+[46034.203371] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[46034.203453] [HIF-SDIO][I]wmt_dev_tm_temp_query:[Thermal] current_temp = 0x10
+[46034.321992] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306df6)
+[46039.052052] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306e13)
+[46052.582383] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306e30)
+crw-rw---- 1 root root 190, 0 Jun 22  2018 /dev/stpwmt
+crw-rw---- 1 root root 153, 0 Jun 22  2018 /dev/wmtWifi
+Inter-| sta-|   Quality        |   Discarded packets               | Missed | WE
+ face | tus | link level noise |  nwid  crypt   frag  retry   misc | beacon | 22
+ wlan0: 0000    0.  -52.  -256.       0      0      0      0      0        0
+=== end harvest ===
+--- CPUPCR samples (10x, healthy-idle pattern reference) ---
+0x18070160 CPUPCR         = 0x0009997A
+0x18070160 CPUPCR         = 0x0009997A
+0x18070160 CPUPCR         = 0x0009997A
+0x18070160 CPUPCR         = 0x0007FD08
+0x18070160 CPUPCR         = 0x0009997A
+0x18070160 CPUPCR         = 0x0009997A
+0x18070160 CPUPCR         = 0x000024A0
+0x18070160 CPUPCR         = 0x0009997A
+0x18070160 CPUPCR         = 0x0009997A
+0x18070160 CPUPCR         = 0x0009997A
+0x18070000 MCU_HW_VER     = 0x00008A00
+0x18070004 MCU_FW_VER     = 0x00008A00
+0x18070114 MCU_CFG_0x114  = 0xAA0A0014
+0x18070120 MCU_CFG_0x120  = 0x00000001
+--- BTIF host block 0x1100C000 ---
+0x1100C004 BTIF_IER       = 0x00000001
+0x1100C00c BTIF_FAKELCR   = 0x00000000
+0x1100C014 BTIF_LSR       = 0x00000060
+0x1100C048 BTIF_SLEEP_EN  = 0x00000000
+0x1100C04c BTIF_DMA_EN    = 0x00000007
+0x1100C054 BTIF_RTOCNT    = 0x00000040
+0x1100C060 BTIF_TRI_LVL   = 0x00000018
+0x1100C064 BTIF_WAK       = 0x00000001
+0x1100C068 BTIF_WAT_TIME  = 0x00000012
+0x1100C06c BTIF_HANDSHAKE = 0x00000003
+--- pwrap DCXO_CONN bridge (0x1000D000 base) ---
+0x1000D18C DCXO_ENABLE    = 0x00000000
+0x1000D190 DCXO_CONN_ADR0 = 0x00000000
+0x1000D194 DCXO_CONN_WDATA0 = 0x00000000
+0x1000D198 DCXO_CONN_ADR1 = 0x00000000
+0x1000D19C DCXO_CONN_WDATA1 = 0x00000000
+--- misc AP-side ---
+0x10001f00 AP2CONN_OSC_EN = 0x6D403A00
+0x10005600 AP_UART_USB_MUX = 0x00000080

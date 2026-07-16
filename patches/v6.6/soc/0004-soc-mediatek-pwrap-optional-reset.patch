@@ -1,0 +1,22 @@
+diff --git a/drivers/soc/mediatek/mtk-pmic-wrap.c b/drivers/soc/mediatek/mtk-pmic-wrap.c
+index efd9cae21..2ff75f768 100644
+--- a/drivers/soc/mediatek/mtk-pmic-wrap.c
++++ b/drivers/soc/mediatek/mtk-pmic-wrap.c
+@@ -2498,7 +2498,16 @@ static int pwrap_probe(struct platform_device *pdev)
+ 		return PTR_ERR(wrp->base);
+ 
+ 	if (HAS_CAP(wrp->master->caps, PWRAP_CAP_RESET)) {
+-		wrp->rstc = devm_reset_control_get(wrp->dev, "pwrap");
++		/*
++		 * MT6797 has no mainline reset provider (clk-mt6797 registers
++		 * no reset controller), so a "resets" property cannot be
++		 * satisfied there. The reset is only exercised inside
++		 * pwrap_init(), which is skipped whenever the bootloader has
++		 * already initialised the wrapper (INIT_DONE2 set); treat it
++		 * as optional so such platforms can still probe.
++		 * reset_control_reset(NULL) is a no-op if init does run.
++		 */
++		wrp->rstc = devm_reset_control_get_optional(wrp->dev, "pwrap");
+ 		if (IS_ERR(wrp->rstc)) {
+ 			ret = PTR_ERR(wrp->rstc);
+ 			dev_dbg(wrp->dev, "cannot get pwrap reset: %d\n", ret);

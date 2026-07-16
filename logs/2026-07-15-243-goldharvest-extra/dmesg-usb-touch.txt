@@ -1,0 +1,203 @@
+[    0.000000] Kernel command line: console=tty0 console=ttyMT0,921600n1 root=/dev/ram vmalloc=496M slub_max_order=0 slub_debug=OFZPU androidboot.hardware=mt6797 maxcpus=5 androidboot.verifiedbootstate=green bootopt=64S3,32N2,64N2 log_buf_len=4M androidboot.veritymode=enforcing printk.disable_uart=1 bootprof.pl_t=1375 bootprof.lk_t=3963 boot_reason=0 androidboot.serialno=0123456789ABCDEF androidboot.bootreason=power_key gpt=1 usb2jtag_mode=0 mrdump_ddrsv=yes mrdump_rsvmem=0x46000000,0x400000,0x44800000,0xa0e80,0x44000000,0x80000,0x448a0e40,0x1671
+[    0.226836] sysfs: cannot create duplicate filename '/module/c2k_usb/version'
+[    0.307042] usbcore: registered new interface driver usbfs
+[    0.307107] usbcore: registered new interface driver hub
+[    0.307249] usbcore: registered new device driver usb
+[    0.308059] soc:usbphy@0 supply vcc not found, using dummy regulator
+[    0.373060] vusb33: 3300 mV 
+[    0.380879] [FUSB301]fusb301_init initialization succeed!!
+[    0.380898] fusb300_gpio_init
+[    0.380989] [FUSB302]fusb300_init initialization succeed!!
+[    0.477834] C2K_USB_NOTE,<init 713>, rawbulk functions init.
+[    0.477865] C2K_USB_NOTE,<rawbulk_alloc_function 602>, rawbulk_alloc_function
+[    0.477951] C2K_USB_NOTE,<rawbulk_alloc_function 602>, rawbulk_alloc_function
+[    0.478024] C2K_USB_NOTE,<rawbulk_alloc_function 602>, rawbulk_alloc_function
+[    0.478098] C2K_USB_NOTE,<rawbulk_alloc_function 602>, rawbulk_alloc_function
+[    0.478167] C2K_USB_NOTE,<rawbulk_alloc_function 602>, rawbulk_alloc_function
+[    0.478240] C2K_USB_NOTE,<rawbulk_alloc_function 602>, rawbulk_alloc_function
+[    0.478311] C2K_USB_NOTE,<rawbulk_alloc_function 602>, rawbulk_alloc_function
+[    0.478382] C2K_USB_NOTE,<rawbulk_alloc_function 602>, rawbulk_alloc_function
+[    0.478456] C2K_USB_NOTE,<rawbulk_init 1308>, rawbulk_init
+[    0.493547] [MUSBFSH] musbfsh_init 2771: MUSBFSH is enabled
+[    0.494593] [MUSBFSH] musbfsh_init_controller 2102: musbfsh_init_controller++
+[    0.494617] MTK_ICUSB [DBG], <musbfsh_platform_init(), 1291> 
+[    0.494629] [MUSBFSH] musbfsh_platform_init 1293: musbfsh_platform_init++
+[    0.494646] [MUSBFSH] mt65xx_usb11_poweron 1192: mt65xx_usb11_poweron++
+[    0.495649] [USBPHY] Slew Rate Calibration: Timeout
+[    0.495717] musbfsh musbfsh: MUSBFSH HDRC host driver
+[    0.495747] musbfsh musbfsh: new USB bus registered, assigned bus number 1
+[    0.496473] hub 1-0:1.0: USB hub found
+[    0.496605] [MUSBFSH] musbfsh_start 1225: <== devctl 0x98
+[    0.496624] [MUSBFSH] musbfsh_start 1334:  musb ready. devctl=0x99, power=0x71
+[    0.996821] musbfsh musbfsh: USB controller at ffffff80014b2000 using DMA, IRQ 105
+[    0.996882] MTK_ICUSB [DBG], <create_musbfsh_cmd_proc_entry(), 353> 
+[    0.996929] MTK_ICUSB [DBG], <create_musbfsh_cmd_proc_entry(), 357> add /proc/MUSBFSH_CMD_ENTRY ok
+[    0.998789] musb-hdrc: version 6.0, ?dma?, otg (peripheral+host)
+[    1.003099] [FUSB302]Register driver musb-hdrc 1
+[    1.003392] musb-hdrc musb-hdrc: USB Peripheral mode controller at ffffff8001500000 using PIO, IRQ 159
+[    1.003430] musb-mtu3d 11270000.usb3: Cannot find usb pinctrl iddig_init
+[    1.113320] USB_BOOST, <test_loops(), 337> id<-1>, loops:100000, spent 0 sec, 707 usec
+[    1.114045] USB_BOOST, <test_loops(), 337> id<0>, loops:100000, spent 0 sec, 707 usec
+[    1.114899] USB_BOOST, <test_loops(), 337> id<1>, loops:100000, spent 0 sec, 706 usec
+[    1.115029] USB_BOOST, <create_sys_fs(), 505> 
+[    1.115225] USB_BOOST, <usb_boost_set_para_and_arg(), 141> para_range:<4>
+[    1.115241] USB_BOOST, <usb_boost_set_para_and_arg(), 141> para_range:<4>
+[    1.115255] USB_BOOST, <usb_boost_set_para_and_arg(), 141> para_range:<4>
+[    1.115270] USB_BOOST, <usb_boost_set_para_and_arg(), 141> para_range:<4>
+[    1.121450] usbcore: registered new interface driver usb-storage
+[    1.121509] usbcore: registered new interface driver ums-alauda
+[    1.121558] usbcore: registered new interface driver ums-cypress
+[    1.121606] usbcore: registered new interface driver ums-datafab
+[    1.121653] usbcore: registered new interface driver ums-freecom
+[    1.121705] usbcore: registered new interface driver ums-isd200
+[    1.121750] usbcore: registered new interface driver ums-jumpshot
+[    1.121799] usbcore: registered new interface driver ums-karma
+[    1.121845] usbcore: registered new interface driver ums-onetouch
+[    1.121891] usbcore: registered new interface driver ums-sddr09
+[    1.121937] usbcore: registered new interface driver ums-sddr55
+[    1.121983] usbcore: registered new interface driver ums-usbat
+[    1.122034] usbcore: registered new interface driver trancevibrator
+[    1.136366] mtk-tpd: MediaTek SSD20xx touch panel driver init
+[    1.143874] [FUSB302]fusb300_i2c_probe 0x25
+[    1.143887] [FUSB302]fusb300_i2c_probe FUSB301_1
+[    1.143903] [FUSB302]InitializeFUSB300
+[    1.144091] [FUSB302]InitializeFUSB300 DeviceID: 0x12
+[    1.145886] [FUSB302]request_irq debounce=256000, gpiopin=64
+[    1.145902] [FUSB302]request_irq irqnum=0x183
+[    1.146207] [FUSB302]fusb300_i2c_probe 12
+[    1.150686] [FUSB301]fusb301_i2c_probe 0x25
+[    1.150702] [FUSB301]fusb301_i2c_probe FUSB301_0
+[    1.150714] [FUSB301]InitializeFUSB301
+[    1.150917] [FUSB301]InitializeFUSB301 DeviceID: 0x12
+[    1.151931] [<ffffffc000517948>] fusb301_eint_init+0x64/0x10c
+[    1.151946] [<ffffffc000517b74>] fusb301_i2c_probe+0x11c/0x178
+[    1.152559] [<ffffffc000517948>] fusb301_eint_init+0x64/0x10c
+[    1.152574] [<ffffffc000517b74>] fusb301_i2c_probe+0x11c/0x178
+[    1.152972] [FUSB301]request_irq debounce=0, gpiopin=0
+[    1.152984] [FUSB301]request_irq irqnum=0x0
+[    1.152995] [FUSB301]request_irq fail, ret -22, irqnum 0!!!
+[    1.153211] [FUSB301]fusb301_i2c_probe 12
+[    1.370092] usbcore: registered new interface driver usbhid
+[    1.370111] usbhid: USB HID core driver
+[    1.372411] usbcore: registered new interface driver snd-usb-audio
+[    1.656421] [<ffffffc000516d08>] mtk_xhci_eint_iddig_init+0x170/0x1c4
+[    1.656432] [<ffffffc0012a1a60>] xhci_hcd_init+0x14/0x60
+[    1.656621] [FUSB302]Register driver xhci-mtk 2
+[    1.668101] [g_android][USB]android_init_functions: f->dev_name = f_ffs, f->name = ffs
+[    1.668536] [g_android][USB]android_init_functions: init ffs success!!
+[    1.668641] [g_android][USB]android_init_functions: f->dev_name = f_mbim, f->name = mbim
+[    1.669412] [g_android][USB]android_init_functions: init mbim success!!
+[    1.669504] [g_android][USB]android_init_functions: f->dev_name = f_acm, f->name = acm
+[    1.671471] [g_android][USB]android_init_functions: init acm success!!
+[    1.671525] [g_android][USB]android_init_functions: f->dev_name = f_mtp, f->name = mtp
+[    1.672648] [g_android][USB]android_init_functions: init mtp success!!
+[    1.672744] [g_android][USB]android_init_functions: f->dev_name = f_ptp, f->name = ptp
+[    1.673047] [g_android][USB]android_init_functions: init ptp success!!
+[    1.673134] [g_android][USB]android_init_functions: f->dev_name = f_eem, f->name = eem
+[    1.673442] [g_android][USB]android_init_functions: init eem success!!
+[    1.673552] [g_android][USB]android_init_functions: f->dev_name = f_gser, f->name = gser
+[    1.675600] [g_android][USB]android_init_functions: init gser success!!
+[    1.675715] [g_android][USB]android_init_functions: f->dev_name = f_rndis, f->name = rndis
+[    1.676004] [g_android][USB]android_init_functions: init rndis success!!
+[    1.676167] [g_android][USB]android_init_functions: f->dev_name = f_mass_storage, f->name = mass_storage
+[    1.677378] [g_android][USB]android_init_functions: init mass_storage success!!
+[    1.677438] [g_android][USB]android_init_functions: f->dev_name = f_accessory, f->name = accessory
+[    1.677887] [g_android][USB]android_init_functions: init accessory success!!
+[    1.677919] [g_android][USB]android_init_functions: f->dev_name = f_audio_source, f->name = audio_source
+[    1.678042] [g_android][USB]android_init_functions: init audio_source success!!
+[    1.678076] [g_android][USB]android_init_functions: f->dev_name = f_midi, f->name = midi
+[    1.678177] [g_android][USB]android_init_functions: init midi success!!
+[    1.678215] [g_android][USB]android_init_functions: f->dev_name = f_via_modem, f->name = via_modem
+[    1.678323] [g_android][USB]android_init_functions: init via_modem success!!
+[    1.678379] [g_android][USB]android_init_functions: f->dev_name = f_via_ets, f->name = via_ets
+[    1.678488] [g_android][USB]android_init_functions: init via_ets success!!
+[    1.678519] [g_android][USB]android_init_functions: f->dev_name = f_via_atc, f->name = via_atc
+[    1.678622] [g_android][USB]android_init_functions: init via_atc success!!
+[    1.678653] [g_android][USB]android_init_functions: f->dev_name = f_via_pcv, f->name = via_pcv
+[    1.678752] [g_android][USB]android_init_functions: init via_pcv success!!
+[    1.678795] [g_android][USB]android_init_functions: f->dev_name = f_via_gps, f->name = via_gps
+[    1.678895] [g_android][USB]android_init_functions: init via_gps success!!
+[    1.678925] [g_android][USB]android_init_functions: f->dev_name = f_hid, f->name = hid
+[    1.679071] [g_android][USB]android_init_functions: init hid success!!
+[    1.679118] android_usb gadget: android_usb ready
+[    1.741755] vusb33: disabling
+[    1.741808] vusb33: couldn't disable: -1
+[    2.350893] [NVT-ts] nvt_local_init 1679: add error touch panel driver.
+[    2.350982] mtk-tpd: SSL SSD20xx I2C Touchscreen Driver...
+[    2.524775] mtk-tpd: Cap touch panel driver
+[    2.529221] [BAT_probe] power_supply_register USB Success !!
+[    7.825941] systemd[1]: Starting USB Tethering...
+[    7.853276] [g_android][USB]enable_store: device_attr->attr.name: enable
+[    7.853323] [g_android]android_usb: already disabled
+[    7.853859] [g_android][USB]functions_store: name = rndis
+[    7.853960] [g_android][USB]enable_store: device_attr->attr.name: enable
+[    7.853976] [g_android][USB]bind_config function 'rndis'/ffffffc0013d3db8
+[    7.853986] [g_android][USB]rndis_function_bind_config
+[    7.854052] android_usb gadget: using random self ethernet address
+[    7.854065] android_usb gadget: using random host ethernet address
+[    7.854715] android_usb gadget: cfg 1/ffffffc0013d2f20 speeds: super high full
+[    7.854744] [g_android][USB]enable_store: enable 0->1 case, device_desc.idVendor = 0xfce, device_desc.idProduct = 0x7169
+[    8.979800] init: ignored duplicate definition of service 'atci_service'init: ignored duplicate definition of service 'atcid-daemon-u'init: ignored duplicate definition of service 'atcid-daemon-e'init: ignored duplicate definition of service 'audio-daemon'init: (Parsing init.mt6797.usb.rc took 0.00s.)
+[    9.801363] init: write_file: Unable to write to '/sys/class/android_usb/android0/f_ffs/aliases': Device or resource busy
+[   10.950106] init: cannot find '/vendor/bin/dongled' (No such file or directory), disabling 'usbdongled'
+[  534.896054] xhci-hcd 11270000.usb3_xhci: xHCI Host Controller
+[  534.896241] xhci-hcd 11270000.usb3_xhci: new USB bus registered, assigned bus number 2
+[  534.897511] xhci-hcd 11270000.usb3_xhci: irq 158, io mem 0x11270000
+[  534.913934] hub 2-0:1.0: USB hub found
+[  534.917850] xhci-hcd 11270000.usb3_xhci: xHCI Host Controller
+[  534.917942] xhci-hcd 11270000.usb3_xhci: new USB bus registered, assigned bus number 3
+[  534.929287] hub 3-0:1.0: USB hub found
+[  534.931270] xhci-hcd 11270000.usb3_xhci: Cannot find usb pinctrl drvvbus_high
+[  535.369518] usb 2-1: new full-speed USB device number 2 using xhci-hcd
+[  539.110290] xhci-hcd 11270000.usb3_xhci: Cannot find usb pinctrl drvvbus_low
+[  539.110421] xhci-hcd 11270000.usb3_xhci: remove, state 1
+[  539.110538] usb usb3: USB disconnect, device number 1
+[  539.116202] xhci-hcd 11270000.usb3_xhci: USB bus 3 deregistered
+[  539.116403] xhci-hcd 11270000.usb3_xhci: remove, state 1
+[  539.116521] usb usb2: USB disconnect, device number 1
+[  540.374417] xhci-hcd 11270000.usb3_xhci: USB bus 2 deregistered
+[  543.045416] xhci-hcd 11270000.usb3_xhci: xHCI Host Controller
+[  543.045596] xhci-hcd 11270000.usb3_xhci: new USB bus registered, assigned bus number 2
+[  543.047015] xhci-hcd 11270000.usb3_xhci: irq 158, io mem 0x11270000
+[  543.055365] hub 2-0:1.0: USB hub found
+[  543.056531] xhci-hcd 11270000.usb3_xhci: xHCI Host Controller
+[  543.056563] xhci-hcd 11270000.usb3_xhci: new USB bus registered, assigned bus number 3
+[  543.058475] hub 3-0:1.0: USB hub found
+[  543.058892] xhci-hcd 11270000.usb3_xhci: Cannot find usb pinctrl drvvbus_high
+[  553.049852] xhci-hcd 11270000.usb3_xhci: Cannot find usb pinctrl drvvbus_low
+[  553.049928] xhci-hcd 11270000.usb3_xhci: remove, state 1
+[  553.050007] usb usb3: USB disconnect, device number 1
+[  553.051905] xhci-hcd 11270000.usb3_xhci: USB bus 3 deregistered
+[  553.052028] xhci-hcd 11270000.usb3_xhci: remove, state 1
+[  553.052106] usb usb2: USB disconnect, device number 1
+[  553.056283] xhci-hcd 11270000.usb3_xhci: USB bus 2 deregistered
+[  562.513492] xhci-hcd 11270000.usb3_xhci: xHCI Host Controller
+[  562.513674] xhci-hcd 11270000.usb3_xhci: new USB bus registered, assigned bus number 2
+[  562.515334] xhci-hcd 11270000.usb3_xhci: irq 158, io mem 0x11270000
+[  562.532710] hub 2-0:1.0: USB hub found
+[  562.534118] xhci-hcd 11270000.usb3_xhci: xHCI Host Controller
+[  562.534202] xhci-hcd 11270000.usb3_xhci: new USB bus registered, assigned bus number 3
+[  562.543393] hub 3-0:1.0: USB hub found
+[  562.546738] xhci-hcd 11270000.usb3_xhci: Cannot find usb pinctrl drvvbus_high
+[  568.747512] xhci-hcd 11270000.usb3_xhci: Cannot find usb pinctrl drvvbus_low
+[  568.747647] xhci-hcd 11270000.usb3_xhci: remove, state 1
+[  568.747764] usb usb3: USB disconnect, device number 1
+[  568.750450] xhci-hcd 11270000.usb3_xhci: USB bus 3 deregistered
+[  568.750632] xhci-hcd 11270000.usb3_xhci: remove, state 1
+[  568.750746] usb usb2: USB disconnect, device number 1
+[  568.767791] xhci-hcd 11270000.usb3_xhci: USB bus 2 deregistered
+[  578.022027] xhci-hcd 11270000.usb3_xhci: xHCI Host Controller
+[  578.022215] xhci-hcd 11270000.usb3_xhci: new USB bus registered, assigned bus number 2
+[  578.023976] xhci-hcd 11270000.usb3_xhci: irq 158, io mem 0x11270000
+[  578.047695] hub 2-0:1.0: USB hub found
+[  578.048081] xhci-hcd 11270000.usb3_xhci: xHCI Host Controller
+[  578.048109] xhci-hcd 11270000.usb3_xhci: new USB bus registered, assigned bus number 3
+[  578.048860] hub 3-0:1.0: USB hub found
+[  578.049133] xhci-hcd 11270000.usb3_xhci: Cannot find usb pinctrl drvvbus_high
+[  579.977809] xhci-hcd 11270000.usb3_xhci: Cannot find usb pinctrl drvvbus_low
+[  579.977941] xhci-hcd 11270000.usb3_xhci: remove, state 1
+[  579.978056] usb usb3: USB disconnect, device number 1
+[  579.980325] xhci-hcd 11270000.usb3_xhci: USB bus 3 deregistered
+[  579.980493] xhci-hcd 11270000.usb3_xhci: remove, state 1
+[  579.980605] usb usb2: USB disconnect, device number 1
+[  579.986715] xhci-hcd 11270000.usb3_xhci: USB bus 2 deregistered

@@ -1,8 +1,29 @@
 diff --git a/drivers/power/supply/bq25890_charger.c b/drivers/power/supply/bq25890_charger.c
-index 03fa11a1c..cd6961219 100644
+index 03fa11a1c..6324b7f87 100644
 --- a/drivers/power/supply/bq25890_charger.c
 +++ b/drivers/power/supply/bq25890_charger.c
-@@ -1495,9 +1495,18 @@ static int bq25890_probe(struct i2c_client *client)
+@@ -1155,6 +1155,20 @@ static int bq25890_vbus_enable(struct regulator_dev *rdev)
+ 	union power_supply_propval val = {
+ 		.intval = 0,
+ 	};
++	int ret;
++
++	/*
++	 * GEMINI (blockers.md B-19, boot.md build #231 defect 1): the chip
++	 * has been observed to lose its probe-time programming after boot
++	 * (REG07 read back 0xff, OTG bit clear) while the regulator core
++	 * still counted it enabled. The 40s I2C watchdog silently resets
++	 * REG03 unless disabled, so re-assert watchdog-off on every enable
++	 * instead of trusting probe-time state.
++	 */
++	ret = bq25890_field_write(bq, F_WD, 0);
++	if (ret < 0)
++		dev_err(bq->dev, "re-disabling I2C watchdog failed: %d\n", ret);
++	dev_info(bq->dev, "enabling OTG boost (watchdog re-disabled)\n");
+ 
+ 	/*
+ 	 * When enabling 5V boost / Vbus output, we need to put the secondary
+@@ -1495,9 +1509,18 @@ static int bq25890_probe(struct i2c_client *client)
  	if (client->irq <= 0)
  		client->irq = bq25890_irq_probe(bq);
  
@@ -23,7 +44,7 @@ index 03fa11a1c..cd6961219 100644
  	}
  
  	/* OTG reporting */
-@@ -1519,12 +1528,14 @@ static int bq25890_probe(struct i2c_client *client)
+@@ -1519,12 +1542,14 @@ static int bq25890_probe(struct i2c_client *client)
  	if (ret < 0)
  		return dev_err_probe(dev, ret, "registering power supply\n");
  
