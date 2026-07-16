@@ -1,0 +1,104 @@
+diff --git a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+index 39239e270..9b911e3b3 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+@@ -22,6 +22,7 @@
+ #include <dt-bindings/gpio/gpio.h>
+ #include <dt-bindings/input/input.h>
+ #include <dt-bindings/phy/phy.h>
++#include <dt-bindings/power/mt6797-power.h>
+ 
+ / {
+ 	model = "Planet Computers Gemini PDA";
+@@ -1140,4 +1141,91 @@ ssusb: usb@11271000 {
+ 			status = "okay";
+ 		};
+ 	};
+ };
++
++/*
++ * --- PMIC wrapper + MT6351 VCN regulators + CONSYS (Phase 8 WiFi, Stage
++ * W1 spike; research.md "CONSYS Stage W0 harvest") ---
++ *
++ * pwrap: mainline mtk-pmic-wrap fully supports mt6797 + the mt6351 slave.
++ * IRQ SPI 178 level-high from the vendor DTB (pwrap@1000d000,
++ * interrupts = <0 0xb2 0x04>). LK has already initialised the wrapper
++ * (all PMIC access in LK goes through it), so the driver's init path is
++ * a no-op re-check; clocks: "spi" = pmicspi_sel mux, "wrap" = the
++ * infracfg pmic_ap gate (clk-mt6797 GATE_ICG0 1) -- both already in
++ * clk-mt6797.
++ *
++ * MT6351 child: minimal regulator driver (VCN rails only,
++ * drivers/regulator/mt6351-regulator.c). Voltages are the vendor-fixed
++ * nominals (upmu_hw.h defaults; vendor consys sets exactly these).
++ *
++ * consys: spike probe driver (Gate G2a). The CONN scpsys domain
++ * (MT6797_POWER_DOMAIN_CONN, keep-default-off) is powered by the driver
++ * only after VCN18/VCN28 are up, matching the vendor order. The 2 MB
++ * no-map EMI region mirrors the vendor's dynamic consys-reserve-memory
++ * node (2 MB size/alignment); unused until Gate G2b firmware download.
++ */
++/ {
++	reserved-memory {
++		consys_mem: consys-reserve-memory {
++			no-map;
++			size = <0 0x200000>;
++			alignment = <0 0x200000>;
++			alloc-ranges = <0 0x40000000 0 0x80000000>;
++		};
++	};
++
++	pwrap: pwrap@1000d000 {
++		compatible = "mediatek,mt6797-pwrap";
++		reg = <0 0x1000d000 0 0x1000>;
++		reg-names = "pwrap";
++		interrupts = <GIC_SPI 178 IRQ_TYPE_LEVEL_HIGH>;
++		clocks = <&topckgen CLK_TOP_MUX_PMICSPI>,
++			 <&infrasys CLK_INFRA_PMIC_AP>;
++		clock-names = "spi", "wrap";
++
++		pmic: mt6351 {
++			compatible = "mediatek,mt6351";
++
++			regulators {
++				mt6351_vcn18_reg: vcn18 {
++					regulator-name = "vcn18";
++					regulator-min-microvolt = <1800000>;
++					regulator-max-microvolt = <1800000>;
++				};
++
++				mt6351_vcn28_reg: vcn28 {
++					regulator-name = "vcn28";
++					regulator-min-microvolt = <2800000>;
++					regulator-max-microvolt = <2800000>;
++				};
++
++				mt6351_vcn33_bt_reg: vcn33_bt {
++					regulator-name = "vcn33_bt";
++					regulator-min-microvolt = <3300000>;
++					regulator-max-microvolt = <3300000>;
++				};
++
++				mt6351_vcn33_wifi_reg: vcn33_wifi {
++					regulator-name = "vcn33_wifi";
++					regulator-min-microvolt = <3300000>;
++					regulator-max-microvolt = <3300000>;
++				};
++			};
++		};
++	};
++
++	consys: consys@18070000 {
++		compatible = "mediatek,mt6797-consys";
++		reg = <0 0x18070000 0 0x200>;
++		power-domains = <&scpsys MT6797_POWER_DOMAIN_CONN>;
++		/* AP<->CONSYS BTIF FIFO clock, for the Stage W2 (Gate
++		 * G2b) WMT handshake; the BTIF block itself
++		 * (0x1100c000) is ioremapped by the spike driver. */
++		clocks = <&infrasys CLK_INFRA_BTIF>;
++		clock-names = "btif";
++		vcn18-supply = <&mt6351_vcn18_reg>;
++		vcn28-supply = <&mt6351_vcn28_reg>;
++		memory-region = <&consys_mem>;
++	};
++};

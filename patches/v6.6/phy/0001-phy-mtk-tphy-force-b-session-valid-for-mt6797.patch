@@ -1,5 +1,5 @@
 diff --git a/drivers/phy/mediatek/phy-mtk-tphy.c b/drivers/phy/mediatek/phy-mtk-tphy.c
-index 05eab9014..8afd7470c 100644
+index 05eab9014..4ab1c2e47 100644
 --- a/drivers/phy/mediatek/phy-mtk-tphy.c
 +++ b/drivers/phy/mediatek/phy-mtk-tphy.c
 @@ -111,11 +111,22 @@
@@ -25,15 +25,16 @@ index 05eab9014..8afd7470c 100644
  
  #define U3P_U2PHYBC12C		0x080
  #define P2C_RG_CHGDT_EN		BIT(0)
-@@ -327,6 +338,7 @@ struct mtk_phy_instance {
+@@ -327,6 +338,8 @@ struct mtk_phy_instance {
  	int discth;
  	int pre_emphasis;
  	bool bc12_en;
 +	bool force_sess_valid;
++	bool force_usb_host;
  };
  
  struct mtk_tphy {
-@@ -872,6 +884,25 @@ static void u2_phy_instance_power_on(struct mtk_tphy *tphy,
+@@ -872,6 +885,54 @@ static void u2_phy_instance_power_on(struct mtk_tphy *tphy,
  
  	mtk_phy_clear_bits(com + U3P_U2PHYDTM1, P2C_RG_SESSEND);
  
@@ -56,10 +57,39 @@ index 05eab9014..8afd7470c 100644
 +			 index);
 +	}
 +
++	/*
++	 * MT6797 Gemini left-port host mode (blockers.md B-19): mtu3 never
++	 * calls phy_set_mode(), so the host-role IDDIG forcing in
++	 * u2_phy_instance_set_mode() is unreachable, and on a clean LK
++	 * handover DTM1=0 leaves the MAC in device role with the PHY analog
++	 * suspended (DTM0 SUSPENDM=0). Verified by devmem on hardware
++	 * (boot.md build #231 defects 3+4): DTM1 FORCE_IDDIG with RG_IDDIG=0
++	 * plus DTM0 FORCE_SUSPENDM|RG_SUSPENDM are both required. Doing it
++	 * in power_on makes it survive PHY power cycles.
++	 *
++	 * The session-valid signals must be forced too: with them left to
++	 * hardware, the MUSB right-port MAC never sees VBUS and loops in
++	 * "VBUS_ERROR in a_idle (<SessEnd)" (boot.md build #249) — the
++	 * vendor usb11 driver (musbfsh_mt65xx.c) forces avalid/bvalid/
++	 * vbusvalid and clears sessend on host enable for exactly this
++	 * reason. Same mask as force_sess_valid but with IDDIG=0 (host).
++	 */
++	if (instance->force_usb_host) {
++		mtk_phy_clear_bits(com + U3P_U2PHYDTM1,
++				   P2C_RG_IDDIG | P2C_RG_SESSEND);
++		mtk_phy_set_bits(com + U3P_U2PHYDTM1,
++				 P2C_FORCE_SESS_MSK | P2C_RG_VBUSVALID |
++				 P2C_RG_BVALID | P2C_RG_AVALID);
++		mtk_phy_set_bits(com + U3P_U2PHYDTM0,
++				 P2C_FORCE_SUSPENDM | P2C_RG_SUSPENDM);
++		dev_info(tphy->dev, "u2 phy%d: forcing host role (IDDIG=0, session forced valid, SUSPENDM=1)\n",
++			 index);
++	}
++
  	if (tphy->pdata->avoid_rx_sen_degradation && index) {
  		mtk_phy_set_bits(com + U3D_U2PHYDCR0, P2C_RG_SIF_U2PLL_FORCE_ON);
  
-@@ -894,6 +925,11 @@ static void u2_phy_instance_power_off(struct mtk_tphy *tphy,
+@@ -894,6 +955,19 @@ static void u2_phy_instance_power_off(struct mtk_tphy *tphy,
  
  	mtk_phy_set_bits(com + U3P_U2PHYDTM1, P2C_RG_SESSEND);
  
@@ -68,15 +98,25 @@ index 05eab9014..8afd7470c 100644
 +		mtk_phy_clear_bits(com + U3P_U2PHYDTM1,
 +				   P2C_FORCE_SESS_MSK | P2C_RG_SESS_VALID_MSK);
 +
++	/* undo forced host role so a later role change starts clean */
++	if (instance->force_usb_host) {
++		mtk_phy_clear_bits(com + U3P_U2PHYDTM1,
++				   P2C_FORCE_SESS_MSK | P2C_RG_SESS_VALID_MSK);
++		mtk_phy_clear_bits(com + U3P_U2PHYDTM0,
++				   P2C_FORCE_SUSPENDM | P2C_RG_SUSPENDM);
++	}
++
  	if (tphy->pdata->avoid_rx_sen_degradation && index) {
  		mtk_phy_clear_bits(com + U3P_U2PHYDTM0, P2C_RG_SUSPENDM | P2C_FORCE_SUSPENDM);
  
-@@ -1124,6 +1160,8 @@ static void phy_parse_property(struct mtk_tphy *tphy,
+@@ -1124,6 +1198,10 @@ static void phy_parse_property(struct mtk_tphy *tphy,
  		return;
  
  	instance->bc12_en = device_property_read_bool(dev, "mediatek,bc12");
 +	instance->force_sess_valid = device_property_read_bool(dev,
 +					"mediatek,force-b-session-valid");
++	instance->force_usb_host = device_property_read_bool(dev,
++					"mediatek,force-usb-host");
  	device_property_read_u32(dev, "mediatek,eye-src",
  				 &instance->eye_src);
  	device_property_read_u32(dev, "mediatek,eye-vrt",

@@ -1,0 +1,37 @@
+
+kali login: 
+>>> SENT: 'root'
+root
+/system/bin/sh: root: not found
+127|aeon6797_6m_n:/ $ 
+>>> SENT: "PS1='GPROMPT# '"
+PS1='GPROMPT# '
+GPROMPT# 
+>>> SENT: 'uname -a'
+uname -a
+Linux localhost 3.18.41-kali+ #12 SMP PREEMPT Wed Apr 3 19:04:09 AEDT 2019 armv8l
+GPROMPT# 
+>>> SENT: 'id'
+id
+uid=2000(shell) gid=2000(shell) groups=2000(shell),1007(log),3009(readproc)
+GPROMPT# 
+GPROMPT# 
+>>> SENT: "PS1='GPROMPT# '"
+PS1='GPROMPT# '
+GPROMPT# 
+>>> SENT: 'su -c id 2>&1 || echo NOSU'
+su -c id 2>&1 || echo NOSU
+su: invalid uid/gid '-c'
+NOSU
+GPROMPT# 
+>>> SENT: 'sudo -n id 2>&1 || echo NOSUDO'
+sudo -n id 2>&1 || echo NOSUDO
+/system/bin/sh: sudo: not found
+NOSUDO
+GPROMPT# 
+>>> SENT: 'which devmem devmem2 busybox 2>/dev/null; ls /dev/wmtWifi /dev/stpwmt 2>&1'
+which devmem devmem2 busybox 2>/dev/null; ls /dev/wmtWifi /dev/stpwmt 2>&1
+mem2 busybox 2>/dev/null; ls /dev/wmtWifi /dev/stpwmt                         <Password: 
+>>> SENT: "PS1='GPROMPT# '"
+
+>>> SENT: "PS1='GPROMPT# '"

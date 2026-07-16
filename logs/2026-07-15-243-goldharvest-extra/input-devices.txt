@@ -1,0 +1,107 @@
+I: Bus=0019 Vendor=0000 Product=0000 Version=0000
+N: Name="ACCDET"
+P: Phys=
+S: Sysfs=/devices/virtual/input/input0
+U: Uniq=
+H: Handlers=kbd gpufreq_ib event0 
+B: PROP=0
+B: EV=23
+B: KEY=40 0 0 0 0 0 0 1000000000 c000000000018 0
+B: SW=1
+
+I: Bus=0019 Vendor=2454 Product=6500 Version=0010
+N: Name="mtk-kpd"
+P: Phys=
+S: Sysfs=/devices/soc/10010000.keypad/input/input1
+U: Uniq=
+H: Handlers=kbd gpufreq_ib event1 
+B: PROP=0
+B: EV=3
+B: KEY=1000000 0 0 8000000000 0 4000000000000 2
+
+I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+N: Name="Integrated keyboard"
+P: Phys=
+S: Sysfs=/devices/virtual/input/input2
+U: Uniq=
+H: Handlers=kbd gpufreq_ib event2 
+B: PROP=0
+B: EV=3
+B: KEY=1000000000000 0 2000168000000000 35ff57ff3ffcffc
+
+I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+N: Name="hwmdata"
+P: Phys=
+S: Sysfs=/devices/virtual/input/input3
+U: Uniq=
+H: Handlers=gpufreq_ib event3 
+B: PROP=0
+B: EV=5
+B: REL=6
+
+I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+N: Name="m_alsps_input"
+P: Phys=
+S: Sysfs=/devices/virtual/input/input4
+U: Uniq=
+H: Handlers=gpufreq_ib event4 
+B: PROP=0
+B: EV=d
+B: REL=6
+B: ABS=101
+
+I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+N: Name="m_acc_input"
+P: Phys=
+S: Sysfs=/devices/virtual/input/input5
+U: Uniq=
+H: Handlers=gpufreq_ib event5 
+B: PROP=0
+B: EV=d
+B: REL=c1
+B: ABS=107
+
+I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+N: Name="m_gyro_input"
+P: Phys=
+S: Sysfs=/devices/virtual/input/input6
+U: Uniq=
+H: Handlers=gpufreq_ib event6 
+B: PROP=0
+B: EV=d
+B: REL=c1
+B: ABS=107
+
+I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+N: Name="m_step_c_input"
+P: Phys=
+S: Sysfs=/devices/virtual/input/input7
+U: Uniq=
+H: Handlers=gpufreq_ib event7 
+B: PROP=0
+B: EV=d
+B: REL=7
+B: ABS=100
+
+I: Bus=0018 Vendor=0000 Product=0000 Version=0000
+N: Name=""
+P: Phys=
+S: Sysfs=/devices/soc/11011000.i2c/i2c-4/4-0053/input/input9
+U: Uniq=
+H: Handlers=gpufreq_ib event8 
+B: PROP=2
+B: EV=b
+B: KEY=420 0 0 0 0 0
+B: ABS=460000000000000
+
+I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+N: Name="mtk-tpd"
+P: Phys=
+S: Sysfs=/devices/virtual/input/input8
+U: Uniq=
+H: Handlers=kbd gpufreq_ib event9 
+B: PROP=2
+B: EV=b
+B: KEY=400 0 0 100040008800 10168000000000 4500181460000
+B: ABS=263000001000003
+

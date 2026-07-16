@@ -26,3 +26,4 @@ FlashToolLinux/history.ini
 
 # Claude local settings
 .claude/settings.local.json
+docs/firmware-consys/

@@ -1,0 +1,100 @@
+[44531.800923] [HIF-SDIO][I]wmt_dev_tm_temp_query:It is long time (> 300 sec) not to query, we must query temp temperature..
+[44531.831345] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[44531.831972] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_READ_CMD command OK!
+[44531.832613] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[44531.832699] [HIF-SDIO][I]wmt_dev_tm_temp_query:[Thermal] current_temp = 0x10
+[44581.911271] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[44581.911906] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_READ_CMD command OK!
+[44581.912553] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[44581.912638] [HIF-SDIO][I]wmt_dev_tm_temp_query:[Thermal] current_temp = 0x10
+[44631.991270] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[44631.991899] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_READ_CMD command OK!
+[44631.992544] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[44631.992631] [HIF-SDIO][I]wmt_dev_tm_temp_query:[Thermal] current_temp = 0x10
+[44682.071246] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[44682.071859] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_READ_CMD command OK!
+[44682.072508] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[44682.072592] [HIF-SDIO][I]wmt_dev_tm_temp_query:[Thermal] current_temp = 0x10
+[44732.151352] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[44732.152003] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_READ_CMD command OK!
+[44732.152643] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[44732.152727] [HIF-SDIO][I]wmt_dev_tm_temp_query:[Thermal] current_temp = 0x10
+[45032.600748] [HIF-SDIO][I]wmt_dev_tm_temp_query:It is long time (> 300 sec) not to query, we must query temp temperature..
+[45032.631253] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45032.631874] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_READ_CMD command OK!
+[45032.632518] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45032.632602] [HIF-SDIO][I]wmt_dev_tm_temp_query:[Thermal] current_temp = 0xb
+[45082.711352] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45082.712017] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_READ_CMD command OK!
+[45082.712672] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45082.712757] [HIF-SDIO][I]wmt_dev_tm_temp_query:[Thermal] current_temp = 0xb
+[45132.791292] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45132.791952] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_READ_CMD command OK!
+[45132.792609] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45132.792694] [HIF-SDIO][I]wmt_dev_tm_temp_query:[Thermal] current_temp = 0xb
+[45182.871282] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45182.871947] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_READ_CMD command OK!
+[45182.872606] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45182.872692] [HIF-SDIO][I]wmt_dev_tm_temp_query:[Thermal] current_temp = 0xb
+[45221.201920] [HIF-SDIO][W]wmt_fb_notifier_callback:@@@@@@@@@@wmt enter UNBLANK @@@@@@@@@@@@@@
+[45221.201982] [HIF-SDIO][I]mtk_wcn_wmt_func_ctrl:wmt-exp: OPID(3) type(9) start
+[45221.231214] [WMT-CORE][I]wmt_core_dump_func_state:[AF FUNC ON]status(b:2 f:0 g:0 w:2 lpbk:2 coredump:0 wmt:2 ant:0 sd1:0 sd2:0 stp:0)
+[45221.231336] [HIF-SDIO][I]mtk_wcn_wmt_func_ctrl:OPID(3) type(9) ok
+[45232.951273] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45232.951897] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_READ_CMD command OK!
+[45232.952510] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45232.952546] [HIF-SDIO][I]wmt_dev_tm_temp_query:[Thermal] current_temp = 0xb
+[45333.060991] [HIF-SDIO][I]wmt_dev_tm_temp_query:It is long time (> 300 sec) not to query, we must query temp temperature..
+[45333.091567] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45333.092379] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_READ_CMD command OK!
+[45333.093170] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45333.093407] [HIF-SDIO][I]wmt_dev_tm_temp_query:[Thermal] current_temp = 0x10
+[45383.171962] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45383.172826] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_READ_CMD command OK!
+[45383.173702] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45383.174064] [HIF-SDIO][I]wmt_dev_tm_temp_query:[Thermal] current_temp = 0x10
+[45433.242802] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45433.243120] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_READ_CMD command OK!
+[45433.243400] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45433.243445] [HIF-SDIO][I]wmt_dev_tm_temp_query:[Thermal] current_temp = 0x10
+[45483.321858] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45483.322694] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_READ_CMD command OK!
+[45483.323491] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45483.323725] [HIF-SDIO][I]wmt_dev_tm_temp_query:[Thermal] current_temp = 0x10
+[45533.402213] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45533.403063] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_READ_CMD command OK!
+[45533.403989] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45533.404229] [HIF-SDIO][I]wmt_dev_tm_temp_query:[Thermal] current_temp = 0x10
+[45558.959576] [WMT-DEV][I]wmt_dbg_write:write parameter len = 12
+[45558.959595] [WMT-DEV][I]wmt_dbg_write:write parameter data = 0x8 0x0 0x0
+[45558.959613] [WMT-DEV][I]wmt_dbg_write:y = 0x00000000
+[45558.959620] [WMT-DEV][I]wmt_dbg_write:x(0x00000008), y(0x00000000), z(0x00000000)
+[45558.959635] [WMT-DEV][I]wmt_dbg_raed_chipid:chip version = 0
+[45558.959704] [WMT-DEV][I]wmt_dbg_write:write parameter len = 12
+[45558.959713] [WMT-DEV][I]wmt_dbg_write:write parameter data = 0x3 0x0 0x0
+[45558.959727] [WMT-DEV][I]wmt_dbg_write:y = 0x00000000
+[45558.959733] [WMT-DEV][I]wmt_dbg_write:x(0x00000003), y(0x00000000), z(0x00000000)
+[45558.959746] [WMT-DEV][I]wmt_dbg_hwver_get:query chip version
+[45558.959798] [WMT-DEV][I]wmt_dbg_write:write parameter len = 15
+[45558.959807] [WMT-DEV][I]wmt_dbg_write:write parameter data = 0x1b 0x14 0x10
+[45558.959821] [WMT-DEV][I]wmt_dbg_write:y = 0x00000014
+[45558.959828] [WMT-DEV][I]wmt_dbg_write:x(0x0000001b), y(0x00000014), z(0x00000010)
+[45558.959842] [WMT-DEV][I]wmt_dbg_poll_cpupcr:polling count[20],polling sleep[1],toaee[0]
+[45561.372746] [WMT-DEV][I]wmt_dbg_write:write parameter len = 13
+[45561.372855] [WMT-DEV][I]wmt_dbg_write:write parameter data = 0x19 0x1 0x0
+[45561.372999] [WMT-DEV][I]wmt_dbg_write:y = 0x00000001
+[45561.373059] [WMT-DEV][I]wmt_dbg_write:x(0x00000019), y(0x00000001), z(0x00000000)
+[45561.373204] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008300000)
+[45561.373305] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008300400)
+[45575.011392] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306a90)
+[45583.451297] [HIF-SDIO][I]wmt_dev_tra_poll:**poll_during_time = 45283520 > 3000, during_count = 2690 > 200, query
+[45583.451434] [HIF-SDIO][I]wmt_dev_tm_temp_query:traffic , we must query temperature..
+[45583.481883] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45583.482705] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_READ_CMD command OK!
+[45583.483860] [WMT-CORE][I]opfunc_therm_ctrl:Send WMT_THERM_CTRL_CMD command OK!
+[45583.484096] [HIF-SDIO][I]wmt_dev_tm_temp_query:[Thermal] current_temp = 0x10
+[45589.311381] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306aad)
+[45604.931595] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306aca)
+[45634.991891] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306ae7)
+[45664.911954] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306b04)
+[45694.942018] [HIF-SDIO][I]wmt_lib_get_fwinfor_from_emi:vir addr(0xffffff8008306b21)

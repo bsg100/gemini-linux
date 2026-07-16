@@ -1,0 +1,127 @@
+Warning: Permanently added '192.168.100.137' (ED25519) to the list of known hosts.
+[sudo] password for kali: [  627.211626] init: Starting service 'vold'...
+[  627.398367] systemd[1]: Started /run/user/100000 mount wrapper.
+[  627.399315] systemd[1]: Created slice User Slice of UID 100000.
+[  627.401671] systemd[1]: Starting User Manager for UID 100000...
+[  627.410976] systemd[1]: Started Session 19 of user kali.
+[  627.427720] logd first log reader, set log level to M!
+[  627.427756] logd: logd.reader.per thread start.
+[  627.430597] logd no log reader, set log level to I!
+[  627.430636] logd: logd.reader.per thread stop.
+[  627.431124] logd first log reader, set log level to M!
+[  627.431144] logd: logd.reader.per thread start.
+[  627.432810] logd no log reader, set log level to I!
+[  627.432835] logd: logd.reader.per thread stop.
+[  627.440535] logd first log reader, set log level to M!
+[  627.440572] logd: logd.reader.per thread start.
+[  627.442394] logd no log reader, set log level to I!
+[  627.442415] logd: logd.reader.per thread stop.
+[  627.443082] logd first log reader, set log level to M!
+[  627.443104] logd: logd.reader.per thread start.
+[  627.444698] logd no log reader, set log level to I!
+[  627.444722] logd: logd.reader.per thread stop.
+[  627.471622] [4163:vold] is in the middle of doing coredump so skip sig 13
+[  627.509023] init: Service 'vold' (pid 587) killed by signal 6
+[  627.509101] init: Service 'vold' (pid 587) killing any children in process group
+[  627.695549] [CQ] task 0 ready not clear when DMA
+[  627.733584] [PMIC] [PMIC_INT] addr[0x2e0]=0x0
+[  627.733617] [PMIC] [PMIC_INT] addr[0x2e2]=0x0
+[  627.733640] [PMIC] [PMIC_INT] addr[0x2e4]=0x4000
+[  627.733668] [do_chrdet_int_task] charger exist!
+[  627.735741] [is_chr_det] 1
+[  628.063137] [PMIC] [PMIC_INT] addr[0x2e6]=0x0
+[  628.063669] MTK_FG: FG parameters v1(4211,4268,4312,4336) (4201,4245,3740,2645) (15,10,10) 60 115 3050 (2,98) (1,1,60) 75
+[  628.063700] mtk_rtc_hal_common: rtc_spare_reg[0] = {16412, 127, 8}
+[  628.080615] [kernel]AvgVbat 4241,bat_vol 4322, AvgI 624, I -107, VChr 4929, AvgT 26, T 26, ZCV 4302, CHR_Type 2, SOC  98: 99:100, bcct 0:0, Ichg 768, IBat -44
+[  628.080685] [BATTERY] Disable check battery exist.
+[  628.081021] Can't find closest level 
+[  628.084367] mtk_rtc_common: set_rtc_spare_fg_value, 99
+[  628.084388] [fg_res] set rtc = 99
+[  628.471950] systemd[1]: Started User Manager for UID 100000.
+[  628.584972] mtk_pep_reset_ta_vchr: OK
+[  628.585005] mtk_pep_set_is_cable_out_occur: out = 0
+[  628.585018] pep_plugout_reset: OK
+[  628.585033] mtk_pep_check_charger: stop, SOC = 99, to_check_chr_type = 1, chr_type = 2, ret = 0
+[  628.585052] [BATTERY] Battery full !!
+               
+[  628.585090] charging_set_cv_voltage register_value=0x1f 4340000 4336000
+[  628.585488] [BATTERY] Battery Re-charging !!
+               
+[  628.585507] mtk_pep_set_to_check_chr_type: check = 1
+[  628.586986] [PE+]Ibat=768, Ilim=100, Vbus=5100, err=0, Ichg=0, Vbat=4204, ChrStat=2, CHGEN=1, VDPM=0
+===
+Bus 001 Device 004: ID 349c:0418  
+Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+===
+/sys/bus/usb/devices/1-1/speed:480
+/sys/bus/usb/devices/usb1/speed:480
+/sys/bus/usb/devices/1-1/product:USB2.0 Device
+/sys/bus/usb/devices/usb1/product:MUSBFSH HDRC host driver
+===
+NAME         MAJ:MIN RM   SIZE RO TYPE MOUNTPOINT
+loop0          7:0    0   700M  1 loop /var/lib/lxc/android/rootfs/system
+sda            8:0    1 119.1G  0 disk 
+`-sda1         8:1    1 119.1G  0 part /media/root/SDCARD
+mmcblk0      179:0    0  58.2G  0 disk 
+mmcblk0boot0 179:32   0     4M  1 disk 
+mmcblk0boot1 179:64   0     4M  1 disk 
+mmcblk0rpmb  179:96   0     4M  0 disk 
+mmcblk1      179:128  0  14.9G  0 disk 
+`-mmcblk1p1  179:129  0  14.9G  0 part 
+zram0        254:0    0   1.9G  0 disk [SWAP]
+Warning: Permanently added '192.168.100.137' (ED25519) to the list of known hosts.
+[sudo] password for kali: DRIVER=musbfsh
+OF_NAME=usb1
+OF_FULLNAME=/soc/usb1@11200000
+OF_COMPATIBLE_0=mediatek,mt6797-usb11
+OF_COMPATIBLE_N=1
+MODALIAS=of:Nusb1T<NULL>Cmediatek,mt6797-usb11
+driver
+driver_override
+modalias
+pools
+power
+subsystem
+uevent
+usb1
+105:       7500       5708     GICv3 105  musbfsh
+159:          0          0     GICv3 159  musb-hdrc
+/sys/firmware/devicetree/base/soc/usb3@11270000
+/sys/firmware/devicetree/base/soc/usb3_xhci@11270000
+/sys/firmware/devicetree/base/soc/fusb301@
+/sys/firmware/devicetree/base/soc/fusb301a@
+/sys/firmware/devicetree/base/soc/usb3_sif2@11290000
+/sys/firmware/devicetree/base/soc/usb1p_sif@11210000
+/sys/firmware/devicetree/base/soc/usb1@11200000
+/sys/firmware/devicetree/base/soc/usb3_sif@11280000
+/sys/firmware/devicetree/base/soc/usb3_phy
+/sys/firmware/devicetree/base/soc/usbphy@0
+===
+10001000.usb2jtag
+11200000.usb1
+11210000.usb1p_sif
+11270000.usb3
+11270000.usb3_xhci
+11280000.usb3_sif
+11290000.usb3_sif2
+musb-hdrc
+musbfsh
+soc:fusb301@
+soc:fusb301a@
+soc:usb3_phy
+soc:usb_c_pinctrl@0
+soc:usbphy@0
+Warning: Permanently added '192.168.100.137' (ED25519) to the list of known hosts.
+=== RTL8156 ethernet dongle, right port (later same session) ===
+Bus 001 Device 005: ID 0bda:8156 Realtek Semiconductor Corp. 
+Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+usb0             UP             192.168.100.138/24 
+usb0             UP             00:e0:4c:68:00:cd <BROADCAST,MULTICAST,DYNAMIC,UP,LOWER_UP> 
+[  461.530635] usb 1-1: new high-speed USB device number 2 using musbfsh
+[  468.251587] usb 1-1: USB disconnect, device number 2
+[  474.587993] usb 1-1: new high-speed USB device number 3 using musbfsh
+[  482.505796] usb 1-1: USB disconnect, device number 3
+[  601.092849] usb 1-1: new high-speed USB device number 4 using musbfsh
+[  673.922009] usb 1-1: USB disconnect, device number 4
+[  678.431317] usb 1-1: new high-speed USB device number 5 using musbfsh
+[  678.642471] cdc_ncm 1-1:2.0: MAC-Address: 00:e0:4c:68:00:cd

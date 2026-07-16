@@ -2479,7 +2479,50 @@ USB-off/`clk_ignore_unused` fallback is no longer needed — mtu3 + keyboard
 now coexist). **New baseline:** display + keyboard + USB gadget SSH, all
 together, for the first time since Phase 6 began.
 
-## 🟡 B-19 — WiFi Stage 1 Gate G1a: USB host mode never enumerates a real device, cause unknown
+## 🟢 B-19 — WiFi Stage 1 Gate G1a: USB host mode — RESOLVED 2026-07-15 (build #248: RTL8156 ethernet adapter enumerates + SSH-over-LAN, no-hands cold boot verified)
+
+**RESOLVED 2026-07-15.** Build #248's four baked-in #231 fixes all worked;
+the final live root cause was **external charge power suppressing the
+BQ2589x OTG boost** (chip enters charge mode, REG0B VBUS_STAT=001, OTG
+bit dropped — no VBUS ever sourced, so every prior test with a charger
+attached was doomed regardless of kernel state). With the charger
+unplugged: RTL8156 USB-C ethernet adapter enumerates from a cold boot
+with zero manual pokes, r8152 binds, DHCP, SSH from the Mac over the LAN
+(192.168.100.144). Full timeline + rough edges (charger hot-plug kills
+boost without self-resume — /root/h.sh recovers; one unexplained panic
+on first reboot, pstore empty; rtl8156b-2.fw missing but works) in
+boot.md "BUILD #248 flashed". Gate G1b's original purpose (SSH not via
+the gadget) is satisfied by this ethernet path; WiFi-dongle work can
+reuse it directly.
+
+**History — resumed 2026-07-15 (user decision — CONSYS G2b hunt parked in turn):**
+target is a USB ethernet adapter on the left port, giving SSH-over-LAN as
+the debug channel for later WiFi work. Build #248 (sha256
+`99bf2c1aa53a46348a55e0e43e1f898f594435dd99370dd7c4559450e2b76edb`) bakes
+in all four #231 defects: (1) bq25890_vbus_enable re-asserts WD-off each
+enable (power/0001); (2) autosuspend root-caused to Debian's
+60-autosuspend.rules hwdb writing power/control=auto — countered by rootfs
+udev rule 99-gemini-usb-host-pm.rules (both controllers + all USB devices
+pinned "on"); (3+4) new DTS-gated `mediatek,force-usb-host` in phy/0001
+(host IDDIG + SUSPENDM forced in u2 power_on — mtu3 never calls
+phy_set_mode(), so mainline's host-role path is dead code here). dts/0012
+re-enabled (dts/0013 EOF-context regenerated to apply after it);
+gemini-usb.config back to the host build + usbnet adapter drivers
+(CDCETHER/RTL8152/AX88179/AX8817X/RNDIS/SMSC95XX); rootfs also got DHCP
+on any en*/eth* (not usb0) and re-staged /root/h.sh + /root/s.sh (s.sh now
+reads the queued linestate monitor 0x11290870/74). New pre-build evidence:
+**MT6351 VUSB33/VA10 rails proven ON live** via pwrap regmap on #247
+(0x0A16=0xda62, 0x0A6E=0xda62, EN bits set) — the #231 "analog rails"
+suspect is weakened. If #248 still shows Powered/Not-connected, the
+linestate adapter-out-vs-in comparison at the panel console is the
+deciding diagnostic. See boot.md "BUILD #248".
+
+**History — parked 2026-07-14 → 2026-07-15:** build #231 exhausted the vendor-sourced GPIO/mux
+candidates and four PHY/runtime-PM defects were root-caused without
+producing a connect event. WiFi pivoted to the internal CONSYS path
+(B-21) until G2b stalled (see B-21). Host-mode overlay was retired to
+`patches/v6.6/dts/0012-...patch.disabled`; `configs/gemini-usb.config`
+restored to the gadget build (build #233). Both reversals undone in #248.
 
 **Symptom:** with `mtu3` in host/OTG mode (`patches/v6.6/dts/0009-...`),
 `xhci-mtk` binds and the controller comes up without crashing, but a USB
@@ -2646,7 +2689,118 @@ live verification, research.md "USB Left-Port PHY & Type-C Harvest"):**
    retest left-port enumeration; trace how IDDIG is generated on a
    Type-C port before more role-switch DTS work.
 
-## 🟢 B-20 — USB gadget enumeration intermittently dead: root cause = U2PHYDTM1 session-valid FORCE bits (RESOLVED 2026-07-14, build #225)
+**Update 2026-07-14 — Stage C Phase 1 (vendor IDDIG/VBUS harvest) complete
+(research.md harvest §7).** Key facts:
+- Vendor host-mode trigger = pure ID-pin OTG: EINT 181 level-low →
+  debounced `mtk_xhci_mode_switch()` loads xhci and enables VBUS; no CC
+  logic anywhere in the host path. Who drives IDDIG low on a Type-C
+  connector is still unproven (i2c1 FUSB301's eint handler is a stub;
+  FUSB301 has no legacy ID output pin) — to be resolved empirically in
+  Phase 0 by watching EINT181 while attaching a sink with the chip in
+  SOURCE mode.
+- **Left-port host VBUS = RT9466 charger OTG boost** (`set_chr_enable_otg`
+  → CHG_CTRL1 reg 0x01 bit0 OPA_MODE, chip at i2c0 0x53), NOT the MT6351
+  PMIC (`CONFIG_MTK_OTG_PMIC_BOOST_5V` unset in the known-good config).
+  Mainline `rt9467-charger.c` exposes exactly this boost as a
+  `usb-otg-vbus-regulator` — clean Phase 2 shape is RT9466 node +
+  regulator as `vbus-supply` of ssusb (caveat: driver hard-requires its
+  IRQ, the B-11 EINT gap — patch it optional or fix B-11).
+- ~~**Phase 0 zero-kernel live test (next, needs hardware):** on #225 over
+  FTDI serial — i2c1 0x25 Mode(0x02)=0x01 SOURCE, RT9466 boost on via
+  i2c0 0x53 reg 0x01 bit0, plug real-Type-C sink into left port, read
+  Status(0x11)/Type(0x12) expecting ATTACH=1, and check EINT181 level.~~
+  **DONE 2026-07-14 — see below.**
+
+**Update 2026-07-14 — Stage C Phase 0 COMPLETE: full left-port CC+VBUS
+chain proven live, zero kernel changes** (research.md harvest §8, logs
+`2026-07-14-227..230-b19-phase0-*.log`). Run over gadget SSH with staged
+scripts (serial console is unusable on #225 — see B-20 note below). The
+working recipe, all three elements required:
+1. **FUSB301 i2c1 0x25 Mode(0x02)=0x01 SOURCE** → ATTACH=1 + Type=SINK for
+   real devices, both CC orientations verified.
+2. **BQ25896 OTG bit (i2c0 0x6b REG03 bit5) with I2C watchdog disabled**
+   (REG07[5:4]=00; the 40s WD silently resets REG03 otherwise).
+3. **GPIO107 HIGH** (`GPIO_OTG_DRVVBUS_PIN`, aeon dws) — the BQ25896 boost
+   is pin-AND-register gated and fails silently (no fault) when low; LK
+   hands it over low. This was the final missing piece.
+   Result: VBUS_STAT=111, VBUS ADC 5.0V, device LEDs lit.
+- **Charger correction: the device has a TI BQ25896 at i2c0 0x6b
+  (REG14=0x06), NOT an RT9466** — nothing at 0x53 on any bus. All RT9466
+  references in hardware.md/Phase 7 corrected; mainline driver =
+  `bq25890_charger.c` (`ti,bq25896`), which also exposes the boost as a
+  `usb-otg-vbus` regulator.
+- **Remaining for Stage C:** Phase 2 build (host-mode DTS + FUSB301A
+  driver rewrite for i2c1/real regmap + bq25896 node + GPIO107 + gating
+  the B-20 force-b-session-valid in host role), then Gate G1a enumeration
+  test. IDDIG (EINT 181) still untraced — may be unnecessary with
+  role-switch-default host.
+
+**Side-finding 2026-07-14 (belongs to B-20/B-15 ledger):** on build #225
+the serial console is dead on EVERY boot (FTDI protocol included) — the
+forced session-valid bits hold the PHY pads in USB mode; #226's "FTDI
+regression clean" capture actually ends at 0.447s (mtu3 probe). Worse, a
+boot with the FTDI rig attached at power-on appeared to hang at
+`clk: Disabling unused clocks` (panel confirmed stuck, not just serial
+loss); boot with NO cable then hot-plug works. serial-login/serial capture
+are unavailable on #225 until the force bits are gated by role or DTS knob.
+
+**Update 2026-07-14 — Stage C Phase 2 patches drafted (not yet built):**
+- `patches/v6.6/usb/0001` REWRITTEN for the real chip/regmap: binds the
+  **i2c1** left-port FUSB301, Mode reg 0x02 = 0x01 SOURCE, Status
+  0x11/Type 0x12 decode per the live Phase 0 verification. Polling (500ms,
+  B-11 = no EINT), dev_info on CC change, SINK restored in
+  shutdown/remove for vendor-chain handoff.
+- NEW `patches/v6.6/power/0001-power-bq25890-allow-probe-without-irq.patch`:
+  mainline `bq25890_charger.c` hard-fails probe without an IRQ; patched to
+  warn-and-continue (B-11). Driver already disables the 40s watchdog in
+  hw_init (F_WD=0) — matches the Phase 0 recipe.
+- NEW `patches/v6.6/dts/0012-arm64-dts-mediatek-gemini-left-port-host-mode.patch`
+  (applies after dts/0009, keeps 0009 gadget baseline intact for easy
+  revert): (a) i2c0 charger node corrected to `ti,bq25896`@0x6b with the
+  seven required ti,* props (defaults matching live-observed hardware
+  values) and an `otg_vbus: usb-otg-vbus` regulator child; (b) i2c1
+  `typec@25` FUSB301 node enabled; (c) GPIO107 gpio-hog output-high
+  (`otg-drvvbus`); (d) ssusb → dr_mode="otg" + usb-role-switch +
+  role-switch-default-mode="host" + xhci child @0x11270000 SPI 126 (the
+  #142 sysfs-collision and #143 pure-host-mux lessons baked in),
+  vbus-supply=<&otg_vbus>; (e) **B-20 `mediatek,force-b-session-valid`
+  REMOVED from u2port0** in this build — it pins the PHY to device role
+  (and killed serial); serial console should return to normal B-15
+  behaviour. The old GPIO94/sw7226/fusb301a_sw hogs from #144-146 are NOT
+  revived (right-port wiring); FUSB340 GPIO251/252 hogs stay excluded
+  (display regression, #147).
+- `configs/gemini-usb.config` updated: MTU3_DUAL_ROLE, XHCI_MTK,
+  TYPEC_FUSB301A, CHARGER_BQ25890, plus usb-storage/usbnet class drivers
+  so G1a devices bind.
+- Validated: full patch stack applies clean on pristine v6.6; board DTS
+  compiles with dtc. Next: /build-pack, regression-check keyboard+display
+  (+serial return), then Gate G1a (SPI 126 count + lsusb beyond root hub).
+
+**Update 2026-07-14 (late) — build #231 flashed and live-debugged: all
+Phase 2 software works, Gate G1a still not passed.** Full session detail
+in boot.md "BUILD #231 flashed". Regression gate passed (boot, display,
+keyboard, FTDI-attached boot no longer hangs); FUSB301 driver, bq25890
+regulator, dual-role mtu3 + xhci root hub all live. Device never
+enumerates: portsc stuck "Powered Not-connected", SPI 126 never fires.
+Four real defects found and worked around by hand (all must be fixed in
+build #232):
+1. bq25890 boost state lost post-boot (REG03/REG07 reset; harden
+   `bq25890_vbus_enable` to rewrite WD-off + OTG each enable);
+2. runtime PM autosuspend clears IPPC HOST_SEL and power-cycles the PHY
+   — with no USB wakeup wired this permanently kills connect detection
+   (disable autosuspend for ssusb/xhci in the build);
+3. U2PHYDTM1 needs explicit host forcing (FORCE_IDDIG|RG_IDDIG=0 =
+   0x200); LK leftovers differ by boot cable (0x43E2E FTDI / 0x0 clean);
+4. U2PHYDTM0 SUSPENDM=0 on clean handover — PHY analog asleep; forced
+   FORCE_SUSPENDM|RG_SUSPENDM.
+Even with all four fixed live, no linestate: ruled out usb2uart mux,
+usb2jtag mux, ACR4 GPIO mode, ACR6 config, GPIO70/71, orientation.
+NEXT: PHY linestate monitor (0x11290870/74) adapter-out vs -in to split
+MAC-side break vs analog-blind; prime remaining suspect = MT6351 PMIC
+PHY rails (VUSB33/VA10, no mainline driver) per vendor
+`usb_phy_recover()`, the canonical host U2-PHY bring-up sequence.
+Debug tooling: `/root/h.sh` + `/root/s.sh` on the rootfs (survive kernel
+reflashes; see boot.md). — USB gadget enumeration intermittently dead: root cause = U2PHYDTM1 session-valid FORCE bits (RESOLVED 2026-07-14, build #225)
 
 **Opened 2026-07-13 (late).** The #175/#177 gadget baseline (verified
 working twice on 2026-07-13: morning #175, and once mid-evening #177 with
@@ -2749,3 +2903,338 @@ serial, gadget `configured` + SSH after cable swap; serial still dies at
 the ~0.45s PHY switch — that is B-15, unchanged and expected). The
 cable protocol ("never boot with the Mac cable in") is retired: boot
 with the host attached now just works.
+
+
+## 🟡 B-21 — Internal WiFi via MT6797 CONSYS (Phase 8 Stage 2, activated 2026-07-14)
+
+**Goal:** working internal WiFi (scan/associate/DHCP/SSH-over-WiFi) via
+the on-die CONSYS block — the vendor gen2 stack is the only
+implementation that has ever existed (~150 KLOC WiFi; no mainline
+support; frank-w's same-core port broke at kernel 6.0, unfixed). Staged
+with hard gates so we can stop cheaply (plan.md Phase 8 "WiFi plan"
+Stage 2; approved plan in research.md "CONSYS Stage W0 harvest").
+
+- **Stage W0 (DONE 2026-07-14, no flash):** vendor power-on sequence
+  fully source-harvested (corrections: CONN_PWR_CON=0x280 not 0x32C; no
+  clk-mt6797 change needed); LK proven to leave CONSYS cold (devmem on
+  #225); firmware blobs + wmt binaries extracted from Android p27 to
+  `docs/firmware-consys/`; golden-reference harvest script
+  `scripts/consys-golden-harvest.sh` ready for the optional vendor-Kali
+  boot (W0b — needs `boot2 planet/kali_boot.img` + slow 5.5GB
+  `linux planet/linux.img` flash, then Debian restore).
+- **Stage W1: Gate G2a PASSED (proven live by hand 2026-07-14).** Two
+  fixes en route: build #234 = pwrap reset made optional (soc/0004 —
+  mt6797 has no mainline reset provider, mt6797 pwrap caps demand one);
+  then scpsys "Failed to power on domain conn" root-caused live to a
+  STALE vendor CONN_PWR_CON define — real offset is SPM+0x32C, not
+  0x280 (0x280 rejects writes; 0x32C idles at the 0x112 off-pattern and
+  acks in PWR_STATUS bit1). Manual devmem sequence at 0x32C returned
+  chip-ID **0x0279** with VCN rails off and no aux pokes. Build #236
+  flashed and VERIFIED: full driver-level pass at 0.58s boot, chip-ID
+  0x279 first read, CONN genpd on, zero regressions (display/keyboard/
+  gadget SSH). **Stage W1 COMPLETE 2026-07-14.** New:
+  scpsys CONN domain (pmdomain/0002), minimal MT6351 VCN regulator
+  driver over pwrap (regulator/0002 — first Linux PMIC access in the
+  project), consys spike driver (soc/0003), pwrap+mt6351+consys DTS
+  (dts/0013), `configs/gemini-consys.config`. Pass/fail is one dmesg
+  line, checkable over gadget SSH.
+- **Stage W2 (in progress 2026-07-14): Gate G2b.** Desk harvest complete:
+  the WMT handshake runs over **BTIF** (AP↔CONSYS FIFO @0x1100c000,
+  mainline `CLK_INFRA_BTIF` gate exists) in STP *mand mode* (4-byte hdr
+  `0x80|seq<<3, type<<4|len_hi, len_lo, 0x00` + payload + 2 zero CRC,
+  WMT task=4) — the full 3.5-KLOC STP core is NOT needed for the gate.
+  Builds ≤#236 left the MCU held in the WDT swsysrst (bit12, key
+  0x88<<24); releasing it boots the ROM. **Build #237** (sha256
+  `c646178a…`, `logs/2026-07-14-237-consys-w2-g2b-mcu-handshake/`)
+  extends soc/0003: EMI remap (TOPCKGEN+0x1340 = base>>20 | BIT(12)) +
+  zero the 343K ctrl window, BTIF PIO init, MCU release, then
+  WMT_QUERY_STP (`01 04 01 00 04`) expecting ROM event `02 04 06 00 00
+  04` = **Gate G2b PASS** dmesg line. On FAIL the RX hex dump is logged
+  and state left up for devmem. dts/0013 gains the btif clock.
+  **#237 booted (banner verified): G2a still passes; G2b failed at step
+  one with `memory-region unresolved (-22)`** — code bug: `consys_mem`
+  is a dynamic reserved-memory node (no `reg`), so
+  `of_address_to_resource()` can't resolve it; must use
+  `of_reserved_mem_lookup()` (kernel allocated it at 0x42600000 this
+  boot). **Build #238** (`consys-g2b-emi-lookup-fix`, sha256
+  `1766aeb3…`, `logs/2026-07-14-238-consys-g2b-emi-lookup-fix/`) fixes
+  exactly that in soc/0003. **#238 booted: EMI/remap OK, but G2b still
+  -110 (TX out, 0 RX). Live SSH session then proved the MCU ROM IS
+  RUNNING** (CONSYS_CPUPCR 0x18070160 changes every read) — so power/
+  clock/EMI/reset are all correct and only the BTIF channel is at
+  fault. Root cause: BTIF FIFOCTRL clear bits are level-held (vendor
+  pulses them; we left both FIFOs in reset, discarding the ROM's
+  reply), plus the never-done BTIF_WAK (+0x64) ap_wakeup_consys pulse
+  before TX. **Build #239** (`consys-g2b-btif-fifo-wakeup`, sha256
+  `d18973f8…`) fixes both, adds a 500ms retry and CPUPCR/LSR/IIR
+  logging on FAIL. **#239 booted: still -110, but the live session
+  found the real root cause — the CONN domain's TOPAXI bus-protect
+  mask is bits 17|18 (vendor clk-mt6797-pg.c, the actual runtime
+  path), not the MT2701 2|8 our scpsys entry used; PROTECTSTA1 bit 18
+  was never released, blocking all BTIF traffic into CONSYS while
+  chip-ID/CPUPCR reads (different path) worked. Build #240**
+  (`consys-conn-busprot-17-18`, sha256 `2ba9b70960b8a880…`) fixes
+  pmdomain/0002. **#240 booted: protect fix VERIFIED (STA1 bit 18
+  clear, first query frame drained fully — path open), but still
+  G2B FAIL (-110): the ROM runs (CPUPCR alternates 0x55AA55xx
+  idle-pattern with real addresses 0x428/0x3538) yet never services
+  BTIF — its link FIFO swallowed the first frame and stayed full;
+  live MCU re-reset + immediate re-query, OSC_EN(0x10001f00 bit9) and
+  BTIF_WAK pulses all no-effect; EMI ctrl window untouched by ROM;
+  HW_VER 0x8A00 healthy; ACR MBIST already set; PMIC DCXO CW00 bit5
+  (XO_WCN) already 1. Every register vendor's power-on touches now
+  matches. See boot.md 2026-07-14 #240 entry. Next: Stage W0b
+  golden-reference harvest from the working vendor Kali 3.18 stack
+  (user decision — needs 5.5GB linux.img reflash + restore), to
+  capture healthy-idle CPUPCR, DCXO/pwrap DCXO_CONN bridge state, and
+  ROM-boot EMI signature.** **W0b golden harvest COMPLETE 2026-07-15**
+  (boot.md entry; logs 2026-07-15-242/243): healthy CPUPCR = 0x0009997A
+  steady → our 0x55AA55xx is ABNORMAL; working system runs with
+  CONN_PWR_CON=0x10D (bit 8 SET — vendor never touches SRAM_PDN, our
+  scpsys entry was clearing it: top suspect); BTIF golden HANDSHAKE=0x3
+  TRI_LVL=0x18; DCXO_CONN bridge all-zero (clock-buffer theory dead);
+  ROM answers the query ~50ms after reset release on golden hardware;
+  0x10001f00 golden 0x6D403A00 vs our 0x11403200 (bit 11 — reserve
+  suspect). **Build #244** (`consys-g2b-golden-fixes`, sha256
+  `7d681d06…`) = sram_pdn_bits→0 (pmdomain/0002) + BTIF golden config +
+  mand-frame byte0 fix (soc/0003). Awaiting flash (+ Debian rootfs
+  restore after the Kali detour). ROM-patch download (opcodes 0x08/0x01,
+  ≤1000-byte frags) is the step after the query handshake proves the
+  channel. **#244 was a silent no-op** (2026-07-15): the regenerated
+  soc/0003 lost its Kconfig hunk (uncommitted Mac-tree edit) and the
+  untracked spike.c, so `CONFIG_MTK_CONSYS_SPIKE` was dropped by
+  olddefconfig and the driver never built — #244's boot tested nothing.
+  Patch fixed (Kconfig + Makefile + full spike.c). **Build #247**
+  (`consys-g2b-spike-kconfig-fix`, sha256 `3810bd14…`) = the real
+  golden-fixes run. **#247 booted: G2a PASS, G2b still FAIL (-110).**
+  Long live-debug session (boot.md #247 entry) eliminated, one variable
+  at a time on the running system: SWSYSRST bit16, MCU_CFG_ACR bits
+  24/25, full golden AP2CONN_OSC_EN 0x6D403A00, the vendor AFE/WBG
+  analog table (0x180B6000 — step the spike never did), BTIF
+  HANDSHAKE/WAK/FIFO-clear combinations, and the EMI-MPU theory
+  (remapping to golden 0xBFA00000 window + MCU reset-cycle — no
+  change). Signature refined: BTIF TX shifter hard-blocks (LSR 0x60→
+  0x20 on first byte, FIFO-clear resets it, next byte re-sticks), i.e.
+  the CONN-side BTIF peer never initializes; MCU ROM executes (real
+  PCs interleaved with 0x55AA55xx sleep samples) but parks. Remaining
+  hypotheses: golden *pre-patch* ROM-idle state was never captured
+  (all golden numbers are post-firmware); vendor 3.18 CCF
+  `clk_scp_conn_main` (scpsys) side effects beyond our sequence;
+  co-clock/XO detail (`RG_VCN28_ON_CTRL=1` HW-mode before VCN28
+  enable). Device left safe: MCU parked in reset, EMI mapping restored.
+- **Stage W3:** go/no-go on the full gen2 port (frank-w 5.6→6.6 delta
+  audit); if GO, port order = WMT core → AHB HIF → cfg80211 glue, WiFi
+  only.
+
+**Risk:** highest-uncertainty workstream in the project; the gates exist
+precisely because the gen2 port may prove uneconomical. NO-GO returns
+WiFi to the (parked) USB path.
+
+## 🟢 B-22 — RESOLVED 2026-07-16: right-port USB host (MUSB) + left-port charging work simultaneously — opened 2026-07-15
+
+**RESOLVED — build #255 verified on hardware.** With the charger plugged
+into the LEFT port and the RTL8156 ethernet adapter in the RIGHT port at
+the same boot: `bq25890-charger-0` reports `status=Charging`,
+`online=1`; `enxec9a0c162365` (right-port RTL8156) shows live RX/TX
+traffic with zero errors; the left port's `usb0` gadget (RNDIS) also came
+up automatically (a bonus of restoring `mediatek,force-b-session-valid`
+in dts/0015 — gadget mode auto-enumerates again whenever a host is
+present on the left port, same as pre-B-19 behaviour). This is the first
+time charge-left + ethernet-right has been confirmed working together —
+the original goal of this blocker. Full chain of fixes across builds
+#252→#255, in order: (1) full-speed cap to keep the right-port MUSB link
+inside the pad chain's limits (usb/0002 `maximum-speed`), (2) vendor-
+accurate `num_eps=6`/trimmed EP1-5 FIFO table replacing mainline's
+MT8516-shaped 8-EP config (fixed the actual bulk-data TX-stuck/three-
+strikes failure, build #254), (3) `multipoint` staying at mainline's
+`true` default (build #253's `multipoint=false` regressed enumeration
+itself — musbfsh doesn't support multipoint addressing but mainline's
+default value doesn't harm it either), (4) retiring the LEFT port's
+leftover B-19 host-mode DTS (`dts/0012` behaviour) back to
+`dr_mode="peripheral"` (`dts/0015`, build #255) so BQ25896 isn't forced
+into OTG-source mode at every boot, blocking charger input.
+
+**UPDATE 2026-07-16 (latest) — root cause found for "charger plugged in
+but not charging": LEFT port DTS still forced host mode, unconditionally
+enabling the BQ25896 OTG boost at every boot.** User plugged a charger
+into the left port to test the B-22 goal; `power_supply` sysfs stayed
+`Discharging`/`online=0`. dmesg showed `bq25890-charger 0-006b: enabling
+OTG boost (watchdog re-disabled)` firing at 3.156s on every boot,
+regardless of charger presence — traced to `patches/v6.6/dts/0012` (the
+now-superseded B-19 Stage C left-port-host overlay): the `ssusb` node
+still had `dr_mode="otg"` + `role-switch-default-mode="host"` +
+`vbus-supply=<&otg_vbus>`, so `mtu3`'s role-switch probe auto-enables the
+OTG boost regulator unconditionally, putting the charger IC into
+source/OTG mode — which cannot simultaneously sink an external charger.
+This was pure leftover: host duty moved to the RIGHT port (usb1/MUSB) in
+build #248, but the LEFT port's DTS was never reverted to
+peripheral-only. **Fix: new patch `dts/0015`** (applies after 0014,
+built as **BUILD #255**) restores `dr_mode="peripheral"` on `ssusb`,
+drops the `xhci` child node and OTG/role-switch/vbus-supply properties,
+and swaps `u2port0`'s `mediatek,force-usb-host` back to
+`mediatek,force-b-session-valid` (B-20's original device-role force —
+still needed since this PHY has no hardware VBUS/session sensing).
+Banner `#255` verified, DTB grep confirms `dr_mode="peripheral"` (left)
+alongside the right port's unaffected `dr_mode="host"` (dts/0014). Full
+analysis: boot.md 2026-07-16 "charger plugged in but NOT charging".
+**Not yet tested on hardware** — awaiting flash + charger-in-left-port
+retest; if `status` reads `Charging`/`online=1` with an ethernet adapter
+simultaneously in the right port, B-22 closes.
+
+**Why the two ports must be treated as fully separate problems:** the left
+and right USB-C ports are driven by two different, unrelated controller IP
+blocks — they do not share hardware and cannot share driver settings.
+- **Left port** = `xhci-mtk`/`mtu3` at `0x11271000` — MediaTek's modern
+  USB3-capable SSUSB controller (xHCI + USB2 companion), driven by the
+  mainline `xhci-mtk`/`mtu3` drivers. Both the RTL8156 and Naxiang
+  adapters enumerate here cleanly (bus 2 in `lsusb`).
+- **Right port** = `usb11`/MUSB at `0x11200000` — a much older, USB2-only
+  host-only IP (vendor calls its driver "musbfsh"), driven by mainline's
+  generic MUSB core + `drivers/usb/musb/mediatek.c` glue (bus 1 in
+  `lsusb`). This is a legacy Mentor Graphics MUSB IP, architecturally
+  unrelated to xHCI.
+Because they are different silicon with different register layouts, each
+enumerates fully independently (separate USB bus, separate root hub, no
+shared FIFO or arbitration) — plugging a device into one port has zero
+effect on the other. But it also means **the left port's working
+configuration cannot simply be copied to the right port**: `xhci-mtk`/
+`mtu3` has no equivalent of MUSB's `multipoint`/`num_eps`/per-endpoint FIFO
+table concept at all, so there is nothing there to port over. The right
+port's correct settings have to come from the vendor's musbfsh driver for
+this specific legacy IP block (see the config mismatch below) — proven on
+2026-07-16 (both the RTL8156 and Naxiang worked flawlessly on the left
+port on the same boot/build #253 where the right port failed for both,
+confirming the fault is specific to the right-port MUSB config, not the
+adapters or a general USB fault).
+
+**UPDATE 2026-07-16 (latest) — BUILD #254 CONFIRMED: right-port bulk data
+works, root cause fixed:** tested on hardware — RTL8156 in the RIGHT port
+enumerated full-speed, bound `cdc_ether`, got IP `192.168.100.146`, and
+this exact SSH session was carried over that interface end-to-end
+(`ip -s link`: 43510B/279pkts RX, 22182B/78pkts TX, zero errors/drops; no
+watchdog timeout, no three-strikes, no babble, no TXPKTRDY-stuck). Left
+port's gadget (`usb0`) was confirmed `DOWN`/no-carrier during the capture,
+so there is no ambiguity about which port carried the traffic. **Root
+cause: `num_eps=6` + the trimmed EP1-5 512B FIFO table (matching vendor
+musbfsh_config_mt65xx) was the real fix for the original TX-stuck/
+three-strikes bulk failure; `multipoint=false` (added alongside it in
+#253) was an incorrect extra change that broke control-transfer
+enumeration entirely — reverting multipoint to `true` (mainline default)
+while keeping the EP/FIFO fix resolved everything.** Full analysis:
+boot.md 2026-07-16 (later) "BUILD #254 flashed and tested: RIGHT-PORT BULK
+DATA WORKS". **Remaining before this blocker can close:** the actual B-22
+success gate — charger plugged into the LEFT port while the ethernet
+adapter runs on the RIGHT port simultaneously, confirmed via
+`power_supply` sysfs showing "Charging"/`online=1` while network traffic
+keeps flowing on the right interface. Not yet tested (no charger was
+connected during the #254 capture — battery read "Discharging").
+
+**UPDATE 2026-07-16 (later) — BUILD #253 REGRESSED right-port enumeration
+itself; BUILD #254 isolates the variable:** #253 (multipoint=false +
+num_eps=6 combined) made things worse than #252: both the RTL8156 and
+Naxiang, tried on the right port, got stuck in an endless
+`device descriptor read/all, error -71` retry loop — never even
+completing enumeration, let alone reaching bulk. #252's 8-EP/
+multipoint=true baseline at least enumerated the Naxiang fully before
+failing at bulk. On the SAME boot, both adapters worked flawlessly when
+swapped to the LEFT port (confirmed over SSH, .145/.146) — proof the
+regression is specific to the right-port musbfsh config change, not the
+adapters or a general fault (see "why the two ports must be treated as
+fully separate problems" above). **Build #254** (packed+banner-verified,
+`logs/2026-07-16-254-b22-right-port-multipoint-revert/`) reverts
+`multipoint` back to `true`, keeping only `num_eps=6`/the trimmed EP1-5
+FIFO table, to determine which half of the vendor-config change was
+responsible. Full analysis: boot.md 2026-07-16 "BUILD #254".
+
+**UPDATE 2026-07-16 (earlier) — FS test failed, root-cause candidate found, BUILD #253 ready to flash:**
+the #252 full-speed experiment ran (dmesg read live over SSH): Naxiang
+enumerated at full speed on the right port, then bulk still died —
+TX watchdog (zero completions), TX2 FIFO stuck `csr: 2003` (TXPKTRDY
+never clears), `ep2 RX three-strikes`. HS-signal-integrity theory
+FALSIFIED → MAC/glue layer. Root-cause candidate from vendor source:
+mainline mediatek.c uses the MT8516 OTG config (`num_eps=8`,
+`multipoint=true`, EP1–7 FIFO) but MT6797 usb11 is the musbfsh IP —
+vendor `musbfsh_config_mt65xx` = **num_eps=6, multipoint=false, EP1–5
+512B single-buffered**. multipoint=true addresses bulk via per-EP
+TXFUNCADDR/busctl registers this hardware lacks (EP0 works via FADDR,
+bulk dies — exact symptom match). **Build #253** (usb/0002 extended:
+`mediatek,mt6797-musb` compatible → musbfsh config via match data;
+dts/0014 compatible switched; FS cap + PIO kept, single variable) is
+packed and banner-verified — flash `boot2` from
+`logs/2026-07-16-253-b22-right-port-musbfsh-config/`, then Naxiang in
+RIGHT port; success = no watchdog/three-strikes + traffic on .146 (check
+the right interface's own counters, ARP-flux warning below), then the
+gate: charger LEFT + ethernet RIGHT simultaneously. Full analysis:
+boot.md 2026-07-16. If #253 works, later single-variable retests: drop
+FS cap (HS may have been this bug all along), then DMA.
+
+**Goal:** host on the RIGHT port (vendor `usb1@11200000`, MUSB) so the
+left port is free for charging — device currently runs on battery when
+the left port carries the ethernet adapter. Charge-left + host-right is
+proven vendor behaviour and right-port VBUS is independent of the
+BQ25896 boost (GPIO94+GPIO72 only; live-proven, boot.md 2026-07-15).
+
+**Works (builds #249–#252):**
+- `patches/v6.6/usb/0002`: mtk-musb glue — clocks made optional (MT6797
+  has only infra icusb as "main") + DT `maximum-speed` honored
+  (musb_dsps pattern).
+- `patches/v6.6/dts/0014`: second generic-tphy-v1 @0x11210000
+  (u2port1@11210800, `mediatek,force-usb-host`, clk26m ref — vendor
+  usb11 PHY is byte-for-byte tphy-v1 layout, no new driver needed);
+  `usb1@11200000` on `mediatek,mtk-musb` (SPI 73 level-low,
+  CLK_INFRA_ICUSB, dr_mode="host", maximum-speed="full-speed"); 4 hogs:
+  GPIO94/72 (VBUS) + GPIO70 hi/71 lo (vendor USB-OTG mux position; 70
+  low = HDMI alt-mode).
+- phy/0001's `mediatek,force-usb-host` extended (#250) to the FULL
+  vendor host state: IDDIG=0 + FORCE_SESS_MSK + RG vbusvalid/avalid/
+  bvalid + SESSEND=0 + SUSPENDM — without this musb loops
+  `VBUS_ERROR in a_idle (<SessEnd)` (vendor musbfsh forces the same).
+- Devices ENUMERATE on the musb bus (Naxiang cdc_ether, RTL8156).
+- **Vendor babble recovery proven live over devmem:** DTM1(u2port1)=
+  0x1121086C: write 0x3E10 (sessend pulse) → ~200ms → 0x3E2C (session
+  restore) flips DEVCTL 0x99(b_idle, wedged)→0x5D(host) and the device
+  re-enumerates instantly. Candidate for a proper hook in
+  musb babble recovery or the tphy driver.
+
+**Broken:**
+1. **Bulk data never flows at high speed**: cdc bulk-IN dies
+   `ep2 RX three-strikes error` ×N → `Babble` → OTG FSM falls to b_idle
+   (recoverable only via the devmem pulse above or reboot). TX counter
+   stays 0 (urbs submitted, zero completions). MAC state is
+   textbook-healthy (DEVCTL 0x5D, INTRTXE/RXE + DMA unmask all correct).
+   Working theory: HS signal integrity through the external
+   SW7226/FUSB301a mux chain — hence #252's full-speed cap.
+2. **Inventra DMA (build #251) hard-crashes the SoC** — repeated
+   green-screen panics/hangs within minutes, no pstore record (ramoops
+   IS bound and mounted at 44410000 — crashes are bus lockups that never
+   reach the panic path). Suspected rogue/unclocked DMA bus master (the
+   glue's "mcu" clock has no MT6797 equivalent). DMA stays OFF
+   (MUSB_PIO_ONLY=y) until understood.
+3. Mainline glue **unbind oopses** (NULL deref in devm_usb_phy_release)
+   — never unbind musb; upstream bug, not chased.
+
+**RESUME HERE (build #252 is flashed, banner verified, FS cap active):**
+plug a USB device (Naxiang adapter, .146 static) into the RIGHT port and
+test whether bulk finally flows at full speed: expect dmesg
+"new full-speed USB device number N using musb-hdrc" (NOT high-speed),
+then ping/SSH via it with the left adapter unplugged or the route
+pinned (beware Linux ARP-flux false positives — the left interface
+answers ARP for the right one's IP; check the RIGHT interface's RX/TX
+counters, not just ping success). If FS bulk works → right port is
+SSH-grade usable; write it up, then optionally chase HS (PHY eye/slew
+tuning vs mux) and DMA later. If FS bulk ALSO three-strikes → the
+problem is not HS signal integrity; next suspects = musb PIO IRQ
+handling on this glue / the missing "mcu" bus clock.
+
+**Static IPs (rootfs, by MAC):** RTL8156 = 192.168.100.145, Naxiang =
+192.168.100.146. No default route on either. RTL8156-on-left passed no
+traffic once on #252 with the newly-installed rtl8156b-2.fw — if it
+recurs, delete /lib/firmware/rtl_nic/rtl8156b-2.fw (was working
+fw-less). /root/h.sh + /root/s.sh have the left-port recovery/status
+pokes; the babble-recovery devmem pair above is NOT yet in h.sh.
+
+**Related:** B-19 (left port, RESOLVED — including these left-port
+follow-ups: bq25890 boost does not self-resume after charger removal;
+xhci misses disconnect events, recovers on next connect; two-crash
+"reboot panic" mystery from #248 remains unexplained). CLAUDE.md Phase 8
+table row updated 2026-07-15.

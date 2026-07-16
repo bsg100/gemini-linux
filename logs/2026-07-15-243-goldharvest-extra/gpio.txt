@@ -1,0 +1,5 @@
+GPIOs 0-261, mtk-gpio:
+ gpio-88  (p-sensor            ) in  hi    
+
+GPIOs 762-1023, platform/10005000.pinctrl, 10005000.pinctrl:
+ gpio-829 (cd                  ) in  hi    

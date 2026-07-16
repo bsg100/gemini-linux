@@ -1,0 +1,2 @@
+/sys/class/udc:
+musb-hdrc

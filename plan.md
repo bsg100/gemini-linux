@@ -298,7 +298,16 @@ Staged plan, hardware-verifiable gates:
   SSH-over-WiFi — which frees the left port for serial permanently. Dual-role
   (`otg` + `usb-role-switch`) to restore gadget SSH alongside host mode is
   deferred until after G1a/G1b.
-- **Stage 2 — CONSYS feasibility spike (time-boxed ~5 days / ~8 flashes;
+- **Stage 2 — ACTIVATED 2026-07-14 (user decision: B-19 parked, Stage 2
+  promoted from spike-only to "make WiFi work if the gates pass"; see
+  blockers.md B-21).** Stage W0 recon complete same day (vendor sequence
+  harvested with corrections — CONN_PWR_CON is 0x280 not 0x32C, no conn
+  clock patch needed; firmware extracted to `docs/firmware-consys/`);
+  Stage W1 COMPLETE 2026-07-14: **Gate G2a PASSED** (build #236 verified —
+  chip-ID 0x0279 at 0.58s; fixes en route: pwrap reset optional soc/0004,
+  real CONN_PWR_CON = SPM+0x32C). Next: Stage W2 (Gate G2b MCU firmware
+  handshake). Original spike definition below.
+  Original: **CONSYS feasibility spike (time-boxed ~5 days / ~8 flashes;
   deliverable = go/no-go report in research.md, NOT working WiFi).** Add
   CONN power domain to mtk-scpsys mt6797 data (vendor CONN_PWR_CON =
   SPM+0x32C, PWR_STATUS BIT(1)); resolve the "conn" clock in clk-mt6797;
