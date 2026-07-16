@@ -7666,3 +7666,36 @@ present, exactly as it did before the B-19 host-mode detour.
 
 **B-22 is closed.** See blockers.md for the full fix chain across builds
 #252-#255.
+
+## 2026-07-16 — BUILD #257: B-21 G2b WMT_QUERY_STP_EVT_DEFAULT fix — tested, did not resolve G2b
+
+Source audit of the vendor 3.18 CONSYS/WMT stack (`wmt_core.c`,
+`wmt_ic_soc.c`) found our G2b spike's expected-response constant
+(`wmt_query_stp_evt[]` in `patches/v6.6/soc/0003-soc-mediatek-add-mt6797-consys-spike.patch`)
+was truncated to 6 bytes vs. the real vendor `WMT_QUERY_STP_EVT_DEFAULT`
+(10 bytes: `02 04 06 00 00 04 11 00 00 00`). Widened the constant; no
+other code change needed (`sizeof()` propagates automatically, RX buffer/
+timeout already cover 10 bytes). `git apply --check` clean.
+
+Packed as build #257 (`--dtb-grep btif`, confirmed `clock-names = "btif"`
+present). Banner verified `#257 SMP PREEMPT Thu Jul 16 06:44:07 UTC 2026`.
+sha256 in `logs/2026-07-16-257-consys-g2b-wmt-evt-fix/`.
+
+Flashed to `boot2`, booted, SSH reachable on `192.168.100.146` (right-port
+adapter). `uname -a` confirmed banner match: `6.6.0-dirty #257 SMP PREEMPT
+Thu Jul 16 06:44:07 UTC 2026`.
+
+**Result: Gate G2a PASS (chip ID 0x279), Gate G2b still FAIL (-110).**
+Both WMT query attempts got **RX 0 bytes** — the widened match constant
+never had a byte stream to compare against, so it wasn't/couldn't be the
+actual cause of the -110. CPUPCR samples changing between reads
+(`0x55aa55d2 → 0x55aa55d6 → 0x55aa55da`) confirms the MCU ROM is
+genuinely executing post-reset-release; it simply doesn't answer
+WMT_QUERY_STP over BTIF. On retry, the second TX itself stalls
+(`BTIF TX stuck, LSR=0x20`, TEMT never sets) — see blockers.md B-21 for
+full analysis and the recommended next step (re-audit `stp_core.c`'s
+`stp_send_data_no_ps` mand-mode framing byte-by-byte for a subtler
+mismatch, since the response-matching layer is now ruled out).
+
+Fix retained in the patch (correct regardless, prevents future false
+negatives) but did not close B-21.

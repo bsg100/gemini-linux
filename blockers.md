@@ -3022,6 +3022,95 @@ Stage 2; approved plan in research.md "CONSYS Stage W0 harvest").
   `clk_scp_conn_main` (scpsys) side effects beyond our sequence;
   co-clock/XO detail (`RG_VCN28_ON_CTRL=1` HW-mode before VCN28
   enable). Device left safe: MCU parked in reset, EMI mapping restored.
+- **Update 2026-07-16 — source audit of the real vendor CONSYS driver**
+  (`mtk_wcn_consys_hw.c`, `wmt_core.c`, `wmt_ic_soc.c` in the 3.18 reference
+  tree, not just the generic scpsys `clk-mt6797-pg.c` checked in earlier
+  builds). Findings:
+  - **Hypotheses 2 and 3 (from the #247 session) are now conclusively
+    ruled out with source citations, not just build-log elimination.**
+    `mtk_wcn_consys_hw_reg_ctrl()` is the real platform power-on function;
+    its VCN18→VCN28(+`RG_VCN28_ON_CTRL=1` HW-mode switch, written *before*
+    LDO enable)→`CONN2AP_SLEEP_MASK`→WDT-hold→`SPM_PWRON_CONFG_EN=0x0b160001`
+    →CONN MTCMOS→chip-ID-poll→MBIST-bit sequence matches our
+    regulator/0002 + soc/0003 patches step-for-step, same order, same
+    values. The `mtk_wcn_consys_hw_gpio_ctrl()` companion (PIN_BGF_EINT/
+    GPS_SYNC/GPS_LNA/I2S_GRP) is a dead end for us — confirmed via the
+    device's own extracted DTB (`docs/vendor-dtb/gemini_kali_boot.dts`)
+    that `btif@1100c000` has no pinctrl properties; BTIF is a pure
+    internal AP↔CONSYS bus block on this SoC-integrated CONSYS design,
+    not routed through external GPIO pins.
+  - **New candidate found in `wmt_core_stp_init()`/`mtk_wcn_soc_sw_init()`
+    (`wmt_core.c`, `wmt_ic_soc.c`):** the vendor's BTIF bring-up is not a
+    single query/response — it's `init_table_1_2` (query, mand mode) →
+    `init_table_4` (set STP options) → switch STP mode to
+    `MTKSTP_BTIF_FULL_MODE` → sleep 10ms → `init_table_5` (query again, now
+    in full mode). Our G2b spike sends only the equivalent of
+    `init_table_1_2`'s single query and never performs the FULL_MODE
+    switch — this on its own doesn't explain a zero-byte RX on the very
+    first attempt (the first query should still be answerable in mand
+    mode per the vendor's own `init_table_1_2` step), but it means our
+    "single query is sufficient for the gate" assumption is not what the
+    vendor actually does, and the fuller sequence is untested.
+  - **Concrete bug found: our G2b PASS/FAIL check
+    (`soc/0003`'s `wmt_query_stp_evt[]`) only matches the first 6 bytes of
+    the expected reply.** The real vendor constant
+    (`wmt_ic_soc.c:123`) is 10 bytes:
+    `WMT_QUERY_STP_EVT_DEFAULT[] = {0x02,0x04,0x06,0x00,0x00,0x04,0x11,0x00,0x00,0x00}`
+    — our `wmt_query_stp_evt[]` is missing the trailing `11 00 00 00`.
+    Our TX command itself is byte-for-byte correct
+    (`WMT_QUERY_STP_CMD = {0x01,0x04,0x01,0x00,0x04}`, confirmed against
+    `wmt_ic_soc.c:122`). A prefix-only match wouldn't itself cause a
+    zero-byte RX failure, but it means our RX path may not be reading/
+    draining the full expected frame length, which is a plausible
+    contributor to the observed "TX shifter blocks on retry" symptom
+    (an under-drained previous reply jamming the link for the next
+    attempt). Confirmed our own STP mand-mode frame-wrapping assumption
+    (4-byte hdr + WMT payload + 2-byte zero CRC) is architecturally
+    correct — the 5-byte `WMT_QUERY_STP_CMD` is the inner WMT payload,
+    wrapped by the (skipped, ~3.5-KLOC) vendor STP core before it reaches
+    BTIF; our hand-rolled equivalent framing was already sourced
+    correctly in the W2 harvest.
+  - **Fix implemented 2026-07-16 (not yet built/flashed):**
+    `patches/v6.6/soc/0003-soc-mediatek-add-mt6797-consys-spike.patch`'s
+    `wmt_query_stp_evt[]` widened to the full 10-byte
+    `WMT_QUERY_STP_EVT_DEFAULT` (`02 04 06 00 00 04 11 00 00 00`). No other
+    change needed: `wmt_cmd_evt()` already passes `sizeof(wmt_query_stp_evt)`
+    through to the memcmp scan, and `btif_rx_drain()`'s 64-byte buffer /
+    1000ms timeout already exceed 10 bytes, so the existing RX drain covers
+    the wider match with no code changes beyond the constant. Verified
+    `git apply --check` clean against a fresh v6.6 tree. Next: rebuild
+    (build-pack), flash `boot2`, re-run Gate G2b, capture serial.
+  - **Not yet attempted:** replicating the vendor's fuller BTIF bring-up
+    sequence (`init_table_1_2` query → `init_table_4` set-STP-options →
+    switch to `MTKSTP_BTIF_FULL_MODE` → 10ms settle → `init_table_5` second
+    query) — our spike only ever sends the equivalent of `init_table_1_2`.
+    Worth trying if the widened-constant fix alone doesn't flip G2b to PASS.
+  - **Build #257 tested 2026-07-16 — widened constant confirmed NOT the
+    root cause.** G2a still passes (chip ID 0x279). G2b still FAILs at -110
+    (`ETIMEDOUT`) — both attempts report **RX 0 bytes**, so the fix (matching
+    the full 10-byte event) never had a byte stream to compare against; this
+    rules out "truncated match constant" as *the* cause, though the fix is
+    still correct/retained (dead code otherwise). CPUPCR samples are
+    changing between reads (`0x55aa55d2` → `0x55aa55d6` → `0x55aa55da`),
+    confirming the MCU ROM is genuinely executing after reset release — it
+    simply never answers the WMT_QUERY_STP command over BTIF. On retry, the
+    *second* TX itself stalls (`BTIF TX stuck, LSR=0x20` — TEMT never sets),
+    suggesting either the first frame is still sitting un-drained in the ROM
+    side (no far-end consumer clearing the shifter) or our retry re-sends
+    into a BTIF state the first failed exchange left wedged. This points
+    back toward hypothesis territory: either (a) the ROM needs something
+    from the not-yet-replicated `init_table_4`/`FULL_MODE` sequence before
+    it'll answer even the first query — contradicted by vendor source
+    showing `init_table_1_2` is sent standalone in mand mode first — or
+    (b) our STP mand-mode frame is malformed/misaddressed in a way the ROM
+    silently drops (wrong WMT task index, wrong CRC handling, wrong wakeup
+    timing) even though byte-level construction matches `stp_core.c` on
+    paper. **Next recommended step:** capture the TX frame bytes against a
+    real vendor STP core trace/logic-analyzer if possible, or re-examine
+    `stp_core.c`'s `stp_send_data_no_ps` mand-mode path byte-by-byte (only
+    partially audited so far) for a subtler framing mismatch (e.g. CRC not
+    actually zero, task-index bit position, or a required wakeup/ready
+    handshake before the ROM's UART-equivalent ISR is listening).
 - **Stage W3:** go/no-go on the full gen2 port (frank-w 5.6→6.6 delta
   audit); if GO, port order = WMT core → AHB HIF → cfg80211 glue, WiFi
   only.
