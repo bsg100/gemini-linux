@@ -825,3 +825,57 @@ the re-scoped gate ("handshake + firmware resident") testable end-to-end the
 moment the query starts passing, and (b) attempting the later steps (reg-write
 ops use a different WMT opcode, 0x08) even after a query timeout tells us
 whether the ROM ignores only opcode 0x04 or all BTIF traffic.
+
+## 9. LXQt desktop bring-up (2026-07-19) — userspace only, no kernel/boot change
+
+Working LXQt desktop on the Debian 13 rootfs, launched manually with `startx`
+(root; no display manager installed, boot behavior unchanged). All work done
+live over SSH (`sshpass -p toor`, usb0 10.15.19.82). Kernel remains build #266.
+
+**Packages:** `lxqt-core openbox xorg xinit` (`--no-install-recommends`), then
+the pieces that flag silently omits and which each caused a visible defect:
+`breeze-icon-theme lxqt-themes` (no icon theme at all), **`qt6-svg-plugins`**
+(see below), `qterminal pcmanfm-qt featherpad lximage-qt lxqt-config`, and
+`gvfs gvfs-backends gvfs-fuse udisks2` (desktop Computer/Network icons
+returned "operation not permitted" without them; need a fresh session after
+install).
+
+**Rotation — DRM path is fatal:** `xrandr --rotate left` on the modesetting
+driver issues an atomic commit that wedges mediatek-drm (`flip_done timed
+out`, `vblank wait timed out`, `mtk_drm_crtc: new event while there is still
+a pending event`); the panel stays dark until reboot. Working config instead
+forces the **fbdev** Xorg driver with software shadow rotation:
+`/etc/X11/xorg.conf.d/20-gemini-fbdev-rotate.conf` — `Driver "fbdev"`,
+`Option "Rotate" "CCW"`. The SSD2092 touchscreen needs an **identity**
+libinput calibration matrix — its raw axes already match the rotated
+landscape screen (derived empirically via corner mapping).
+
+**Invisible start button root cause:** the mainmenu/fancymenu button rendered
+zero visible pixels but was present and clickable (proved with `xdotool`
+click + `scrot` screenshot over SSH). Breeze is an all-SVG theme and the Qt6
+SVG *icon engine* (`qt6-svg-plugins` → `iconengines/libqsvgicon.so`) was
+missing, so every themed icon drew blank (tray showed red-X placeholders).
+Panel config was additionally modeled on the known-good 2019 Kali image
+(`planet/linux.img`, read on macOS via Homebrew `debugfs`): classic
+`mainmenu` first in an explicit `plugins=` list under `[panel1]` in
+`~/.config/lxqt/panel.conf`. Note `lxqt-panel` does **not** hot-reload its
+config — restart it (with the session's env from
+`/proc/$(pgrep lxqt-session)/environ` if done over SSH).
+
+**HiDPI:** 2160×1080 at ~6" needs scaling — `.xinitrc` exports
+`QT_SCALE_FACTOR=1.5` and `XCURSOR_SIZE=36`; panel `panelSize=48`,
+`iconSize=36`.
+
+**X-exit console damage (recurring):** killing Xorg leaves (a) the
+matrix-keypad driver with stuck-pressed keys — new presses are swallowed,
+only release events emitted; fix by rebinding: `echo keyboard >
+/sys/bus/platform/drivers/matrix-keypad/unbind` then `bind` — and (b) tty1
+echo off, where `stty sane` was not sufficient but `systemctl restart
+getty@tty1` is. A durable fix candidate: flush pressed-key state in the
+`input/0001` polled driver's close/disconnect path.
+
+**Users:** `gemini` user created (uid 1000, groups video/input/audio/plugdev,
+password `gemini`, own `.xinitrc`) but has no LXQt config yet — desktop has
+only been run as root so far. The rootfs also predated the mkrootfs.sh
+gemini-user provisioning, and the baked-in Mac SSH key does not match the
+Mac's current key (password auth in use).
