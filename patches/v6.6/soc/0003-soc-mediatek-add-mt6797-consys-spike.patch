@@ -1,8 +1,8 @@
 diff --git a/drivers/soc/mediatek/Kconfig b/drivers/soc/mediatek/Kconfig
-index a88cf04fc..f673ffd78 100644
+index a88cf04fc..30592cb89 100644
 --- a/drivers/soc/mediatek/Kconfig
 +++ b/drivers/soc/mediatek/Kconfig
-@@ -91,4 +91,12 @@ config MTK_SVS
+@@ -91,4 +91,15 @@ config MTK_SVS
  	  chip process corner, temperatures and other factors. Then DVFS
  	  driver could apply SVS bank voltage to PMIC/Buck.
  
@@ -11,8 +11,11 @@ index a88cf04fc..f673ffd78 100644
 +	depends on HAS_IOMEM
 +	help
 +	  Throwaway diagnostic driver that runs the vendor CONSYS power-on
-+	  sequence on MT6797 and polls the CONSYS chip-ID register (Gate
-+	  G2a of the Gemini PDA WiFi plan). Not a production driver.
++	  sequence on MT6797, polls the CONSYS chip-ID register (Gate G2a
++	  of the Gemini PDA WiFi plan), then exchanges WMT commands with
++	  the CONSYS MCU over BTIF and pushes the vendor WMT ROM-patch
++	  firmware (Gate G2b). The firmware blobs must be built in via
++	  CONFIG_EXTRA_FIRMWARE. Not a production driver.
 +
  endmenu
 diff --git a/drivers/soc/mediatek/Makefile b/drivers/soc/mediatek/Makefile
@@ -26,10 +29,10 @@ index 9d3ce7878..203aaaf0c 100644
 +obj-$(CONFIG_MTK_CONSYS_SPIKE) += mtk-consys-spike.o
 diff --git a/drivers/soc/mediatek/mtk-consys-spike.c b/drivers/soc/mediatek/mtk-consys-spike.c
 new file mode 100644
-index 000000000..12aead20d
+index 000000000..d81713049
 --- /dev/null
 +++ b/drivers/soc/mediatek/mtk-consys-spike.c
-@@ -0,0 +1,552 @@
+@@ -0,0 +1,894 @@
 +// SPDX-License-Identifier: GPL-2.0
 +//
 +// MT6797 CONSYS feasibility-spike probe driver (Gemini PDA, Gates G2a+G2b).
@@ -54,6 +57,20 @@ index 000000000..12aead20d
 +// leaves CONSYS + BTIF powered and returns 0 so the state can be
 +// inspected over gadget SSH with devmem.
 +//
++// Stage W3 extension (G2b re-scope, 2026-07-16): after the ROM-only
++// query, push the real WMT ROM-patch firmware exactly as the vendor
++// does (research.md "WMT Firmware-Push Protocol"): power-on DLM regs,
++// 6797 MCU-clock speed-up, then per patch (download-seq order from
++// header byte 24) the two patch-address reg-writes, 1000-byte
++// fragmented WMT_PATCH commands, and a WMT_RESET; finally the MCU
++// clock is restored and WMT_QUERY_STP re-issued - that final query is
++// the re-scoped Gate G2b. The blobs are built into the kernel image
++// via CONFIG_EXTRA_FIRMWARE (probe runs before the rootfs is mounted,
++// so /lib/firmware is not reachable). The push sequence is attempted
++// even when the initial query times out: its reg-write commands use
++// WMT opcode 0x08, so the responses (or their absence) distinguish
++// "ROM ignores opcode 0x04" from "ROM ignores all BTIF traffic".
++//
 +// Every step logs to dmesg BEFORE it executes so a hang identifies the
 +// exact stalled step from the serial/panel console (patches/STANDARDS.md
 +// serial-observability rule).
@@ -70,6 +87,7 @@ index 000000000..12aead20d
 +
 +#include <linux/clk.h>
 +#include <linux/delay.h>
++#include <linux/firmware.h>
 +#include <linux/io.h>
 +#include <linux/jiffies.h>
 +#include <linux/module.h>
@@ -129,6 +147,7 @@ index 000000000..12aead20d
 +
 +#define BTIF_LSR_DR		BIT(0)
 +#define BTIF_LSR_TEMT		BIT(6)
++#define BTIF_IER_RXFEN		BIT(0)	/* vendor hal_btif_hw_init() leaves this set */
 +#define BTIF_FIFOCTRL_CLR_TX	BIT(2)
 +#define BTIF_FIFOCTRL_CLR_RX	BIT(1)
 +#define BTIF_DMA_EN_AUTORST	BIT(2)
@@ -157,6 +176,115 @@ index 000000000..12aead20d
 +
 +#define G2B_RX_BUF_SZ		64
 +#define G2B_RX_TIMEOUT_MS	1000
++/* Once bytes start arriving, stop draining after this much silence so
++ * per-fragment acks don't each burn the full timeout. */
++#define G2B_RX_IDLE_MS		30
++
++/* --- Stage W3: WMT firmware push (vendor wmt_ic_soc.c, 6797 path; full
++ * byte-level derivation in research.md "WMT Firmware-Push Protocol") --- */
++
++/* WMT_PATCH header (wmt_core.h): 16B datetime, 4B "ALPS", u2HwVer,
++ * u2SwVer, u4PatchVer. Byte 24 = patch-count<<4 | download-seq; bytes
++ * 24..27 with byte 24 zeroed = the patch RAM address for
++ * WMT_PATCH_P_ADDRESS_CMD (stp_uart_launcher.c srh_patch()). */
++#define WMT_PATCH_HDR_SIZE	28
++#define WMT_PATCH_INFO_OFF	24
++#define WMT_PATCH_FRAG_SIZE	1000
++#define WMT_PATCH_FRAG_1ST	1
++#define WMT_PATCH_FRAG_MID	2
++#define WMT_PATCH_FRAG_LAST	3
++
++/* In vendor download-seq order (seq 1 = _1_1, seq 2 = _1_0 - from each
++ * file's header byte 24: 0x21 and 0x22). */
++static const char *const wmt_patch_names[] = {
++	"ROMv3_patch_1_1_hdr.bin",
++	"ROMv3_patch_1_0_hdr.bin",
++};
++
++/* Reg-write op (opcode 0x08) shared event */
++static const u8 wmt_reg_evt[] = { 0x02, 0x08, 0x04, 0x00, 0x00, 0x00, 0x00, 0x01 };
++
++/* WMT_PATCH_ADDRESS_CMD with the 6797 override already applied
++ * (wmt_ic_soc.c: bytes 8/9 = 0x08/0x05 for icId 0x0279): write 0 to
++ * 0x02090508, mask 0xffffffff. */
++static const u8 wmt_patch_address_cmd[] = {
++	0x01, 0x08, 0x10, 0x00,
++	0x01, 0x01, 0x00, 0x01,
++	0x08, 0x05, 0x09, 0x02,
++	0x00, 0x00, 0x00, 0x00,
++	0xff, 0xff, 0xff, 0xff
++};
++
++/* WMT_PATCH_P_ADDRESS_CMD, 6797 override (bytes 8/9 = 0x2c/0x0b):
++ * write <patch address> to 0x02090b2c. Bytes 12..15 are filled per
++ * patch from its header. */
++static const u8 wmt_patch_p_address_cmd[] = {
++	0x01, 0x08, 0x10, 0x00,
++	0x01, 0x01, 0x00, 0x01,
++	0x2c, 0x0b, 0x09, 0x02,
++	0x00, 0x00, 0x00, 0x00,	/* <- patch addRess[4] */
++	0xff, 0xff, 0xff, 0xff
++};
++
++static const u8 wmt_patch_evt[] = { 0x02, 0x01, 0x01, 0x00, 0x00 };
++static const u8 wmt_reset_cmd[] = { 0x01, 0x07, 0x01, 0x00, 0x04 };
++static const u8 wmt_reset_evt[] = { 0x02, 0x07, 0x01, 0x00, 0x00 };
++
++/* wmt_power_on_dlm_table: three masked writes to 0x80100060 (non-fatal
++ * in the vendor flow too). */
++static const u8 wmt_dlm_cmd1[] = {
++	0x01, 0x08, 0x10, 0x00, 0x01, 0x01, 0x00, 0x01,
++	0x60, 0x00, 0x10, 0x80, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x0f, 0x00, 0x00
++};
++static const u8 wmt_dlm_cmd2[] = {
++	0x01, 0x08, 0x10, 0x00, 0x01, 0x01, 0x00, 0x01,
++	0x60, 0x00, 0x10, 0x80, 0x00, 0x00, 0x00, 0x00,
++	0xf0, 0x00, 0x00, 0x00
++};
++static const u8 wmt_dlm_cmd3[] = {
++	0x01, 0x08, 0x10, 0x00, 0x01, 0x01, 0x00, 0x01,
++	0x60, 0x00, 0x10, 0x80, 0x00, 0x00, 0x00, 0x00,
++	0x08, 0x00, 0x00, 0x00
++};
++
++/* set_mcuclk_table_3/_4 (6797): speed the MCU clock up for the
++ * download, restore 26 MHz afterwards. Non-fatal in the vendor flow. */
++static const u8 wmt_mcuclk_en[] = {
++	0x01, 0x08, 0x10, 0x00, 0x01, 0x01, 0x00, 0x01,
++	0x10, 0x11, 0x02, 0x81, 0x00, 0x00, 0x00, 0x10,
++	0x00, 0x00, 0x00, 0x10
++};
++static const u8 wmt_mcuclk_ratio[] = {
++	0x01, 0x08, 0x10, 0x00, 0x01, 0x01, 0x00, 0x01,
++	0x0c, 0x01, 0x00, 0x80, 0x40, 0x00, 0x00, 0x00,
++	0xc0, 0x00, 0x00, 0x00
++};
++static const u8 wmt_mcuclk_div[] = {
++	0x01, 0x08, 0x10, 0x00, 0x01, 0x01, 0x00, 0x01,
++	0x18, 0x11, 0x02, 0x80, 0x07, 0x00, 0x00, 0x00,
++	0x3f, 0x00, 0x00, 0x00
++};
++static const u8 wmt_mcuclk_hclk[] = {
++	0x01, 0x08, 0x10, 0x00, 0x01, 0x01, 0x00, 0x01,
++	0x00, 0x11, 0x02, 0x81, 0x04, 0x00, 0x00, 0x00,
++	0x07, 0x00, 0x00, 0x00
++};
++static const u8 wmt_mcuclk_hclk_dis[] = {
++	0x01, 0x08, 0x10, 0x00, 0x01, 0x01, 0x00, 0x01,
++	0x00, 0x11, 0x02, 0x81, 0x00, 0x00, 0x00, 0x00,
++	0x07, 0x00, 0x00, 0x00
++};
++static const u8 wmt_mcuclk_ratio_dis[] = {
++	0x01, 0x08, 0x10, 0x00, 0x01, 0x01, 0x00, 0x01,
++	0x0c, 0x01, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00,
++	0xc0, 0x00, 0x00, 0x00
++};
++static const u8 wmt_mcuclk_dis[] = {
++	0x01, 0x08, 0x10, 0x00, 0x01, 0x01, 0x00, 0x01,
++	0x10, 0x11, 0x02, 0x81, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x10
++};
 +
 +static int consys_poke(unsigned long pa, u32 set_bits, u32 key,
 +		       bool overwrite, u32 value, struct device *dev,
@@ -253,8 +381,13 @@ index 000000000..12aead20d
 +}
 +
 +/* Vendor hal_btif_hw_init(), PIO subset: normal LCR, new-handshake
-+ * mode, FIFO clear, trigger levels + loopback off, DMA off, all IRQs
-+ * masked (we poll LSR). */
++ * mode, FIFO clear, trigger levels + loopback off, DMA off, Tx IRQ
++ * masked (we poll LSR for TX). Rx IER is left SET (BTIF_IER_RXFEN),
++ * matching hal_btif_hw_init()'s "enable Rx IER by default" - build
++ * #257 source audit found we masked it too, the one BTIF-register
++ * divergence from vendor found after a full bit-for-bit review; no
++ * IRQ handler is registered so this has no runtime effect beyond
++ * matching the register value, but is cheap to rule in/out. */
 +static void btif_hw_init(void __iomem *btif)
 +{
 +	writel(0, btif + BTIF_FAKELCR);
@@ -271,7 +404,7 @@ index 000000000..12aead20d
 +	writel(readl(btif + BTIF_DMA_EN) & ~3, btif + BTIF_DMA_EN);
 +	writel(readl(btif + BTIF_DMA_EN) | BTIF_DMA_EN_AUTORST,
 +	       btif + BTIF_DMA_EN);
-+	writel(0, btif + BTIF_IER);
++	writel(BTIF_IER_RXFEN, btif + BTIF_IER);
 +	writel(0, btif + BTIF_SLEEP_EN);
 +}
 +
@@ -310,30 +443,47 @@ index 000000000..12aead20d
 +	return 0;
 +}
 +
-+/* Drain RX for up to timeout_ms into buf; returns bytes read. */
++/* Drain RX for up to timeout_ms into buf; returns bytes read. Once at
++ * least one byte has arrived, G2B_RX_IDLE_MS of silence ends the drain
++ * early (a complete reply is ~16 bytes; waiting out the full timeout
++ * per exchange would make the 259-fragment firmware push take
++ * minutes). */
 +static int btif_rx_drain(void __iomem *btif, u8 *buf, int max,
 +			 unsigned int timeout_ms)
 +{
 +	unsigned long t = jiffies + msecs_to_jiffies(timeout_ms);
++	unsigned long idle = 0;
 +	int n = 0;
 +
 +	while (n < max && !time_after(jiffies, t)) {
-+		if (readl(btif + BTIF_LSR) & BTIF_LSR_DR)
++		if (readl(btif + BTIF_LSR) & BTIF_LSR_DR) {
 +			buf[n++] = readl(btif + BTIF_RBR) & 0xff;
-+		else
++			idle = jiffies + msecs_to_jiffies(G2B_RX_IDLE_MS);
++		} else {
++			if (n && time_after(jiffies, idle))
++				break;
 +			usleep_range(200, 500);
++		}
 +	}
 +	return n;
 +}
 +
 +/* Send one WMT command in STP mand-mode framing and scan the reply
-+ * bytes for the expected WMT event payload. */
++ * bytes for the expected WMT event payload. cmdlen may exceed the old
++ * 16-byte stack frame (firmware fragments are 1005 bytes), so the
++ * frame is heap-allocated. quiet suppresses the per-exchange TX/RX
++ * dumps for the fragment loop; failures always log. */
 +static int wmt_cmd_evt(struct device *dev, void __iomem *btif, u8 seq,
-+		       const u8 *cmd, int cmdlen, const u8 *evt, int evtlen)
++		       const u8 *cmd, int cmdlen, const u8 *evt, int evtlen,
++		       bool quiet)
 +{
-+	u8 frame[STP_HDR_SIZE + 16 + STP_CRC_SIZE];
++	u8 *frame;
 +	u8 rx[G2B_RX_BUF_SZ];
 +	int n, i, ret;
++
++	frame = kmalloc(STP_HDR_SIZE + cmdlen + STP_CRC_SIZE, GFP_KERNEL);
++	if (!frame)
++		return -ENOMEM;
 +
 +	/* Mand-mode byte0 is FIXED 0x80 (vendor stp_send_data_no_ps mand
 +	 * branch) -- no tx-seq field; earlier builds' seq<<3 retries were
@@ -346,21 +496,193 @@ index 000000000..12aead20d
 +	frame[STP_HDR_SIZE + cmdlen] = 0x00;
 +	frame[STP_HDR_SIZE + cmdlen + 1] = 0x00;
 +
-+	dev_info(dev, "consys-spike: WMT TX %*ph\n",
-+		 STP_HDR_SIZE + cmdlen + STP_CRC_SIZE, frame);
++	if (!quiet)
++		dev_info(dev, "consys-spike: WMT TX %*ph\n",
++			 min(STP_HDR_SIZE + cmdlen + STP_CRC_SIZE, 32), frame);
 +	btif_wakeup_consys(btif);
 +	ret = btif_tx(dev, btif, frame, STP_HDR_SIZE + cmdlen + STP_CRC_SIZE);
++	kfree(frame);
 +	if (ret)
 +		return ret;
 +
 +	n = btif_rx_drain(btif, rx, sizeof(rx), G2B_RX_TIMEOUT_MS);
-+	dev_info(dev, "consys-spike: WMT RX %d bytes: %*ph\n", n, n, rx);
++	if (!quiet || n < evtlen)
++		dev_info(dev, "consys-spike: WMT RX %d bytes: %*ph\n",
++			 n, n, rx);
 +	if (n < evtlen)
 +		return -ETIMEDOUT;
 +	for (i = 0; i + evtlen <= n; i++)
 +		if (!memcmp(&rx[i], evt, evtlen))
 +			return 0;
 +	return -EBADMSG;
++}
++
++/* Run a named list of non-fatal reg-write commands (vendor
++ * wmt_core_init_script equivalents where the vendor also only logs
++ * failures). */
++static void wmt_run_script(struct device *dev, void __iomem *btif,
++			   const char *what, const u8 *const cmds[],
++			   const int lens[], int count)
++{
++	int i, ret;
++
++	for (i = 0; i < count; i++) {
++		ret = wmt_cmd_evt(dev, btif, 0, cmds[i], lens[i],
++				  wmt_reg_evt, sizeof(wmt_reg_evt), false);
++		if (ret)
++			dev_err(dev, "consys-spike: %s cmd %d failed (%d) - continuing\n",
++				what, i, ret);
++	}
++}
++
++/* Push one WMT ROM-patch blob: the two patch-address reg-writes, then
++ * the body (file minus 28-byte header) as 1000-byte WMT_PATCH
++ * fragments, then WMT_RESET (vendor mtk_wcn_soc_patch_dwn() +
++ * init_table_3). */
++static int wmt_push_patch(struct device *dev, void __iomem *btif,
++			  const struct firmware *fw, const char *name)
++{
++	u8 p_address_cmd[sizeof(wmt_patch_p_address_cmd)];
++	u8 patch_cmd[5] = { 0x01, 0x01, 0x00, 0x00, 0x00 };
++	u8 *frag;
++	const u8 *body;
++	u32 body_len, off, frag_len, frag_num, frag_seq;
++	u16 cmd_len;
++	int ret;
++
++	if (fw->size <= WMT_PATCH_HDR_SIZE) {
++		dev_err(dev, "consys-spike: %s too small (%zu)\n",
++			name, fw->size);
++		return -EINVAL;
++	}
++	dev_info(dev, "consys-spike: pushing %s: %zu bytes, hdr info %*ph\n",
++		 name, fw->size, 4, fw->data + WMT_PATCH_INFO_OFF);
++
++	ret = wmt_cmd_evt(dev, btif, 0, wmt_patch_address_cmd,
++			  sizeof(wmt_patch_address_cmd), wmt_reg_evt,
++			  sizeof(wmt_reg_evt), false);
++	if (ret) {
++		dev_err(dev, "consys-spike: patch-address cmd failed (%d)\n",
++			ret);
++		return ret;
++	}
++
++	/* Per-patch RAM address = header bytes 24..27 with byte 24
++	 * zeroed (launcher srh_patch()), placed in the value field. */
++	memcpy(p_address_cmd, wmt_patch_p_address_cmd, sizeof(p_address_cmd));
++	memcpy(&p_address_cmd[12], fw->data + WMT_PATCH_INFO_OFF, 4);
++	p_address_cmd[12] = 0x00;
++	ret = wmt_cmd_evt(dev, btif, 0, p_address_cmd, sizeof(p_address_cmd),
++			  wmt_reg_evt, sizeof(wmt_reg_evt), false);
++	if (ret) {
++		dev_err(dev, "consys-spike: part-patch-address cmd failed (%d)\n",
++			ret);
++		return ret;
++	}
++
++	body = fw->data + WMT_PATCH_HDR_SIZE;
++	body_len = fw->size - WMT_PATCH_HDR_SIZE;
++	frag_num = DIV_ROUND_UP(body_len, WMT_PATCH_FRAG_SIZE);
++	dev_info(dev, "consys-spike: %s body %u bytes, %u fragments\n",
++		 name, body_len, frag_num);
++
++	frag = kmalloc(sizeof(patch_cmd) + WMT_PATCH_FRAG_SIZE, GFP_KERNEL);
++	if (!frag)
++		return -ENOMEM;
++
++	for (frag_seq = 0, off = 0; frag_seq < frag_num;
++	     frag_seq++, off += WMT_PATCH_FRAG_SIZE) {
++		frag_len = min(body_len - off, (u32)WMT_PATCH_FRAG_SIZE);
++		cmd_len = 1 + frag_len;
++		patch_cmd[2] = cmd_len & 0xff;
++		patch_cmd[3] = cmd_len >> 8;
++		if (frag_seq == frag_num - 1)
++			patch_cmd[4] = WMT_PATCH_FRAG_LAST;
++		else
++			patch_cmd[4] = frag_seq ? WMT_PATCH_FRAG_MID
++						: WMT_PATCH_FRAG_1ST;
++		memcpy(frag, patch_cmd, sizeof(patch_cmd));
++		memcpy(frag + sizeof(patch_cmd), body + off, frag_len);
++
++		ret = wmt_cmd_evt(dev, btif, 0, frag,
++				  sizeof(patch_cmd) + frag_len,
++				  wmt_patch_evt, sizeof(wmt_patch_evt),
++				  true);
++		if (ret) {
++			dev_err(dev, "consys-spike: %s fragment %u/%u failed (%d)\n",
++				name, frag_seq + 1, frag_num, ret);
++			kfree(frag);
++			return ret;
++		}
++		if (!(frag_seq % 32) || frag_seq == frag_num - 1)
++			dev_info(dev, "consys-spike: %s fragment %u/%u ok\n",
++				 name, frag_seq + 1, frag_num);
++	}
++	kfree(frag);
++
++	ret = wmt_cmd_evt(dev, btif, 0, wmt_reset_cmd, sizeof(wmt_reset_cmd),
++			  wmt_reset_evt, sizeof(wmt_reset_evt), false);
++	if (ret)
++		dev_err(dev, "consys-spike: post-patch WMT_RESET failed (%d)\n",
++			ret);
++	return ret;
++}
++
++/* Full vendor-order firmware push: DLM power-on regs, MCU clock up,
++ * both patches in download-seq order, MCU clock restore, final query
++ * (the re-scoped Gate G2b). */
++static int wmt_firmware_push(struct device *dev, void __iomem *btif)
++{
++	static const u8 *const dlm_cmds[] = {
++		wmt_dlm_cmd1, wmt_dlm_cmd2, wmt_dlm_cmd3
++	};
++	static const int dlm_lens[] = {
++		sizeof(wmt_dlm_cmd1), sizeof(wmt_dlm_cmd2),
++		sizeof(wmt_dlm_cmd3)
++	};
++	static const u8 *const clk_up_cmds[] = {
++		wmt_mcuclk_en, wmt_mcuclk_ratio, wmt_mcuclk_div,
++		wmt_mcuclk_hclk
++	};
++	static const int clk_up_lens[] = {
++		sizeof(wmt_mcuclk_en), sizeof(wmt_mcuclk_ratio),
++		sizeof(wmt_mcuclk_div), sizeof(wmt_mcuclk_hclk)
++	};
++	static const u8 *const clk_dn_cmds[] = {
++		wmt_mcuclk_hclk_dis, wmt_mcuclk_ratio_dis, wmt_mcuclk_dis
++	};
++	static const int clk_dn_lens[] = {
++		sizeof(wmt_mcuclk_hclk_dis), sizeof(wmt_mcuclk_ratio_dis),
++		sizeof(wmt_mcuclk_dis)
++	};
++	const struct firmware *fw;
++	int i, ret, push_ret = 0;
++
++	dev_info(dev, "consys-spike: starting WMT firmware push\n");
++
++	wmt_run_script(dev, btif, "power-on-dlm", dlm_cmds, dlm_lens,
++		       ARRAY_SIZE(dlm_cmds));
++	wmt_run_script(dev, btif, "mcuclk-up", clk_up_cmds, clk_up_lens,
++		       ARRAY_SIZE(clk_up_cmds));
++
++	for (i = 0; i < ARRAY_SIZE(wmt_patch_names); i++) {
++		ret = request_firmware(&fw, wmt_patch_names[i], dev);
++		if (ret) {
++			dev_err(dev, "consys-spike: request_firmware(%s) failed (%d) - is CONFIG_EXTRA_FIRMWARE set?\n",
++				wmt_patch_names[i], ret);
++			return ret;
++		}
++		ret = wmt_push_patch(dev, btif, fw, wmt_patch_names[i]);
++		release_firmware(fw);
++		if (ret) {
++			push_ret = ret;
++			break;
++		}
++	}
++
++	wmt_run_script(dev, btif, "mcuclk-restore", clk_dn_cmds, clk_dn_lens,
++		       ARRAY_SIZE(clk_dn_cmds));
++	return push_ret;
 +}
 +
 +/* Stage W2: EMI remap + BTIF up + MCU release + first WMT exchange. */
@@ -415,13 +737,13 @@ index 000000000..12aead20d
 +
 +	ret = wmt_cmd_evt(dev, btif, 0, wmt_query_stp_cmd,
 +			  sizeof(wmt_query_stp_cmd), wmt_query_stp_evt,
-+			  sizeof(wmt_query_stp_evt));
++			  sizeof(wmt_query_stp_evt), false);
 +	if (ret == -ETIMEDOUT) {
 +		dev_info(dev, "consys-spike: retrying WMT query once\n");
 +		msleep(500);
 +		ret = wmt_cmd_evt(dev, btif, 1, wmt_query_stp_cmd,
 +				  sizeof(wmt_query_stp_cmd), wmt_query_stp_evt,
-+				  sizeof(wmt_query_stp_evt));
++				  sizeof(wmt_query_stp_evt), false);
 +	}
 +	if (ret) {
 +		void __iomem *pcr = ioremap(CONSYS_CPUPCR_PA, 4);
@@ -433,12 +755,35 @@ index 000000000..12aead20d
 +		}
 +		dev_err(dev, "consys-spike: BTIF LSR=%#x IIR=%#x\n",
 +			readl(btif + BTIF_LSR), readl(btif + BTIF_IIR));
++		dev_err(dev, "consys-spike: ROM-only query FAIL (%d) - attempting firmware push anyway (its opcode-0x08 cmds are a separate diagnostic)\n",
++			ret);
++	} else {
++		dev_info(dev, "consys-spike: ROM-only query PASS - ROM answers pre-firmware\n");
++	}
++
++	/* Stage W3 / re-scoped Gate G2b: push the real WMT firmware, then
++	 * the query is the pass/fail. */
++	ret = wmt_firmware_push(dev, btif);
++	if (ret)
++		dev_err(dev, "consys-spike: firmware push failed (%d)\n", ret);
++
++	ret = wmt_cmd_evt(dev, btif, 2, wmt_query_stp_cmd,
++			  sizeof(wmt_query_stp_cmd), wmt_query_stp_evt,
++			  sizeof(wmt_query_stp_evt), false);
++	if (ret) {
++		void __iomem *pcr = ioremap(CONSYS_CPUPCR_PA, 4);
++
++		if (pcr) {
++			dev_err(dev, "consys-spike: MCU CPUPCR samples: %#x %#x %#x\n",
++				readl(pcr), readl(pcr), readl(pcr));
++			iounmap(pcr);
++		}
 +		dev_err(dev, "consys-spike: GATE G2B FAIL (%d) - state left up for devmem inspection\n",
 +			ret);
 +		goto out_unmap;
 +	}
 +
-+	dev_info(dev, "consys-spike: *** GATE G2B PASS - CONSYS MCU ROM answers WMT over BTIF ***\n");
++	dev_info(dev, "consys-spike: *** GATE G2B PASS - CONSYS MCU answers WMT over BTIF with firmware pushed ***\n");
 +out_unmap:
 +	iounmap(btif);
 +	return ret;
@@ -580,5 +925,5 @@ index 000000000..12aead20d
 +};
 +module_platform_driver(mtk_consys_spike_driver);
 +
-+MODULE_DESCRIPTION("MT6797 CONSYS power-on feasibility spike (Gate G2a)");
++MODULE_DESCRIPTION("MT6797 CONSYS power-on + WMT firmware-push feasibility spike (Gates G2a/G2b)");
 +MODULE_LICENSE("GPL");

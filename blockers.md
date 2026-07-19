@@ -2905,7 +2905,17 @@ cable protocol ("never boot with the Mac cable in") is retired: boot
 with the host attached now just works.
 
 
-## 🟡 B-21 — Internal WiFi via MT6797 CONSYS (Phase 8 Stage 2, activated 2026-07-14)
+## ⏸️ B-21 — Internal WiFi via MT6797 CONSYS (Phase 8 Stage 2, activated 2026-07-14, **PARKED 2026-07-16**)
+
+**PARKED (user decision 2026-07-16):** WiFi work paused in favour of
+Phase 9. Parking state: **build #262** (`consys-g2b-fw-push`) is packed,
+banner-verified and ready in `logs/2026-07-16-262-consys-g2b-fw-push/`
+but **never flashed or tested** — it implements the full re-scoped G2b
+firmware push (protocol in research.md "WMT Firmware-Push Protocol").
+Resuming = flash that image to `boot2`, capture serial, judge the gate
+per the boot.md #262 expected-outcome checklist. Interim networking:
+USB ethernet on the right port (internet-enabled 2026-07-16, boot.md
+entry) covers connectivity needs meanwhile.
 
 **Goal:** working internal WiFi (scan/associate/DHCP/SSH-over-WiFi) via
 the on-die CONSYS block — the vendor gen2 stack is the only
@@ -3111,13 +3121,174 @@ Stage 2; approved plan in research.md "CONSYS Stage W0 harvest").
     partially audited so far) for a subtler framing mismatch (e.g. CRC not
     actually zero, task-index bit position, or a required wakeup/ready
     handshake before the ROM's UART-equivalent ISR is listening).
+  - **Update 2026-07-16 (cont.) — full BTIF hardware-init audit
+    (`btif_plat.c` `hal_btif_hw_init()`, `mtk_btif.c` `_btif_send_data()`/
+    `hal_btif_is_tx_allow()`, `mtk_btif_exp.c` `mtk_wcn_btif_wakeup_consys()`).**
+    Traced (b) exhaustively — every BTIF register poke our spike's
+    `btif_hw_init()` does was checked bit-for-bit against the real
+    `hal_btif_hw_init()`: FAKELCR (both write `0x0`/normal mode), new-
+    handshake-mode enable (`BTIF_HANDSHAKE_EN_HANDSHAKE`, matches), Rx/Tx
+    FIFO clear-then-release sequence (matches, and is the fix from build
+    #237/#238 - still correct), TRI_LVL trigger levels (matches, computed
+    from the same `BTIF_TX_FIFO_THRE`/`BTIF_RX_FIFO_THRE` constants),
+    loopback disabled, DMA disabled + auto-reset enabled (matches). One
+    real difference found: the vendor **leaves Rx IER enabled**
+    (`hal_btif_rx_ier_ctrl(p_btif, true)` at the end of hw_init) since it's
+    interrupt-driven; our spike masks all IERs including Rx (`writel(0,
+    BTIF_IER)`) since it polls LSR.DR instead - this is host-side-only
+    register state (doesn't reach the MCU/bus), so it cannot explain the
+    MCU never answering, but is worth ruling in/out empirically since it's
+    now the only unexplained divergence at the BTIF hardware layer. The
+    wakeup-pulse mechanism (`hal_btif_raise_wak_sig`: clear WAK, sleep
+    64-96us, set WAK) is confirmed to exactly match our `btif_wakeup_consys()`,
+    and per its own doc comment is only meaningful "once sleep command is
+    sent to consys" (i.e. is a no-op after a cold MCU-ROM release, so its
+    absence/presence shouldn't matter here). The CPU-reset-release register
+    path (`mtk_wdt_swsysret_config((1<<12), ...)` = `AP_RGU_SWSYSRST` bit
+    12, `0x10007018`) is confirmed identical between `mtk_wcn_consys_hw.c`'s
+    two chip variants and our spike. **Conclusion: the entire AP-side
+    hardware path (power-on, BTIF init, MCU release, STP mand-mode framing)
+    now matches the vendor driver as closely as static source review can
+    verify** - CPUPCR advancing proves the ROM is alive, yet it never
+    answers on BTIF. This makes hypothesis 1 (parked pre-patch golden
+    capture, per 2026-07-16 checklist) the most likely remaining
+    explanation: the ROM may genuinely require something delivered by the
+    proprietary WMT firmware/patch download path (not visible in the GPL
+    driver source, since patch blobs and their loader protocol are closed)
+    before it will respond to STP commands at all - i.e. Gate G2b as
+    currently defined may be unreachable pre-firmware regardless of how
+    correct our register sequencing is. Try widening the Rx IER divergence
+    fix first (cheap, rules out a real if unlikely difference); if that
+    doesn't change the outcome, the pre-patch-capture experiment (parked)
+    becomes the most information-dense next step, since it would show
+    whether the *vendor's own* pre-firmware ROM answers this same query at
+    all, or whether even the real driver only gets a BTIF reply after WMT
+    firmware is pushed.
+  - **Build #259 tested 2026-07-16 — Rx IER fix confirmed NOT causal, as
+    expected.** Matched vendor's `hal_btif_hw_init()` exactly (leaves
+    `BTIF_IER_RXFEN` set instead of masking all IERs). Result: bit-identical
+    failure signature to build #257 — G2a PASS (chip ID 0x279), G2b FAIL
+    (-110), RX 0 bytes on both attempts, CPUPCR still advancing
+    (`0x55aa55de → 0x55aa55e2 → 0x55aa55e6`), retry TX still stalls
+    (`LSR=0x20`). Confirms the divergence was host-side-only as predicted
+    and rules it out. **The entire AP-side hardware/software path is now
+    verified correct against vendor source to the limit of static review.**
+    Proceeding to hypothesis 1: the parked pre-patch golden capture
+    (`logs/2026-07-16-b21-golden-prepatch-checklist.md`), simplified this
+    time to flash `boot2`+`linux` with the vendor Kali stack directly
+    (skip the risky `boot`-partition/Debian-rootfs combination that
+    reboot-looped in the 2026-07-16 attempt) - this is the only remaining
+    way to determine whether the real vendor driver's ROM answers
+    WMT_QUERY_STP pre-firmware at all, or whether Gate G2b is structurally
+    unreachable without the proprietary WMT patch blob.
+- **Hypothesis 1 test (2026-07-16, vendor Kali stack, `boot2`+`linux`
+  flashed with `planet/kali_boot.img`/`planet/linux.img`):** confirmed
+  root cause for why every prior "extensive" W0b golden harvest
+  (`scripts/consys-golden-harvest.sh`, builds #240/#247) only ever
+  captured **post-firmware** CONSYS state, and why a true pre-firmware
+  capture is not achievable from a live shell. dmesg shows
+  `wmt_launcher` fires and completes both WMT firmware fragment
+  downloads (`ROMv3_patch_1_1_hdr.bin`, `ROMv3_patch_1_0_hdr.bin`) by
+  **11.7s uptime** — `wmt_launcher` is registered `class core` in
+  `on init` inside the Android LXC's `init.connectivity.rc` (found at
+  `/var/lib/lxc/android/rootfs/init.connectivity.rc` on the running
+  device), Android init's earliest service class. No shell (serial,
+  SSH, ADB) is reachable that early, so the firmware push always wins
+  the race before any harvest script can run.
+  Attempted fix: added `disabled` to the `service wmt_launcher` stanza
+  and rebooted — **did not work**, because `/var/lib/lxc/android/rootfs`
+  is a `tmpfs` re-populated from `/system/boot/android-ramdisk.img` by
+  `pre-start.sh` on every container (re)start, so the live-tmpfs edit
+  was discarded before the next boot. Attempted to patch the ramdisk
+  image directly: blocked because `/system` is a loop-mounted image
+  (`/data/system.img` on `/dev/loop0`) that refused `mount -o
+  remount,rw` ("write-protected" at the loop-device level, not just the
+  mount) — no changes were made, remount failed cleanly.
+  **Conclusion (user decision 2026-07-16): stop here.** A genuine
+  pre-firmware capture would require either fixing the loop-device
+  write protection to patch the ramdisk properly, or a kill-loop racing
+  `wmt_launcher`'s ~0.5s firmware-push window — both treated as
+  disproportionate effort for this gate. **Hypothesis 1 is treated as
+  confirmed by the timing evidence above without a direct pre/post
+  diff:** firmware is resident on the MCU before any userspace
+  observation point exists, so the AP-side path (verified correct
+  against vendor source in the build #259 audit) cannot be the
+  remaining blocker — G2b's WMT_QUERY_STP handshake is answered by
+  ROM+firmware together, never ROM alone, and our spike (ROM-only,
+  no firmware push) failing to get a reply is expected vendor-matching
+  behaviour, not evidence of a driver bug.
 - **Stage W3:** go/no-go on the full gen2 port (frank-w 5.6→6.6 delta
   audit); if GO, port order = WMT core → AHB HIF → cfg80211 glue, WiFi
-  only.
+  only. Given the hypothesis-1 conclusion above, G2b as originally
+  defined (ROM-only handshake) is not a fair pass/fail gate — Stage W3
+  should re-scope the gate to require pushing the real WMT firmware
+  patch (already extracted to `docs/firmware-consys/`) as part of the
+  spike before judging G2b, or fold G2b into the full gen2 port
+  decision directly.
 
 **Risk:** highest-uncertainty workstream in the project; the gates exist
 precisely because the gen2 port may prove uneconomical. NO-GO returns
 WiFi to the (parked) USB path.
+
+- **2026-07-16 — extracted firmware review (`docs/firmware-consys/`):**
+  reviewed the CONSYS firmware set pulled from the vendor image before
+  attempting the G2b re-scope. Contents:
+  - `ROMv3_patch_1_0_hdr.bin` (211,908 B) / `ROMv3_patch_1_1_hdr.bin`
+    (46,472 B) — MediaTek ALPS ROM-patch container format (`ALPS` magic
+    at offset 0x0C, build timestamp `20180615091545a`, multi-segment
+    offset/length table). Filenames match exactly what `wmt_launcher`
+    was observed pushing in the boot-timing capture above, so this is
+    confirmed to be the right firmware, not a guess.
+  - `WIFI_RAM_CODE_6797` (451,904 B) — `MTKE` magic at offset 0x00,
+    chip-specific to 6797 per filename; this is the WiFi RAM-code image
+    loaded after the ROM patches.
+  - `WMT_SOC.cfg` — plaintext board config (coex antenna mode, GPS LNA
+    pin disabled, `co_clock_flag=0`); trivial, no parsing concerns.
+  - `wmt_launcher` / `wmt_loader` — vendor userspace ELF binaries,
+    reference only.
+  - No corruption or chip-mismatch red flags found. Gap: no local parser
+    for the ALPS ROM-patch segment table/checksums, and no public spec
+    to validate against — sha256 of each file recorded above for future
+    integrity checks.
+- **2026-07-16 — WMT firmware-push protocol extracted and spike extended
+  (Stage W3 / G2b re-scope, not yet built).** Full protocol writeup:
+  research.md "WMT Firmware-Push Protocol". Key findings:
+  - The SoC patch path is `mtk_wcn_soc_patch_dwn()` in `wmt_ic_soc.c`
+    (NOT the `opfunc_flash_patch_*` ops in `wmt_core.c` — those are for
+    external-flash chips). Our extracted blobs are directly downloadable:
+    28-byte `WMT_PATCH` header (datetime/"ALPS"/HwVer 0x8a00 — matches
+    the HW_VER we read live) + body pushed as 1000-byte `WMT_PATCH_CMD`
+    fragments (`01 01 len flag`), evt `02 01 01 00 00` per fragment,
+    `WMT_RESET` after each patch. Per-patch RAM address and download
+    order come from header bytes 24-27 (launcher `srh_patch()`):
+    `_1_1` = seq 1 → 0xF00A0000-style addr bytes `00 00 0a f0`;
+    `_1_0` = seq 2 → `00 00 09 00`. Preceded by two 6797-specific
+    reg-write commands (opcode 0x08) to 0x02090508/0x02090b2c, the DLM
+    power-on writes, and MCU-clock speed-up/restore tables.
+  - **Vendor source contradicts strong hypothesis 1:** `sw_init` sends
+    `WMT_QUERY_STP` pre-patch in mand mode and ABORTS if unanswered —
+    so on working hardware the ROM alone does answer the query. The
+    firmware push therefore can't be what unlocks the query, but the
+    re-scoped gate is still "push firmware, then query" and the push's
+    opcode-0x08 commands double as a diagnostic (does the ROM ignore
+    only opcode 0x04, or all BTIF traffic?).
+  - **Implemented in soc/0003** (regenerated with all hunks, verified
+    `git apply --check` clean + 3 diff sections present): ROM-only query
+    kept (result logged as PASS/FAIL but non-fatal), then DLM + mcuclk
+    tables (non-fatal, vendor-matching), both patches pushed in seq
+    order via `request_firmware()`, final `WMT_QUERY_STP` = the
+    re-scoped **Gate G2b** pass/fail line. Blobs are built into the
+    kernel image via `CONFIG_EXTRA_FIRMWARE` (spike probes before
+    rootfs mount) — `configs/gemini-consys.config` gained
+    `CONFIG_EXTRA_FIRMWARE(_DIR)` and `scripts/build-pack.sh` now
+    rsyncs `docs/firmware-consys/` into the VM. `btif_rx_drain()`
+    gained a 30ms idle-exit so ~260 fragment acks don't serialize on
+    the 1s timeout.
+  - **Build #262** (`consys-g2b-fw-push`, sha256 `c8a958d2…`,
+    `logs/2026-07-16-262-consys-g2b-fw-push/`) is this change, packed
+    and banner-verified, firmware confirmed embedded in vmlinux.
+    Awaiting flash of `boot2` + serial capture (boot.md #262 entry has
+    the expected-outcome checklist).
 
 ## 🟢 B-22 — RESOLVED 2026-07-16: right-port USB host (MUSB) + left-port charging work simultaneously — opened 2026-07-15
 

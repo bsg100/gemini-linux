@@ -733,3 +733,95 @@ Raw log: `logs/2026-07-15-246-vendor-touch-harvest.log`.
   polled operation is viable like the keyboard, else wait for Stage B
   EINT support. A mainline `solomon,ssd20xx` driver does not exist in
   v6.6 — this will be a vendor port or new driver (Phase 9).
+
+# WMT Firmware-Push Protocol (2026-07-16, B-21 G2b re-scope — Step 1 deliverable)
+
+Source authority: vendor 3.18 tree
+`drivers/misc/mediatek/connectivity/common/common_main/` — `core/wmt_ic_soc.c`
+(`mtk_wcn_soc_sw_init()` at ~line 975, `mtk_wcn_soc_patch_dwn()` at ~line
+2042), `core/wmt_ctrl.c` (`wmt_ctrl_get_patch_info()`), `core/include/`
+(`wmt_core.h` `WMT_PATCH`, `wmt_lib.h` `WMT_PATCH_INFO`), plus MTK's
+open-source userspace `stp_uart_launcher.c` (BPI-R2 BSP copy — our extracted
+`wmt_launcher` is the same tool).
+
+## Patch file format — our extracted blobs ARE the on-wire format
+
+`WMT_PATCH` header is exactly 28 bytes, followed directly by the downloadable
+body (no other container — earlier "ALPS magic at 0x0C" note was off by 4):
+
+| Offset | Size | Field | `ROMv3_patch_1_1_hdr.bin` | `ROMv3_patch_1_0_hdr.bin` |
+|---|---|---|---|---|
+| 0 | 16 | `ucDateTime` | `20180615091545a\n` | same |
+| 16 | 4 | `ucPLat` | `ALPS` | `ALPS` |
+| 20 | 2 | `u2HwVer` | `8a 00` (= HW_VER 0x8A00 we read live) | same |
+| 22 | 2 | `u2SwVer` | `8a 00` | `8a 00` |
+| 24 | 4 | `u4PatchVer` (= launcher "patch info") | `21 00 0a f0` | `22 00 09 00` |
+
+The launcher (`srh_patch`) seeks to offset 22, reads 2 bytes version + 4 bytes
+"patch info", and derives:
+
+- `patchNum = info[0] >> 4` (= 2 for both files — total patches)
+- `dowloadSeq = info[0] & 0xF` (1_1 → seq **1**, 1_0 → seq **2** — matches the
+  observed push order on the vendor stack)
+- `addRess[4] = info` with `addRess[0]` zeroed:
+  1_1 → `{00,00,0a,f0}`, 1_0 → `{00,00,09,00}`
+- version check: low byte of `u2SwVer` must equal low byte of the fw version
+  returned by the chip.
+
+It passes `{dowloadSeq, addRess[4], patchName[256]}` per patch to the kernel
+via `WMT_IOCTL_SET_PATCH_INFO`; the kernel driver itself never parses
+anything beyond the 28-byte header.
+
+## Command sequence (BTIF path of `mtk_wcn_soc_sw_init()`)
+
+All frames below are inner WMT payloads, wrapped in STP framing exactly as
+our spike already does. Order, with abort semantics:
+
+1. **`init_table_1_2`**: `WMT_QUERY_STP_CMD` `01 04 01 00 04` →
+   expect `WMT_QUERY_STP_EVT_DEFAULT` `02 04 06 00 00 04 11 00 00 00`.
+   **Runs pre-patch, in mand mode, and sw_init ABORTS if it fails** — i.e.
+   vendor source proves the ROM answers this query before any firmware is
+   pushed. (Tension with the B-21 hypothesis-1 conclusion noted below.)
+2. `init_table_4`: `WMT_SET_STP_CMD` `01 04 05 00 03 DF 0E 68 01` → evt
+   `02 04 02 00 00 03` (enables chip-side full-STP features).
+3. Host-side STP switched to `MTKSTP_BTIF_FULL_MODE`, sleep 10ms.
+4. `init_table_5`: query again, now expecting `WMT_QUERY_STP_EVT`
+   `02 04 06 00 00 04 DF 0E 68 01`.
+5. `wmt_power_on_dlm_table` (non-fatal if it fails): three reg-write ops
+   (opcode 0x08) to addr `0x80100060`: value 0 mask `0x00000f00`; value 0
+   mask `0x000000f0`; value 0 mask `0x00000008`. Evt always
+   `02 08 04 00 00 00 00 01`.
+6. `set_mcuclk_table_3` (6797-specific, non-fatal): four reg-writes —
+   `0x81021110`=0x10000000/mask 0x10000000, `0x8000010c`=0x40/mask 0xc0,
+   `0x80021118`=0x07/mask 0x3f, `0x81021100`=0x04/mask 0x07
+   (speeds MCU clock up for download). Evt = same 0x08 evt as above.
+7. **Per patch, in `dowloadSeq` order (1_1 then 1_0):**
+   a. `WMT_PATCH_ADDRESS_CMD` (20 B, reg-write): for icId 0x0279 the addr
+      bytes [8..11] are patched to `08 05 09 02` → writes 0 (mask
+      0xffffffff) to `0x02090508`. Evt `02 08 04 00 00 00 00 01`.
+   b. `WMT_PATCH_P_ADDRESS_CMD` (20 B, reg-write): addr bytes for 6797 =
+      `2c 0b 09 02` → `0x02090b2c`; **value bytes [12..15] = the patch's
+      `addRess[4]`** (1_1: `00 00 0a f0`, 1_0: `00 00 09 00`), mask
+      0xffffffff. Same evt.
+   c. Fragment loop: body (file minus 28-byte header) split into 1000-byte
+      fragments. Each TX = `WMT_PATCH_CMD` `01 01 <len_lo> <len_hi> <flag>`
+      + fragment, where len = 1 + fragSize and flag = 1 (first), 2 (mid),
+      3 (last). After each fragment expect `WMT_PATCH_EVT`
+      `02 01 01 00 00`. (1_1: 46,444 B body → 47 frags; 1_0: 211,880 B
+      body → 212 frags.)
+   d. `init_table_3` after each patch: `WMT_RESET_CMD` `01 07 01 00 04` →
+      evt `02 07 01 00 00`.
+8. `set_mcuclk_table_4` (non-fatal): reg-writes restoring 26 MHz —
+   `0x81021100`=0/mask 0x07, `0x8000010c`=0/mask 0xc0, `0x81021110`=0/mask
+   0x10000000.
+
+## Implication for G2b
+
+The vendor flow contradicts the strong form of hypothesis 1: the first query
+is answered by the **ROM alone** (patch download only happens after it
+passes). So a firmware push cannot be what unlocks the query — but
+implementing the push path is still the right spike extension: (a) it makes
+the re-scoped gate ("handshake + firmware resident") testable end-to-end the
+moment the query starts passing, and (b) attempting the later steps (reg-write
+ops use a different WMT opcode, 0x08) even after a query timeout tells us
+whether the ROM ignores only opcode 0x04 or all BTIF traffic.

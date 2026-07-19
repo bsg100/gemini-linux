@@ -46,6 +46,9 @@ echo "==> [1/6] Syncing patches/, configs/ and scripts/ to VM"
 rsync -a --delete "$REPO/patches/" root@localhost:'~/gemini_linux/patches/' -e "ssh -p 5522"
 rsync -a "$REPO/scripts/" root@localhost:'~/gemini_linux/scripts/' -e "ssh -p 5522"
 rsync -a --delete "$REPO/configs/" root@localhost:'~/gemini_linux/configs/' -e "ssh -p 5522"
+# CONSYS firmware blobs: gemini-consys.config builds these into the
+# kernel via CONFIG_EXTRA_FIRMWARE_DIR=/root/gemini_linux/docs/firmware-consys
+rsync -a "$REPO/docs/firmware-consys/" root@localhost:'~/gemini_linux/docs/firmware-consys/' -e "ssh -p 5522"
 echo "==> [2/6] Reset kernel tree, patch, config, build (VM)"
 $VM 'cd ~/linux-6.6 && git reset -q && git checkout -- . && git clean -fdq -- Documentation arch drivers'
 $VM 'cd ~/gemini_linux && ./scripts/build.sh patch && ./scripts/build.sh config'
