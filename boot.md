@@ -7699,3 +7699,327 @@ mismatch, since the response-matching layer is now ruled out).
 
 Fix retained in the patch (correct regardless, prevents future false
 negatives) but did not close B-21.
+
+## 2026-07-16 — BUILD #259: B-21 G2b BTIF Rx IER fix — tested, did not resolve G2b
+
+Source audit (`btif_plat.c` `hal_btif_hw_init()`) found one bit-for-bit
+divergence between our spike's `btif_hw_init()` and vendor: vendor leaves
+Rx IER set (`hal_btif_rx_ier_ctrl(p_btif, true)`), our spike masked it
+(`writel(0, btif + BTIF_IER)`). Added `BTIF_IER_RXFEN` and changed the
+final IER write to match. Patch:
+`patches/v6.6/soc/0003-soc-mediatek-add-mt6797-consys-spike.patch`.
+
+Packed as build #259. Banner verified `#259 SMP PREEMPT Thu Jul 16
+06:53:50 UTC 2026`. DTB grep confirmed `clock-names = "btif"` present.
+sha256 in `logs/2026-07-16-259-consys-g2b-rx-ier-fix/`.
+
+**Result: bit-identical failure signature to build #257.** Gate G2a PASS
+(chip ID 0x279), Gate G2b FAIL (-110), RX 0 bytes both attempts, CPUPCR
+still advancing (`0x55aa55de → 0x55aa55e2 → 0x55aa55e6`), retry TX still
+stalls at `LSR=0x20`. Confirms the Rx IER divergence was host-side-only
+(no IRQ handler registered, so it can't affect a PIO-polled path) and
+rules it out, exactly as predicted when the fix was proposed. This
+closes out the static-source-audit line of investigation — the AP-side
+hardware/software path is now verified correct against vendor source to
+the limit of static review. See blockers.md B-21 for the transition to
+hypothesis 1 (pre-firmware capture).
+
+## 2026-07-16 — Vendor Kali stack: B-21 hypothesis 1 pre-firmware capture attempt
+
+Flashed `boot2` with `planet/kali_boot.img` and `linux` with
+`planet/linux.img` (vendor 3.18 Android/Kali stack) per
+`logs/2026-07-16-b21-golden-prepatch-checklist.md`, to determine whether
+the real vendor driver's ROM answers WMT_QUERY_STP over BTIF before any
+WMT firmware is pushed — the "pre-firmware" state our G2b spike is
+actually in, which no prior W0b golden harvest had ever isolated.
+
+Added a `gemini`/`gemini` user (SSH root/toor login was rejected on this
+image; recorded for future vendor-stack sessions) and got a shell.
+`dmesg | grep -i wmt` immediately showed `wmt_launcher` had already
+pushed both firmware fragments (`ROMv3_patch_1_1_hdr.bin`,
+`ROMv3_patch_1_0_hdr.bin`) by **uptime 11.7s** — confirms `wmt_launcher`
+is `class core` / `on init` in the Android LXC's
+`init.connectivity.rc` (Android init's earliest service class), so no
+shell is ever reachable before firmware is already resident. This is
+the direct answer to "why wasn't this harvested during the extensive
+W0b harvest" — every prior harvest, run from a live shell, was
+structurally incapable of catching a pre-firmware window.
+
+Attempted to disable the service (`disabled` flag added to `service
+wmt_launcher` in the live tmpfs `init.connectivity.rc`) and rebooted —
+firmware was pushed again at 11.7s, unchanged. Root cause: the LXC
+container's rootfs is a `tmpfs`, re-populated from
+`/system/boot/android-ramdisk.img` by `pre-start.sh` on every container
+start, so the tmpfs edit never persisted across the reboot. Attempted to
+patch the ramdisk image directly at its source: blocked because
+`/system` (`/data/system.img` on `/dev/loop0`) refused `mount -o
+remount,rw` — "write-protected" at the loop-device level. No changes
+were made; the remount failed cleanly with no side effects.
+
+**User decision: stop here rather than pursue a loop-device fix or a
+firmware-push kill-loop race — disproportionate effort for this gate.**
+Hypothesis 1 (all prior golden harvests were post-firmware; a
+pre-firmware capture is not achievable from userspace) is treated as
+confirmed by the timing evidence, without a direct pre/post register
+diff. Full writeup and Stage W3 re-scoping recommendation in
+blockers.md B-21.
+
+Next: restore device to Debian 13 + our Linux 6.6 kernel
+(`logs/2026-07-16-b21-golden-prepatch-checklist.md` step 5).
+
+**Restore confirmed 2026-07-16:** `boot2` reflashed with
+`logs/2026-07-16-259-consys-g2b-rx-ier-fix/new_kali_boot.img`, `linux`
+reflashed with `debian13-rootfs-backup-20260716.img`. Post-reboot
+`uname -a` over SSH (`10.15.19.82`, gadget) confirms:
+`Linux gemini 6.6.0-dirty #259 SMP PREEMPT Thu Jul 16 06:53:50 UTC 2026
+aarch64 GNU/Linux` — banner matches build #259 exactly, gadget networking
+restored (required re-aliasing the Mac's `en12` RNDIS interface to
+`10.15.19.1/24`, per rndis-gadget-ip-config memory). Device is back on our
+own kernel/rootfs; B-21 golden-prepatch checklist complete through step 6
+(this entry serves as the step-6 writeup — no separate provenance dir
+needed since no harvest txt files were produced).
+
+---
+
+## 2026-07-16 — BUILD #262: `consys-g2b-fw-push` (Stage W3, re-scoped Gate G2b — WMT firmware push)
+
+**Provenance:** `logs/2026-07-16-262-consys-g2b-fw-push/` — sha256
+`c8a958d27352046a228f30088fdea7edff953e4995522828ae488e9f478a751a`,
+banner `#262 SMP PREEMPT Thu Jul 16 09:57:05 UTC 2026` (verified by
+build-pack). Kernel v6.6 + full patch set; repo commit pending.
+
+**What changed and why:** implements the approved G2b re-scope (plan
+`vast-wandering-salamander`). Protocol source-harvested from vendor
+`wmt_ic_soc.c`/`stp_uart_launcher.c` (research.md "WMT Firmware-Push
+Protocol"); soc/0003 extended so the spike now: (1) runs the ROM-only
+WMT_QUERY_STP as before (logged, non-fatal), (2) sends the DLM power-on
+and 6797 MCU-clock reg-write tables, (3) pushes both
+`ROMv3_patch_*_hdr.bin` blobs (built into the kernel via
+CONFIG_EXTRA_FIRMWARE — verified embedded: both `20180615091545a`
+header strings present in vmlinux) in download-seq order with the two
+patch-address commands + 1000-byte fragments + WMT_RESET per patch,
+(4) re-issues WMT_QUERY_STP — **that final query is now the Gate G2b
+pass/fail** (`GATE G2B PASS ... with firmware pushed`). Config:
+`gemini-consys.config` + EXTRA_FIRMWARE lines; `build-pack.sh` now
+rsyncs `docs/firmware-consys/` to the VM.
+
+**Expected outcomes on next capture:**
+- G2a PASS unchanged (chip ID 0x279).
+- ROM-only query: expected to still FAIL -110 per builds #257/#259
+  (logged as `ROM-only query FAIL ... attempting firmware push anyway`).
+- The interesting bits: do the opcode-0x08 address/DLM commands get ANY
+  reply (distinguishes "ROM ignores opcode 0x04" from "ROM deaf on
+  BTIF"), and does the post-push query pass. Any fragment ack at all
+  would be the first-ever CONSYS RX byte on our kernel.
+
+---
+
+## 2026-07-16 — Gemini given internet access (rootfs change, no kernel/flash)
+
+The right-port Naxiang USB-ethernet adapter was already on the LAN
+(192.168.100.146, MAC-pinned networkd config from B-19) but had no
+default route or DNS. Changes made live over gadget SSH (10.15.19.82),
+all on the Debian rootfs — **flagged per the rootfs-network-change
+rule; gadget usb0 config untouched**:
+
+- `Gateway=192.168.100.1` appended to both
+  `/etc/systemd/network/10-usb-{naxiang,r8156}-static.network` (persists
+  across reboots; verified `default via 192.168.100.1 proto static`).
+- `/etc/resolv.conf`: replaced the dangling systemd-resolved stub
+  symlink (resolvectl/resolved not in the minbase image) with a static
+  file — nameservers 192.168.100.1, 8.8.8.8.
+- Device clock was 3 months behind (no RTC sync), which made apt reject
+  repo signatures as "not live yet"; set manually, then installed +
+  enabled `systemd-timesyncd` — now `System clock synchronized: yes`.
+
+Verified: ping 8.8.8.8 (2.6ms), DNS resolves, `apt-get update` fetches
+16.5 MB clean. Note for `scripts/mkrootfs.sh`: these three changes are
+not yet baked into the rootfs build script — a fresh rootfs would need
+them re-applied.
+
+---
+
+## 2026-07-16 — BUILD #263: `touch-i2c4-enable` (Phase 9 touchscreen Stage A — chip identification)
+
+**Provenance:** `logs/2026-07-16-263-touch-i2c4-enable/` — sha256
+`14be6295dfb52d0183bb4516544fb0dec566b30bf3549b6661cff2a8230851cd`,
+banner `#263 SMP PREEMPT Thu Jul 16 10:16:34 UTC 2026` (verified).
+
+**What changed and why:** Phase 9 opened (B-21 WiFi parked with build
+#262 untested). First target: touchscreen. New patch **dts/0016**
+enables `&i2c4` (0x11011000, mainline node existed but disabled;
+`i2c4_pins_a` SDA=GPIO238/SCL=GPIO239, 400 kHz) — the vendor DTB puts
+both touch-controller candidates there: `cap_touch@62` (Novatek,
+configured for the WQHD/R63419 panel variant we do NOT have) and
+`solomon_touch@53` (SSD2092 touch — matches our Phase 5
+hardware-identified panel). Also corrects the stale unverified
+`touchscreen@5d`-on-i2c1 guess (node removed, correction comment left).
+No touch child nodes yet — Stage A is purely: boot, then `i2cdetect -y
+<bus> ` over SSH to see which address acks. Touch power = MT6351 VLDO28
+(2.8 V, `regulator-default-on` in vendor DTB → LK expected to leave it
+up); touch INT = EINT/GPIO85 (B-11 applies — polled operation likely,
+like the keyboard); reset GPIO TBC from vendor pinctrl states.
+
+**Expected on next boot:** a new `i2c-N` bus (11011000.i2c) in sysfs;
+`i2cdetect` shows a device at 0x53 (Solomon likely) and/or 0x62
+(Novatek); zero regressions (display/keyboard/gadget/ethernet). If
+neither address acks, next suspects are VLDO28 actually off under our
+kernel (extend regulator/0002 beyond VCN rails) or a reset line held
+low (the AW9523B keyboard lesson).
+
+**BUILD #263 OUTCOME (2026-07-16, live over gadget SSH — Stage A COMPLETE,
+chip identified):** banner #263 verified. New bus enumerated as `i2c-3`
+(11011000.i2c; note kernel bus numbers shifted — AW9523B keyboard moved
+to `4-005b`, harmless). Findings:
+
+- **Initial i2cdetect: bus empty.** Same failure mode as the keyboard
+  (B-18): LK leaves the touch controller's reset line LOW. Vendor DTB
+  pinctrl decode: **CTP_RST = GPIO68** (`rstoutput0/1`), CTP_INT =
+  GPIO85 (`eint@0`, EINT85).
+- **With GPIO68 driven high (gpioset): address 0x53 ACKs; 0x62 absent.**
+  The touch controller is the **Solomon SSD2092** (`solomon_touch@53`),
+  NOT the Novatek `cap_touch@62` — consistent with the Phase 5 panel
+  identification (the Novatek belongs to the WQHD/R63419 variant).
+- **Driver source secured:** the gemian tree (github.com/gemian/
+  gemini-linux-kernel-3.18, `native` branch) ships
+  `drivers/input/touchscreen/mediatek/SSD209XX/` (the dguidipc tree
+  does NOT have it) — archived to `docs/vendor-touch-ssd20xx/`.
+  Its embedded firmware header states **Product ID AUO599 (AUO 5.99"),
+  IC Name SSD2092** — matching our exact panel; identity confirmed
+  from two independent directions.
+- Protocol notes for the port: 16-bit little-endian register select
+  via separate write, then read (`ts_read_data`); reset dance
+  high-10ms-low-20ms-high-80ms, then INT (GPIO85) falls when the DS
+  is ready — observed LOW on hardware after our reset toggle, so the
+  chip boots. Plain register reads currently echo the written bytes —
+  the chip likely needs the driver's init/handshake (and possibly the
+  embedded-firmware download path in `ssd20xx_upgrade.c` — 483 KB
+  embedded FW, shades of CONSYS but fully in-driver) before the
+  register map serves data. That is Stage B driver-port work, not
+  shell work.
+- Zero regressions: display, keyboard, gadget SSH, right-port ethernet
+  all up.
+
+**Stage B next:** port/write the SSD2092 input driver — reset GPIO +
+VLDO28 handling in DTS, polled INT (GPIO85, B-11 EINT gap — same
+polling approach as the keyboard), vendor init sequence from
+`docs/vendor-touch-ssd20xx/ssd20xx.c`.
+
+---
+
+## BUILD #265 — touch-ssd2092-driver (Phase 9 Stage B, 2026-07-19) — AWAITING FLASH
+
+**Provenance:** `logs/2026-07-19-265-touch-ssd2092-driver/` — sha256
+`b56785145b86f47ba6cf93dec2113fc2e531d43053311bf0f36062c1efe8d875`,
+banner `#265 SMP PREEMPT Sun Jul 19 06:36:29 UTC 2026` (verified in image).
+(A build #264 with the same content existed briefly but was superseded
+pre-flash: its touch node reused the panel's `solomon,ssd2092` compatible;
+#265 renames the touch side to `solomon,ssd2092-touch`. #264's provenance
+dir was deleted, never flashed.)
+
+**New in this build (Stage B — SSD2092 touch driver):**
+- `patches/v6.6/input/0002-Input-add-solomon-ssd2092-touchscreen.patch` —
+  new `drivers/input/touchscreen/ssd2092.c` (+Kconfig/Makefile/binding),
+  a minimal port of the gemian SSL SSD20xx driver
+  (`docs/vendor-touch-ssd20xx/`): DS-handshake (boot-status read, eflash
+  init 0xE003=0x0007 / 0xE000=0x0048, DS int clear, **TMC CPU unstall
+  reg 0x0002=0x0000**), then TMC config (touch mode 0, read X/Y
+  resolution + point count), then 10 ms polled point loop (S&L @0x0AF0
+  with XOR/SUM checksum, 6-byte records @0x0AF1, INT ack 0x0043=0x0001,
+  AUX→full re-init, BOOT_ST→config resend). No firmware-flash path —
+  the touch FW lives in chip eflash. **The DS-stall is the explanation
+  for Stage A's register-echo behaviour.**
+- `patches/v6.6/dts/0017-...-add-ssd2092-touchscreen-node.patch` —
+  `touchscreen@53` under &i2c4: `solomon,ssd2092-touch`, reset-gpios
+  GPIO68 active-low, irq-gpios GPIO85 active-low (polled, B-11),
+  `touchscreen-inverted-x` + `touchscreen-swapped-x-y` (sensor portrait
+  1080x2160 → landscape console; helper inverts before swapping).
+- `configs/gemini-touch.config` — CONFIG_INPUT_TOUCHSCREEN=y,
+  CONFIG_TOUCHSCREEN_SSD2092=y.
+
+**Expected on serial/dmesg:** `ssd2092 3-0053: probing SSD2092 at 0x53`,
+`DS boot status 0x....`, `DS ID words ...`, `TMC config: 1080x2160, N
+points`, `SSD2092 ready (1080x2160, polling 10ms)`; then
+`/dev/input/event*` "Solomon SSD2092 Touchscreen" and `evtest` events on
+touch. Failure modes to look for: INT never asserted after reset (wiring
+/ reset polarity), TMC config reads implausible (handshake insufficient
+→ driver falls back to 1080x2160 defaults and logs a warning).
+
+**Flash:**
+```
+~/gemini-build/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 /Volumes/extdata/github/gemini_linux/logs/2026-07-19-265-touch-ssd2092-driver/new_kali_boot.img
+```
+**Capture:**
+```
+python3 scripts/ftdi-monitor.py --interactive --log logs/2026-07-19-266-touch-ssd2092-driver-boot.log
+```
+
+---
+
+## BUILD #265 OUTCOME + BUILD #266 — touch-ssd2092-poll-fix (2026-07-19)
+
+**#265 flashed and live-debugged over SSH (no serial capture; banner
+verified `#265` via `uname -a`).** Probe chain fully worked first boot:
+
+```
+ssd2092 3-0053: probing SSD2092 at 0x53
+ssd2092 3-0053: DS boot status 0x8000
+ssd2092 3-0053: DS ID words 2405 0002 2016 0504 1742   <- vendor "ES2" signature
+ssd2092 3-0053: TMC config: 1080x2160, 10 points       <- real chip values, not fallback
+ssd2092 3-0053: SSD2092 ready (1080x2160, polling 10ms)
+```
+
+- The DS handshake + TMC unstall is CONFIRMED as the fix for Stage A's
+  register-echo: with the driver unbound, hand reads via i2ctransfer
+  returned X=0x0438 (1080) / Y=0x0870 (2160).
+- The AUX recovery path fired for real at 12.2s (AUX 0x0001 bootup-reset,
+  almost certainly the DSI panel driver resetting the shared TDDI chip)
+  and re-initialised cleanly.
+- **Defect found: zero input events on touch.** Live register watch with
+  the driver unbound: a tap latched S&L=0x0B06 (status 0x0B, len 6 = one
+  point record) with valid XOR/SUM checksum 0x0D11 — but with the report
+  still latched, GPIO85 read PHYSICALLY HIGH. INT is a falling-edge
+  PULSE (vendor uses IRQF_TRIGGER_FALLING), not a level; the #265 poll
+  loop gated on INT level and missed every pulse.
+
+**#266 fix:** poll S&L unconditionally every 10 ms (reports stay latched
+until acked, so nothing is lost); INT is used only for reset/DS-ready
+waits. Also: no int-clear write when S&L==0 (keeps the bus quiet).
+Patch regenerated: `patches/v6.6/input/0002`.
+
+**Provenance:** `logs/2026-07-19-266-touch-ssd2092-poll-fix/`, banner
+`#266 SMP PREEMPT Sun Jul 19 06:46:54 UTC 2026` (sha256 in line below).
+
+**Flash:** `mtk.py w boot2 logs/2026-07-19-266-touch-ssd2092-poll-fix/new_kali_boot.img`
+**Test:** `evtest /dev/input/event0` (or `dd if=/dev/input/event0 | od`) while touching.
+
+---
+
+## BUILD #266 OUTCOME — TOUCHSCREEN WORKING (2026-07-19)
+
+**Result: touch input fully working on hardware.** 30-second on-screen-
+prompted capture: 65,064 bytes (~2700 input events) on
+`/dev/input/event0` — ABS_MT_TRACKING_ID / POSITION_X/Y / PRESSURE,
+BTN_TOUCH, single-touch emulation, ~60 Hz motion updates, clean releases.
+Sample decoded frame: X=380 Y=862 pressure=200 in the landscape ranges
+(X 0–2159, Y 0–1079) → the `touchscreen-inverted-x` +
+`touchscreen-swapped-x-y` mapping is correct.
+
+**Debug journey (worth remembering):**
+1. #265's INT-level gate was replaced with unconditional S&L polling in
+   #266 (INT observed high while a report sat latched — INT is at most a
+   pulse; S&L is the reliable data-pending indicator).
+2. All earlier "zero events" captures — including the ones that
+   motivated deeper debugging — were invalidated by a test-tooling bug:
+   `dd bs=16` on evdev gets EINVAL instantly (struct input_event is 24
+   bytes on arm64), silently closing the device (which also stops the
+   input poller — polling only runs while the device is open). Correct
+   capture: `dd bs=4096` or evtest.
+3. Concurrent i2ctransfer register sampling while the driver is bound
+   races the driver's register-pointer writes — never diagnose that way;
+   unbind first (or trust the driver logs).
+
+**Phase 9 touchscreen: COMPLETE.** Chip SSD2092, driver
+`patches/v6.6/input/0002`, DTS `dts/0017`, config
+`configs/gemini-touch.config`. Remaining polish (not blocking): EINT
+migration when B-11 lands; suspend/resume policy.

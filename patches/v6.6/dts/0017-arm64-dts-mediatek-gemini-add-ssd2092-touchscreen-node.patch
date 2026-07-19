@@ -1,0 +1,57 @@
+diff --git a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+index f0319d798..377f787d8 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+@@ -516,13 +516,20 @@ lcd_avee: outn {
+  * candidates: cap_touch@62 (Novatek, fully-configured node describing
+  * the WQHD/R63419 panel variant) and solomon_touch@53 (bare node —
+  * but our real panel was hardware-identified as SSD2092 in Phase 5,
+- * and "solomon_touch" is the SSD2092 touch controller). Which chip is
+- * physically present must be established by probing the live bus
+- * (i2cdetect for 0x62 vs 0x53) before any driver work — no touch
+- * child nodes yet. Touch power is MT6351 VLDO28 (2.8 V,
+- * regulator-default-on in the vendor DTB, so LK should leave it up);
+- * touch INT is EINT/GPIO85 (unusable until B-11), reset on a GPIO
+- * still to be confirmed from the vendor pinctrl states.
++ * and "solomon_touch" is the SSD2092 touch controller).
++ *
++ * Stage A (2026-07-16, build #263) settled it on live hardware: with
++ * CTP_RST (GPIO68) driven high, 0x53 ACKs and 0x62 is absent — the
++ * chip is the Solomon SSD2092 (matches the "Product ID: AUO599,
++ * IC Name: SSD2092" firmware header in the gemian vendor driver,
++ * archived at gemini_linux docs/vendor-touch-ssd20xx/).
++ *
++ * Touch power is MT6351 VLDO28 (2.8 V, regulator-default-on in the
++ * vendor DTB, LK leaves it up — no supply property needed yet).
++ * CTP_RST = GPIO68 (LK leaves it LOW = held in reset; driver must
++ * pulse it, hardware-verified in Stage A). CTP_INT = GPIO85, an EINT
++ * line pinctrl-mt6797 cannot deliver (B-11) — the ssd2092 driver
++ * polls it as a plain GPIO, like the keyboard.
+  * Mainline i2c4_pins_a: SDA=GPIO238, SCL=GPIO239. Vendor bus config:
+  * 400 kHz, mediatek,use-open-drain.
+  */
+@@ -531,6 +538,24 @@ &i2c4 {
+ 	pinctrl-0 = <&i2c4_pins_a>;
+ 	clock-frequency = <400000>;
+ 	status = "okay";
++
++	touchscreen@53 {
++		compatible = "solomon,ssd2092-touch";
++		reg = <0x53>;	/* vendor DTB solomon_touch@53 */
++		reset-gpios = <&pio 68 GPIO_ACTIVE_LOW>;	/* CTP_RST, Stage A hw-verified */
++		irq-gpios = <&pio 85 GPIO_ACTIVE_LOW>;		/* CTP_INT, polled (B-11) */
++		/*
++		 * Sensor is native portrait 1080x2160; the console/display
++		 * runs landscape 2160x1080. Vendor driver maps X'=y,
++		 * Y'=1080-x. touchscreen_report_pos() inverts in sensor
++		 * space FIRST, then swaps, so this is inverted-x + swap
++		 * (not inverted-y), and the sizes are sensor-space.
++		 */
++		touchscreen-size-x = <1080>;
++		touchscreen-size-y = <2160>;
++		touchscreen-inverted-x;
++		touchscreen-swapped-x-y;
++	};
+ };
+ 
+ /*

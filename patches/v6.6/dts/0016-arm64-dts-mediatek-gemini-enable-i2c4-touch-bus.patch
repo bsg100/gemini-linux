@@ -1,0 +1,66 @@
+diff --git a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+index 8eb89c92f..f0319d798 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+@@ -445,7 +445,7 @@ usb_cc_right: typec@25 {
+ 	};
+ };
+ 
+-/* i2c1: touchscreen (Novatek NT, address TBD via nvtpid) */
++/* i2c1: left-port USB-C CC controller */
+ &i2c1 {
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&i2c1_pins_a>;
+@@ -453,15 +453,14 @@ &i2c1 {
+ 	status = "okay";
+ 
+ 	/*
+-	 * Touchscreen: Novatek NT controller at 0x5d.
+-	 * Chip model determined at runtime via nvtpid register.
+-	 * Disabled until chip model confirmed and driver selected.
++	 * CORRECTION (2026-07-16, Phase 9 touchscreen Stage A): the
++	 * touchscreen is NOT on this bus. The extracted vendor DTB
++	 * (docs/vendor-dtb/gemini_kali_boot.dts) puts both touch
++	 * controller candidates on i2c@11011000 (vendor id=4, our
++	 * &i2c4): cap_touch@62 (Novatek) and solomon_touch@53. The
++	 * earlier touchscreen@5d node here was an unverified guess and
++	 * has been removed — see &i2c4 below.
+ 	 */
+-	touchscreen@5d {
+-		compatible = "novatek,nt11205-ts";
+-		reg = <0x5d>;
+-		status = "disabled";
+-	};
+ 
+ 	/*
+ 	 * FUSB301 USB Type-C CC controller — LEFT port (the mtu3/ssusb
+@@ -511,6 +510,29 @@ lcd_avee: outn {
+ 	};
+ };
+ 
++/*
++ * i2c4: touchscreen bus (Phase 9 Stage A, 2026-07-16).
++ * Vendor DTB i2c@11011000 (id=4) carries the two touch-controller
++ * candidates: cap_touch@62 (Novatek, fully-configured node describing
++ * the WQHD/R63419 panel variant) and solomon_touch@53 (bare node —
++ * but our real panel was hardware-identified as SSD2092 in Phase 5,
++ * and "solomon_touch" is the SSD2092 touch controller). Which chip is
++ * physically present must be established by probing the live bus
++ * (i2cdetect for 0x62 vs 0x53) before any driver work — no touch
++ * child nodes yet. Touch power is MT6351 VLDO28 (2.8 V,
++ * regulator-default-on in the vendor DTB, so LK should leave it up);
++ * touch INT is EINT/GPIO85 (unusable until B-11), reset on a GPIO
++ * still to be confirmed from the vendor pinctrl states.
++ * Mainline i2c4_pins_a: SDA=GPIO238, SCL=GPIO239. Vendor bus config:
++ * 400 kHz, mediatek,use-open-drain.
++ */
++&i2c4 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&i2c4_pins_a>;
++	clock-frequency = <400000>;
++	status = "okay";
++};
++
+ /*
+  * i2c5: AW9523B GPIO/keyboard expander (0x5b) and NFC (0x28).
+  * i2c5 base: 0x1101c000.  Address 0x5b = 0x58 base | AD0=1,AD1=1.

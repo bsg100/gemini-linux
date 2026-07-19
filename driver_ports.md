@@ -751,43 +751,64 @@ The MT6360 ADC driver (`drivers/iio/adc/mt6360-adc.c`) is the closest structural
 
 ---
 
-## Novatek Touchscreen
+## SSD2092 Touchscreen
 
 **Subsystem:** Touchscreen  
-**hardware.md Action:** Research Further  
-**Status:** Blocked on hardware identification  
+**hardware.md Action:** Port Driver  
+**Status:** WORKING ON HARDWARE 2026-07-19 (build #266 — ~2700 events/30 s captured, coordinates + pressure + releases verified; see boot.md BUILD #266 OUTCOME)  
 **Priority:** Usability Critical
 
 ### Background
 
-The Gemini PDA uses an unknown Novatek NT touchscreen controller identified at runtime via `nvtpid` probe. The vendor DTS contains `novatek-mp-criteria-nvtpid` — a Novatek multi-point test criteria node that does not reveal the chip model.
+Chip identity was resolved on hardware 2026-07-16 (Stage A, build #263): the
+touch controller is a **Solomon Systech SSD2092** at i2c4 (11011000) address
+0x53 — not the Novatek candidate (0x62 absent on the live bus; Novatek is the
+WQHD/R63419 panel variant only). The SSD2092 is a TDDI part: the same IC is
+the display driver our Phase 5 DSI panel driver
+(`panel/0005-drm-panel-add-solomon-ssd2092-fhd-panel.patch`, compatible
+`solomon,ssd2092`) talks to; the touch side is a separate I2C interface, so
+the touch node/driver use compatible **`solomon,ssd2092-touch`**.
 
-The mainline driver `drivers/input/touchscreen/novatek-nvt-ts.c` covers only the NT11205. The NT36523 and NT36672A exist in mainline as DRM display panel drivers (`drivers/gpu/drm/panel/`) — these are MIPI DSI display controllers, not touchscreen ICs.
+Vendor source: SSL SSD20xx driver, present only in the gemian 3.18 tree
+(`drivers/input/touchscreen/mediatek/SSD209XX/`,
+`CONFIG_TOUCHSCREEN_MTK_SSL_SSD20XX`), archived at
+`docs/vendor-touch-ssd20xx/`.
 
-### Required Action Before Any Driver Work
+### Port (patches/v6.6/input/0002, dts/0017, configs/gemini-touch.config)
 
-**Hardware test required.** Boot the device and read the `nvtpid` value at I2C probe time (or extract it from Gemian boot logs). This determines the chip model and the correct driver path.
+New standalone driver `drivers/input/touchscreen/ssd2092.c` (~550 lines vs
+the vendor's 4500) implementing only the boot + point-report path:
 
-### Decision Tree
-
-```
-nvtpid == NT11205  →  Use mainline novatek-nvt-ts.c as-is
-nvtpid == NT36xxx  →  Extend novatek-nvt-ts.c with new chip ID
-nvtpid == other    →  Assess; likely extend novatek-nvt-ts.c or write standalone
-```
-
-### If Extension Needed
-
-The mainline driver validates chip identity by reading from offset `0x78` (parameters block) and checking `NVT_TS_PARAMS_CHIP_ID` at byte offset `0x0e`. A different NT model would need:
-- New chip ID constant
-- Updated validation logic in `nvt_ts_identify_chip()` (if models share similar probe protocol)
-- Potentially different touch data format in `nvt_ts_work_func()`
+- **DS handshake** (the key discovery — explains Stage A's "register echo"):
+  after reset the chip is in DS/bootloader mode with the touch MCU stalled;
+  the TMC register map (0x0AF0…) is dead until: boot-status read → eflash
+  init writes (0xE003=0x0007, 0xE000=0x0048) → DS int clear (reg 0x0001) →
+  **CPU unstall (reg 0x0002 = 0x0000)** → INT falls when the firmware is
+  live. Firmware itself lives in chip eflash (factory-programmed); the
+  vendor flash/upgrade path is deliberately not ported.
+- **Reset**: CTP_RST GPIO68 (LK leaves it low = held in reset); vendor pulse
+  high 10 ms → low 20 ms → high 80 ms, then poll INT ≤400 ms.
+- **I2C protocol**: 16-bit LE register select via `i2c_master_send`, 200 µs
+  delay, separate-STOP `i2c_master_recv` (no repeated-start).
+- **Point read**: Status&Length word @0x0AF0 (+XOR/SUM checksum word,
+  3-retry; 0x00F0 fallback on echo), 6-byte point records @0x0AF1
+  (id/x_lsb/y_lsb/x_y_msb/weight, 12-bit coords), INT ack via reg
+  0x0043=0x0001. AUX events trigger full re-init; BOOT_ST triggers config
+  resend — mirroring the vendor recovery paths.
+- **Polled** at 10 ms (`input_setup_polling`) because INT GPIO85 is an EINT
+  line pinctrl-mt6797 can't deliver (B-11) — same approach as the keyboard.
+- **Orientation**: sensor is portrait 1080x2160, console landscape; vendor
+  maps X'=y, Y'=1080−x = DT `touchscreen-inverted-x` + `touchscreen-swapped-x-y`
+  (helper inverts in sensor space before swapping).
+- MT protocol B (`INPUT_MT_DIRECT`), slots keyed by the chip's point id.
 
 ### Open Questions
 
-- Extract `nvtpid` value from Gemian or Kali boot logs for the Gemini PDA.
-- Confirm I2C address of the touchscreen controller (not recorded in current DTS analysis).
-- Determine whether the NT model uses the same MIPI I2C protocol variant as NT11205 or a different one.
+- Hardware test pending (build #265): does the DS handshake bring the TMC
+  register map live, and do the config reads return sane 1080x2160?
+- Suspend/resume behaviour (vendor LPM/gesture path not ported).
+- Whether the eflash firmware version on this unit matches the driver's
+  expectations (no version gating in our port — we boot whatever is there).
 
 ---
 

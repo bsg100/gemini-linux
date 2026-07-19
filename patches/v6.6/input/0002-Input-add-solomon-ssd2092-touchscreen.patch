@@ -1,0 +1,681 @@
+diff --git a/Documentation/devicetree/bindings/input/touchscreen/solomon,ssd2092.yaml b/Documentation/devicetree/bindings/input/touchscreen/solomon,ssd2092.yaml
+new file mode 100644
+index 000000000..9971cf12f
+--- /dev/null
++++ b/Documentation/devicetree/bindings/input/touchscreen/solomon,ssd2092.yaml
+@@ -0,0 +1,59 @@
++# SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/input/touchscreen/solomon,ssd2092.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: Solomon Systech SSD2092 I2C touchscreen controller
++
++maintainers:
++  - Gemini PDA Linux Project
++
++description: |
++  Capacitive touchscreen controller found on the Planet Gemini PDA
++  (AUO 5.99" 1080x2160 panel). The interrupt line is polled via GPIO
++  on platforms whose pinctrl lacks EINT support.
++
++allOf:
++  - $ref: touchscreen.yaml#
++
++properties:
++  compatible:
++    const: solomon,ssd2092-touch
++
++  reg:
++    const: 0x53
++
++  reset-gpios:
++    maxItems: 1
++    description: Active-low CTP_RST line
++
++  irq-gpios:
++    maxItems: 1
++    description: Active-low data-ready/INT line, polled by the driver
++
++required:
++  - compatible
++  - reg
++  - reset-gpios
++  - irq-gpios
++
++unevaluatedProperties: false
++
++examples:
++  - |
++    #include <dt-bindings/gpio/gpio.h>
++    i2c {
++        #address-cells = <1>;
++        #size-cells = <0>;
++        touchscreen@53 {
++            compatible = "solomon,ssd2092-touch";
++            reg = <0x53>;
++            reset-gpios = <&pio 68 GPIO_ACTIVE_LOW>;
++            irq-gpios = <&pio 85 GPIO_ACTIVE_LOW>;
++            touchscreen-size-x = <1080>;
++            touchscreen-size-y = <2160>;
++            touchscreen-inverted-x;
++            touchscreen-swapped-x-y;
++        };
++    };
+diff --git a/drivers/input/touchscreen/Kconfig b/drivers/input/touchscreen/Kconfig
+index e3e232454..f0b3f8567 100644
+--- a/drivers/input/touchscreen/Kconfig
++++ b/drivers/input/touchscreen/Kconfig
+@@ -1213,6 +1213,18 @@ config TOUCHSCREEN_SIS_I2C
+ 	  To compile this driver as a module, choose M here: the
+ 	  module will be called sis_i2c.
+ 
++config TOUCHSCREEN_SSD2092
++	tristate "Solomon SSD2092 touchscreen"
++	depends on I2C
++	depends on GPIOLIB || COMPILE_TEST
++	help
++	  Say Y here if you have a Solomon Systech SSD2092 touchscreen
++	  controller, as found on the Planet Gemini PDA. The driver polls
++	  the interrupt GPIO (for SoCs without EINT support in pinctrl).
++
++	  To compile this driver as a module, choose M here: the
++	  module will be called ssd2092.
++
+ config TOUCHSCREEN_ST1232
+ 	tristate "Sitronix ST1232 or ST1633 touchscreen controllers"
+ 	depends on I2C
+diff --git a/drivers/input/touchscreen/Makefile b/drivers/input/touchscreen/Makefile
+index 62bd24f3a..b3c8d5ca6 100644
+--- a/drivers/input/touchscreen/Makefile
++++ b/drivers/input/touchscreen/Makefile
+@@ -80,6 +80,7 @@ obj-$(CONFIG_TOUCHSCREEN_RM_TS)		+= raydium_i2c_ts.o
+ obj-$(CONFIG_TOUCHSCREEN_S6SY761)	+= s6sy761.o
+ obj-$(CONFIG_TOUCHSCREEN_SILEAD)	+= silead.o
+ obj-$(CONFIG_TOUCHSCREEN_SIS_I2C)	+= sis_i2c.o
++obj-$(CONFIG_TOUCHSCREEN_SSD2092)	+= ssd2092.o
+ obj-$(CONFIG_TOUCHSCREEN_ST1232)	+= st1232.o
+ obj-$(CONFIG_TOUCHSCREEN_STMFTS)	+= stmfts.o
+ obj-$(CONFIG_TOUCHSCREEN_STMPE)		+= stmpe-ts.o
+diff --git a/drivers/input/touchscreen/ssd2092.c b/drivers/input/touchscreen/ssd2092.c
+new file mode 100644
+index 000000000..7b5ee7bc3
+--- /dev/null
++++ b/drivers/input/touchscreen/ssd2092.c
+@@ -0,0 +1,575 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Solomon Systech SSD2092 touchscreen controller (I2C)
++ *
++ * Minimal mainline-style port for the Planet Gemini PDA (AUO 5.99" panel,
++ * "Product ID: AUO599, IC Name: SSD2092" per the firmware embedded in the
++ * vendor driver). Protocol, register map, delays and init sequence are all
++ * taken from the GPL vendor driver archived in the gemini_linux project at
++ * docs/vendor-touch-ssd20xx/ (ssd20xx.c / ssd20xx.h, Solomon Systech 2017,
++ * from github.com/gemian/gemini-linux-kernel-3.18 branch "native").
++ *
++ * Architecture notes:
++ *  - After reset the chip boots into "DS" (bootloader) mode with the touch
++ *    MCU (TMC) stalled; the TMC register map (0x0AF0...) is dead until the
++ *    DS handshake ends with a CPU-unstall write (vendor solomon_pre_init()).
++ *    Raw register reads before that just echo the address bytes back.
++ *  - The touch firmware lives in the chip's eflash (factory-programmed and
++ *    maintained by the Android side of this dual-boot device); the vendor
++ *    driver's firmware-flash path is deliberately NOT ported. We only boot
++ *    the already-present firmware.
++ *  - INT is on MT6797 GPIO85, an EINT line; pinctrl-mt6797 has no EINT
++ *    support yet (gemini_linux blockers.md B-11), so this driver polls,
++ *    exactly like the Gemini keyboard (matrix_keypad polling mode).
++ */
++
++#include <linux/delay.h>
++#include <linux/gpio/consumer.h>
++#include <linux/i2c.h>
++#include <linux/input.h>
++#include <linux/input/mt.h>
++#include <linux/input/touchscreen.h>
++#include <linux/module.h>
++#include <linux/of.h>
++
++/* vendor ssd20xx.h: DS16 (bootloader) command registers */
++#define SSD2092_DS_CLEAR_INT		0x0001
++#define SSD2092_DS_CPU_CONTROL		0x0002	/* 0x0000 = unstall TMC */
++#define SSD2092_DS_EFLASH_WRITE		0x0004
++#define SSD2092_DS_READ_VERSION		0x000F
++
++/* vendor ssd20xx.h: TMC command/status registers (live after unstall) */
++#define SSD2092_REG_INT_CLEAR		0x0043	/* write 0x0001 to ack INT */
++#define SSD2092_REG_TOUCH_MODE		0x0050	/* 0 = point reporting */
++#define SSD2092_REG_X_RESOLUTION	0x0056
++#define SSD2092_REG_Y_RESOLUTION	0x0057
++#define SSD2092_REG_USING_POINT_NUM	0x0059
++#define SSD2092_REG_STATUS_LENGTH	0x0AF0
++#define SSD2092_REG_STATUS_LENGTH_ALT	0x00F0	/* vendor: re-read here if 0x0AF0 echoes */
++#define SSD2092_REG_POINT_DATA		0x0AF1
++#define SSD2092_REG_AUX			0x0AF8
++
++/* vendor ssd20xx.h: status byte bits of the Status&Length word */
++#define SSD2092_STATUS_AUX		0x40
++#define SSD2092_STATUS_BOOT_ST		0x80
++
++/* vendor ssd20xx.h: 6-byte point record IDs (SUPPORT_PROTOCOL_6BYTES) */
++#define SSD2092_ID_AXIS_LAST		0x0E
++
++/* vendor ssd20xx.h: AUX codes that require a TMC reset + re-init */
++#define SSD2092_AUX_BOOTUP_RESET	0x0001
++#define SSD2092_AUX_WDTDS_INT		0x0002
++#define SSD2092_AUX_ESD_DETECT		0x00AA
++
++/* vendor ssd20xx.h/ssd20xx.c timing */
++#define SSD2092_XFER_DELAY_US		200	/* DELAY_FOR_TRANSCATION */
++#define SSD2092_INT_READY_MS		400	/* int_pin_check: 200 x 1ms, x2 in solomon_reset */
++
++#define SSD2092_MAX_POINT		10	/* SOLOMON_MAX_POINT */
++#define SSD2092_POINT_SZ		6	/* sizeof(ssd_data), 6-byte protocol */
++/* points + trailing checksum word, vendor esd_snl sizing */
++#define SSD2092_MAX_PKT			(SSD2092_MAX_POINT * SSD2092_POINT_SZ + 2)
++
++#define SSD2092_DEFAULT_X_RES		1080	/* SOLOMON_X_MAX (native portrait) */
++#define SSD2092_DEFAULT_Y_RES		2160	/* SOLOMON_Y_MAX */
++
++#define SSD2092_POLL_MS			10	/* chip scans at 60 Hz (SOLOMON_SCAN_RATE_HZ) */
++
++struct ssd2092 {
++	struct i2c_client *client;
++	struct input_dev *input;
++	struct touchscreen_properties prop;
++	struct gpio_desc *reset_gpiod;	/* CTP_RST, MT6797 GPIO68, active low */
++	struct gpio_desc *int_gpiod;	/* CTP_INT, MT6797 GPIO85, active low */
++	u16 max_x;
++	u16 max_y;
++};
++
++/*
++ * vendor ts_read_data(): write the 16-bit LE register, wait, then a
++ * separate-STOP read. The chip does not support I2C repeated-start here.
++ */
++static int ssd2092_read_reg(struct ssd2092 *ts, u16 reg, void *buf, u16 len)
++{
++	__le16 r = cpu_to_le16(reg);
++	int ret;
++
++	ret = i2c_master_send(ts->client, (u8 *)&r, 2);
++	if (ret < 0)
++		return ret;
++
++	usleep_range(SSD2092_XFER_DELAY_US, SSD2092_XFER_DELAY_US + 100);
++
++	ret = i2c_master_recv(ts->client, buf, len);
++	if (ret < 0)
++		return ret;
++
++	usleep_range(SSD2092_XFER_DELAY_US, SSD2092_XFER_DELAY_US + 100);
++	return 0;
++}
++
++/* vendor ts_read_data_ex(): arbitrary command bytes, then read */
++static int ssd2092_read_cmd(struct ssd2092 *ts, const u8 *cmd, u16 cmdlen,
++			    void *buf, u16 len)
++{
++	int ret;
++
++	ret = i2c_master_send(ts->client, cmd, cmdlen);
++	if (ret < 0)
++		return ret;
++
++	usleep_range(SSD2092_XFER_DELAY_US, SSD2092_XFER_DELAY_US + 100);
++
++	ret = i2c_master_recv(ts->client, buf, len);
++	if (ret < 0)
++		return ret;
++
++	usleep_range(10, 50);
++	return 0;
++}
++
++/* vendor ts_write_data(): 16-bit LE register followed by payload */
++static int ssd2092_write(struct ssd2092 *ts, u16 reg, const void *val, u16 len)
++{
++	u8 pkt[8];
++	int ret;
++
++	if (WARN_ON(len + 2 > sizeof(pkt)))
++		return -EINVAL;
++
++	pkt[0] = reg & 0xff;
++	pkt[1] = reg >> 8;
++	memcpy(&pkt[2], val, len);
++
++	ret = i2c_master_send(ts->client, pkt, len + 2);
++	if (ret < 0)
++		return ret;
++
++	usleep_range(SSD2092_XFER_DELAY_US, SSD2092_XFER_DELAY_US + 100);
++	return 0;
++}
++
++static int ssd2092_write_word(struct ssd2092 *ts, u16 reg, u16 val)
++{
++	__le16 v = cpu_to_le16(val);
++
++	return ssd2092_write(ts, reg, &v, 2);
++}
++
++/* vendor ds_eflash_write(): reg 0x0004, payload = addr LE + data LE */
++static int ssd2092_eflash_write(struct ssd2092 *ts, u16 addr, u16 data)
++{
++	u8 wd[4] = { addr & 0xff, addr >> 8, data & 0xff, data >> 8 };
++
++	return ssd2092_write(ts, SSD2092_DS_EFLASH_WRITE, wd, 4);
++}
++
++/* vendor esd_checksum(): XOR in high byte, byte-sum in low byte */
++static bool ssd2092_checksum_ok(const u8 *data, int len, u16 csum)
++{
++	u8 xor = 0, sum = 0;
++	int i;
++
++	for (i = 0; i < len; i++) {
++		xor ^= data[i];
++		sum += data[i];
++	}
++
++	return xor == (csum >> 8) && sum == (csum & 0xff);
++}
++
++/* INT is active-low data-ready/DS-ready; GPIO_ACTIVE_LOW so 1 = asserted */
++static bool ssd2092_int_asserted(struct ssd2092 *ts)
++{
++	return gpiod_get_value_cansleep(ts->int_gpiod) == 1;
++}
++
++/* vendor int_pin_check(): wait for INT low = DS/TMC ready */
++static int ssd2092_wait_int(struct ssd2092 *ts, unsigned int timeout_ms)
++{
++	unsigned int i;
++
++	for (i = 0; i < timeout_ms; i++) {
++		if (ssd2092_int_asserted(ts))
++			return 0;
++		usleep_range(1000, 1500);
++	}
++	return -ETIMEDOUT;
++}
++
++/* vendor solomon_reset(): high 10ms, low 20ms, high, wait INT up to 400ms */
++static int ssd2092_hw_reset(struct ssd2092 *ts)
++{
++	int ret;
++
++	msleep(10);
++	gpiod_set_value_cansleep(ts->reset_gpiod, 0);	/* run */
++	msleep(10);
++	gpiod_set_value_cansleep(ts->reset_gpiod, 1);	/* reset */
++	msleep(20);
++	gpiod_set_value_cansleep(ts->reset_gpiod, 0);	/* run */
++	msleep(80);
++
++	ret = ssd2092_wait_int(ts, SSD2092_INT_READY_MS);
++	if (ret)
++		dev_err(&ts->client->dev,
++			"INT never asserted after reset (DS not ready): %d\n", ret);
++	return ret;
++}
++
++/* write 0x0001 to reg 0x0043 to ack/clear the INT line (vendor int_clear_cmd) */
++static int ssd2092_int_clear(struct ssd2092 *ts)
++{
++	return ssd2092_write_word(ts, SSD2092_REG_INT_CLEAR, 0x0001);
++}
++
++/*
++ * vendor solomon_pre_init() minus the firmware-flash path: DS handshake that
++ * releases the stalled touch MCU so the TMC register map goes live.
++ */
++static int ssd2092_ds_handshake(struct ssd2092 *ts)
++{
++	struct device *dev = &ts->client->dev;
++	/* vendor ds_read_boot_st(): 4 zero command bytes, 2-byte reply */
++	static const u8 boot_st_cmd[4] = { 0x00, 0x00, 0x00, 0x00 };
++	/* vendor ds_read_version(): cmd 0x000F, param 0x0080, 10-byte reply */
++	static const u8 ver_cmd[4] = { 0x0F, 0x00, 0x80, 0x00 };
++	__le16 boot_st;
++	__le16 ver[5];
++	int ret;
++
++	ret = ssd2092_read_cmd(ts, boot_st_cmd, 4, &boot_st, 2);
++	if (ret < 0) {
++		dev_err(dev, "DS boot status read failed: %d\n", ret);
++		return ret;
++	}
++	dev_info(dev, "DS boot status 0x%04x\n", le16_to_cpu(boot_st));
++
++	/*
++	 * Chip identification (best effort): the vendor driver only knows the
++	 * SSD2098 ES1/ES2 ID words and falls back to ES1 for anything else,
++	 * so there is no authoritative SSD2092 expected value to reject on.
++	 * Log the ID words for the record instead.
++	 */
++	ret = ssd2092_read_cmd(ts, ver_cmd, 4, ver, 10);
++	if (ret < 0) {
++		dev_err(dev, "DS version read failed: %d\n", ret);
++		return ret;
++	}
++	dev_info(dev, "DS ID words %04x %04x %04x %04x %04x\n",
++		 le16_to_cpu(ver[0]), le16_to_cpu(ver[1]), le16_to_cpu(ver[2]),
++		 le16_to_cpu(ver[3]), le16_to_cpu(ver[4]));
++
++	/* vendor ds_init_code(): magic eflash config writes, no datasheet */
++	ret = ssd2092_eflash_write(ts, 0xE003, 0x0007);
++	if (!ret)
++		ret = ssd2092_eflash_write(ts, 0xE000, 0x0048);
++	if (ret < 0) {
++		dev_err(dev, "DS init code write failed: %d\n", ret);
++		return ret;
++	}
++
++	/* vendor ds_clear_int(): reg 0x0001 <- 0x0000 */
++	ret = ssd2092_write_word(ts, SSD2092_DS_CLEAR_INT, 0x0000);
++	if (ret < 0) {
++		dev_err(dev, "DS int clear failed: %d\n", ret);
++		return ret;
++	}
++
++	/* vendor sint_unstall(): reg 0x0002 <- 0x0000 releases the TMC CPU */
++	ret = ssd2092_write_word(ts, SSD2092_DS_CPU_CONTROL, 0x0000);
++	if (ret < 0) {
++		dev_err(dev, "TMC unstall failed: %d\n", ret);
++		return ret;
++	}
++
++	ret = ssd2092_wait_int(ts, SSD2092_INT_READY_MS);
++	if (ret)
++		dev_warn(dev, "INT not asserted after unstall (continuing)\n");
++
++	return 0;
++}
++
++/* vendor solomon_init_config(): set point mode, read geometry from TMC */
++static int ssd2092_tmc_config(struct ssd2092 *ts)
++{
++	struct device *dev = &ts->client->dev;
++	__le16 val;
++	int ret;
++
++	ret = ssd2092_write_word(ts, SSD2092_REG_TOUCH_MODE, 0x0000);
++	if (ret < 0) {
++		dev_err(dev, "set touch mode failed: %d\n", ret);
++		return ret;
++	}
++
++	ret = ssd2092_read_reg(ts, SSD2092_REG_X_RESOLUTION, &val, 2);
++	if (ret < 0) {
++		dev_err(dev, "X resolution read failed: %d\n", ret);
++		return ret;
++	}
++	ts->max_x = le16_to_cpu(val);
++
++	ret = ssd2092_read_reg(ts, SSD2092_REG_Y_RESOLUTION, &val, 2);
++	if (ret < 0) {
++		dev_err(dev, "Y resolution read failed: %d\n", ret);
++		return ret;
++	}
++	ts->max_y = le16_to_cpu(val);
++
++	ret = ssd2092_read_reg(ts, SSD2092_REG_USING_POINT_NUM, &val, 2);
++	if (ret < 0)
++		dev_warn(dev, "point-num read failed: %d\n", ret);
++
++	dev_info(dev, "TMC config: %ux%u, %u points\n",
++		 ts->max_x, ts->max_y, le16_to_cpu(val));
++
++	if (!ts->max_x || ts->max_x > 4095 || !ts->max_y || ts->max_y > 4095) {
++		/* 12-bit coordinate fields; out-of-range = config not live */
++		dev_warn(dev, "implausible resolution, using %ux%u default\n",
++			 SSD2092_DEFAULT_X_RES, SSD2092_DEFAULT_Y_RES);
++		ts->max_x = SSD2092_DEFAULT_X_RES;
++		ts->max_y = SSD2092_DEFAULT_Y_RES;
++	}
++
++	return 0;
++}
++
++/* full recovery path: hardware reset + DS handshake + TMC config */
++static void ssd2092_reinit(struct ssd2092 *ts)
++{
++	if (ssd2092_hw_reset(ts))
++		return;
++	if (ssd2092_ds_handshake(ts))
++		return;
++	ssd2092_tmc_config(ts);
++}
++
++/*
++ * Read the Status&Length word (+ its checksum word) with the vendor's
++ * echo-fallback and 3-try checksum retry (solomon_read_points()).
++ */
++static int ssd2092_read_snl(struct ssd2092 *ts, u16 *info)
++{
++	__le16 snl[2];
++	int retry, ret;
++
++	for (retry = 0; retry < 3; retry++) {
++		ret = ssd2092_read_reg(ts, SSD2092_REG_STATUS_LENGTH, snl, 4);
++		if (ret < 0)
++			return ret;
++
++		if (le16_to_cpu(snl[0]) == SSD2092_REG_STATUS_LENGTH) {
++			/* address echoed back: vendor re-reads at 0x00F0 */
++			ret = ssd2092_read_reg(ts, SSD2092_REG_STATUS_LENGTH_ALT,
++					       snl, 4);
++			if (ret < 0)
++				return ret;
++		}
++
++		if (ssd2092_checksum_ok((u8 *)&snl[0], 2, le16_to_cpu(snl[1]))) {
++			*info = le16_to_cpu(snl[0]);
++			return 0;
++		}
++	}
++	return -EBADMSG;
++}
++
++static void ssd2092_report_points(struct ssd2092 *ts, const u8 *rec, int count)
++{
++	int i;
++
++	for (i = 0; i < count; i++, rec += SSD2092_POINT_SZ) {
++		/* vendor ssd_data.point: id, x_lsb, y_lsb, x_y_msb, weight */
++		u8 id = rec[0];
++		u16 x = ((rec[3] & 0xf0) << 4) | rec[1];
++		u16 y = ((rec[3] & 0x0f) << 8) | rec[2];
++		u8 w = rec[4];
++
++		if (id > SSD2092_ID_AXIS_LAST)
++			continue;	/* key/gesture/aux records: not ported */
++
++		input_mt_slot(ts->input, id);
++		input_mt_report_slot_state(ts->input, MT_TOOL_FINGER, w > 0);
++		if (w > 0) {
++			touchscreen_report_pos(ts->input, &ts->prop, x, y, true);
++			input_report_abs(ts->input, ABS_MT_PRESSURE, w);
++		}
++	}
++
++	input_mt_sync_frame(ts->input);
++	input_sync(ts->input);
++}
++
++static void ssd2092_poll(struct input_dev *input)
++{
++	struct ssd2092 *ts = input_get_drvdata(input);
++	struct device *dev = &ts->client->dev;
++	u8 pkt[SSD2092_MAX_PKT];
++	u16 info;
++	u8 status, len;
++	int ret;
++
++	/*
++	 * Do NOT gate on the INT level here: hardware-observed 2026-07-19
++	 * (build #265 debug session), the SSD2092 pulses INT low per event
++	 * (vendor uses IRQF_TRIGGER_FALLING, an edge) and the line is back
++	 * high while the report stays latched in S&L until acked — a 10 ms
++	 * level poll misses every pulse. S&L itself is the reliable "data
++	 * pending" indicator; INT is only a level during reset/DS-ready
++	 * (ssd2092_wait_int()).
++	 */
++	ret = ssd2092_read_snl(ts, &info);
++	if (ret) {
++		dev_dbg_ratelimited(dev, "S&L read failed: %d\n", ret);
++		goto ack;
++	}
++
++	if (info == 0)
++		return;	/* nothing latched: no ack needed, keep the bus quiet */
++
++	status = info >> 8;
++	len = info & 0xff;
++
++	if (status & SSD2092_STATUS_BOOT_ST) {
++		/* TMC (re)booted and wants config (vendor STATUS_CHECK_BOOT_ST) */
++		dev_info(dev, "TMC boot flag set, re-sending config\n");
++		ssd2092_tmc_config(ts);
++		goto ack;
++	}
++
++	if (status & SSD2092_STATUS_AUX) {
++		__le16 aux_le;
++		u16 aux = 0;
++
++		if (!ssd2092_read_reg(ts, SSD2092_REG_AUX, &aux_le, 2))
++			aux = le16_to_cpu(aux_le);
++		dev_warn_ratelimited(dev, "AUX event 0x%04x, re-initialising\n", aux);
++		/* every vendor AUX branch ends in a TMC reset or pre-init */
++		ssd2092_reinit(ts);
++		return;
++	}
++
++	if (len && (status & 0x7f)) {
++		if (len > SSD2092_MAX_PKT - 2)
++			len = SSD2092_MAX_PKT - 2;
++
++		ret = ssd2092_read_reg(ts, SSD2092_REG_POINT_DATA, pkt, len + 2);
++		if (ret < 0) {
++			dev_dbg_ratelimited(dev, "point read failed: %d\n", ret);
++			goto ack;
++		}
++		if (ssd2092_checksum_ok(pkt, len,
++					pkt[len] | (pkt[len + 1] << 8)))
++			ssd2092_report_points(ts, pkt, len / SSD2092_POINT_SZ);
++		else
++			dev_dbg_ratelimited(dev, "point checksum fail\n");
++	}
++
++ack:
++	ssd2092_int_clear(ts);
++}
++
++static int ssd2092_probe(struct i2c_client *client)
++{
++	struct device *dev = &client->dev;
++	struct ssd2092 *ts;
++	int ret;
++
++	dev_info(dev, "probing SSD2092 at 0x%02x\n", client->addr);
++
++	ts = devm_kzalloc(dev, sizeof(*ts), GFP_KERNEL);
++	if (!ts)
++		return -ENOMEM;
++	ts->client = client;
++
++	/*
++	 * LK/vendor-DTS leave CTP_RST (GPIO68) LOW = held in reset, so ask
++	 * for the line asserted and run the full reset pulse ourselves.
++	 */
++	ts->reset_gpiod = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
++	if (IS_ERR(ts->reset_gpiod))
++		return dev_err_probe(dev, PTR_ERR(ts->reset_gpiod),
++				     "failed to get reset GPIO\n");
++
++	ts->int_gpiod = devm_gpiod_get(dev, "irq", GPIOD_IN);
++	if (IS_ERR(ts->int_gpiod))
++		return dev_err_probe(dev, PTR_ERR(ts->int_gpiod),
++				     "failed to get INT GPIO\n");
++
++	ret = ssd2092_hw_reset(ts);
++	if (ret)
++		return dev_err_probe(dev, ret, "chip not ready after reset\n");
++
++	ret = ssd2092_ds_handshake(ts);
++	if (ret)
++		return dev_err_probe(dev, ret, "DS handshake failed\n");
++
++	ret = ssd2092_tmc_config(ts);
++	if (ret)
++		return dev_err_probe(dev, ret, "TMC config failed\n");
++
++	ts->input = devm_input_allocate_device(dev);
++	if (!ts->input)
++		return dev_err_probe(dev, -ENOMEM, "input allocation failed\n");
++
++	ts->input->name = "Solomon SSD2092 Touchscreen";
++	ts->input->id.bustype = BUS_I2C;
++	input_set_drvdata(ts->input, ts);
++
++	input_set_abs_params(ts->input, ABS_MT_POSITION_X, 0, ts->max_x - 1, 0, 0);
++	input_set_abs_params(ts->input, ABS_MT_POSITION_Y, 0, ts->max_y - 1, 0, 0);
++	input_set_abs_params(ts->input, ABS_MT_PRESSURE, 0, 255, 0, 0);
++
++	/* touchscreen-swapped-x-y / -inverted-y in DT map portrait sensor to
++	 * the landscape console (vendor hardcodes X=y, Y=1080-x) */
++	touchscreen_parse_properties(ts->input, true, &ts->prop);
++
++	ret = input_mt_init_slots(ts->input, SSD2092_MAX_POINT,
++				  INPUT_MT_DIRECT | INPUT_MT_DROP_UNUSED);
++	if (ret)
++		return dev_err_probe(dev, ret, "MT slot init failed\n");
++
++	ret = input_setup_polling(ts->input, ssd2092_poll);
++	if (ret)
++		return dev_err_probe(dev, ret, "polling setup failed\n");
++	input_set_poll_interval(ts->input, SSD2092_POLL_MS);
++
++	ret = input_register_device(ts->input);
++	if (ret)
++		return dev_err_probe(dev, ret, "input registration failed\n");
++
++	/*
++	 * Dual-boot handoff: we leave the chip running (reset deasserted,
++	 * firmware live). The Android vendor driver hard-resets the chip in
++	 * its own probe, so this state is safe to hand over.
++	 */
++	dev_info(dev, "SSD2092 ready (%ux%u, polling %ums)\n",
++		 ts->max_x, ts->max_y, SSD2092_POLL_MS);
++	return 0;
++}
++
++static const struct of_device_id ssd2092_of_match[] = {
++	{ .compatible = "solomon,ssd2092-touch" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, ssd2092_of_match);
++
++static const struct i2c_device_id ssd2092_id[] = {
++	{ "ssd2092", 0 },
++	{ }
++};
++MODULE_DEVICE_TABLE(i2c, ssd2092_id);
++
++static struct i2c_driver ssd2092_driver = {
++	.driver = {
++		.name = "ssd2092",
++		.of_match_table = ssd2092_of_match,
++	},
++	.probe = ssd2092_probe,
++	.id_table = ssd2092_id,
++};
++module_i2c_driver(ssd2092_driver);
++
++MODULE_DESCRIPTION("Solomon SSD2092 touchscreen driver (Gemini PDA, polled)");
++MODULE_LICENSE("GPL");
