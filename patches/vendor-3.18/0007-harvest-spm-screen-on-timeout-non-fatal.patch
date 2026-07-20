@@ -1,0 +1,26 @@
+diff --git a/kernel-3.18/drivers/misc/mediatek/base/power/spm_v2/mt_spm_vcorefs_mt6797.c b/kernel-3.18/drivers/misc/mediatek/base/power/spm_v2/mt_spm_vcorefs_mt6797.c
+index 2a1c128d..816c3fd7 100644
+--- a/kernel-3.18/drivers/misc/mediatek/base/power/spm_v2/mt_spm_vcorefs_mt6797.c
++++ b/kernel-3.18/drivers/misc/mediatek/base/power/spm_v2/mt_spm_vcorefs_mt6797.c
+@@ -307,7 +307,20 @@ void spm_vcorefs_screen_on_setting(int dvfs_mode, u32 md_dvfs_req)
+ 	timer = wait_spm_complete_by_condition(get_screen_sta() == SPM_SCREEN_SETTING_DONE, SPM_DVFS_TIMEOUT);
+ 	if (timer < 0) {
+ 		spm_vcorefs_dump_dvfs_regs(NULL);
+-		BUG();
++		/* HARVEST: was BUG() -- this SPM/PCM screen-on DVFS handshake
++		 * timeout hard-hung the board (no WDT reset, needed a manual
++		 * power cycle), unlike other BUG()s in this tree that just log
++		 * and continue. Downgrade to non-fatal: log and bail out of this
++		 * DVFS transition rather than wedging the whole system, so boot
++		 * can reach userspace for the harvest capture. Root cause is
++		 * likely upstream of here -- see the "Reserved memory: not enough
++		 * space all defined regions" failures at early boot (5 of 9
++		 * reserved-memory DT nodes fail to allocate); not chased further
++		 * since Vcore DVFS is out of scope for this harvest. */
++		pr_err("[SPM] HARVEST: screen_on_setting timed out, skipping DVFS transition\n");
++		spm_write(SPM_CPU_WAKEUP_EVENT, 0);
++		spm_write(SPM_SW_RSV_1, (spm_read(SPM_SW_RSV_1) & (~0xF)) | SPM_CLEAN_WAKE_EVENT_DONE);
++		return;
+ 	}
+ 	spm_write(SPM_SW_RSV_1, (spm_read(SPM_SW_RSV_1) & ~(1 << 4)) | md_dvfs_req << 4);
+ 	spm_write(SPM_CPU_WAKEUP_EVENT, 0);

@@ -1,0 +1,29 @@
+diff --git a/kernel-3.18/drivers/misc/mediatek/lcm/mt65xx_lcm_list.c b/kernel-3.18/drivers/misc/mediatek/lcm/mt65xx_lcm_list.c
+index 95e3c126..f499e739 100755
+--- a/kernel-3.18/drivers/misc/mediatek/lcm/mt65xx_lcm_list.c
++++ b/kernel-3.18/drivers/misc/mediatek/lcm/mt65xx_lcm_list.c
+@@ -40,6 +40,12 @@ LCM_DRIVER *lcm_driver_list[] = {
+ #if defined(AEON_NT36672_FHD_DSI_VDO_X600_XINLI)
+ 	&aeon_nt36672_fhd_dsi_vdo_x600_xinli_lcm_drv,
+ #endif
++/* HARVEST: SSD2092 driver source exists (copied from android8 sibling
++ * tree for the build fix) but was never wired into DrvGen's generated
++ * dispatch table -- LK selects it (kali_boot LK build) but the kernel's
++ * lcm_driver_list only had NT36672, causing a NULL-deref panic in
++ * disp_lcm_probe() at boot. Wire it in directly since DRVGEN is bypassed. */
++	&aeon_ssd2092_fhd_dsi_solomon_lcm_drv,
+ };
+ 
+ unsigned char lcm_name_list[][128] = {
+diff --git a/kernel-3.18/drivers/misc/mediatek/lcm/mt65xx_lcm_list.h b/kernel-3.18/drivers/misc/mediatek/lcm/mt65xx_lcm_list.h
+index 60edb17f..98a861db 100755
+--- a/kernel-3.18/drivers/misc/mediatek/lcm/mt65xx_lcm_list.h
++++ b/kernel-3.18/drivers/misc/mediatek/lcm/mt65xx_lcm_list.h
+@@ -18,6 +18,7 @@
+ 
+ extern LCM_DRIVER r63419_fhd_truly_phantom_lcm_drv;
+ extern LCM_DRIVER aeon_nt36672_fhd_dsi_vdo_x600_xinli_lcm_drv;
++extern LCM_DRIVER aeon_ssd2092_fhd_dsi_solomon_lcm_drv; /* HARVEST */
+ 
+ #ifdef BUILD_LK
+ extern void mdelay(unsigned long msec);

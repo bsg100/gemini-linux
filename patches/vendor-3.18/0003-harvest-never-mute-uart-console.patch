@@ -1,0 +1,13 @@
+diff --git a/kernel-3.18/kernel/printk/printk.c b/kernel-3.18/kernel/printk/printk.c
+index 0a9478a7..1c49dd3c 100644
+--- a/kernel-3.18/kernel/printk/printk.c
++++ b/kernel-3.18/kernel/printk/printk.c
+@@ -1669,7 +1669,7 @@ static void call_console_drivers(int level, const char *text, size_t len)
+ 		return;
+ 
+ 	for_each_console(con) {
+-		if (printk_disable_uart && (con->flags & CON_CONSDEV))
++		if (0 && printk_disable_uart && (con->flags & CON_CONSDEV)) /* HARVEST: never mute UART */
+ 			continue;
+ 		if (exclusive_console && con != exclusive_console)
+ 			continue;

@@ -1,0 +1,35 @@
+diff --git a/kernel-3.18/drivers/misc/mediatek/scp/mt6797/scp_helper.c b/kernel-3.18/drivers/misc/mediatek/scp/mt6797/scp_helper.c
+index 6ecb9011..1867eb2d 100644
+--- a/kernel-3.18/drivers/misc/mediatek/scp/mt6797/scp_helper.c
++++ b/kernel-3.18/drivers/misc/mediatek/scp/mt6797/scp_helper.c
+@@ -717,8 +717,11 @@ static void scp_reserve_memory_ioremap(void)
+ 		 * 0x4000_0000ULL~0x8FFF_FFFFULL
+ 		 * can be accessible*/
+ 		pr_err("[SCP] The allocated memory(0x%llx) is larger than expected\n", scp_mem_base_phys);
+-		/*call BUG() here to assert the unexpected memory allocation*/
+-		BUG();
++		/* HARVEST: was BUG() -- non-fatal since reserve-memory-scp_share
++		 * fails to fit under our reservation layout ("not enough
++		 * space all defined regions"); bail out instead of ioremap-ing
++		 * garbage and later corrupting an EMI MPU region with set_scp_mpu(). */
++		return;
+ 	}
+ 	accumlate_memory_size = 0;
+ 	scp_mem_base_virt = (phys_addr_t)ioremap_wc(scp_mem_base_phys, scp_mem_size);
+@@ -956,7 +959,15 @@ static int __init scp_init(void)
+ 
+ 	scp_reserve_memory_ioremap();
+ #if ENABLE_SCP_EMI_PROTECTION
+-	set_scp_mpu();
++	/* HARVEST: skip if reservation failed (scp_mem_base_phys left at 0x0
++	 * by scp_reserve_memory_ioremap()'s early return) -- calling
++	 * set_scp_mpu() with a bogus base/size clobbers an unrelated EMI MPU
++	 * region (observed: region 22, display SMI larb0) and floods the
++	 * console with MPU violations forever. */
++	if ((scp_mem_base_phys > 0x0) && (scp_mem_base_phys < 0x90000000ULL))
++		set_scp_mpu();
++	else
++		pr_err("[SCP] HARVEST: skipping set_scp_mpu(), no valid reserved memory\n");
+ #endif
+ 	reset_scp(0);
+ 

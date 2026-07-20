@@ -864,7 +864,16 @@ config — restart it (with the session's env from
 
 **HiDPI:** 2160×1080 at ~6" needs scaling — `.xinitrc` exports
 `QT_SCALE_FACTOR=1.5` and `XCURSOR_SIZE=36`; panel `panelSize=48`,
-`iconSize=36`.
+`iconSize=36`. **Captured into the build 2026-07-20**: `.xinitrc` was
+already staged via `rootfs-files/xinitrc` in `mkrootfs.sh`, but
+`~/.config/lxqt/panel.conf` was only ever a live edit — every rootfs
+reflash silently regenerated stock defaults (`iconSize=22`,
+`panelSize=32`, `fancymenu` instead of `mainmenu`) with no error or
+warning. Now staged as `rootfs-files/panel.conf` and copied for both
+users in `mkrootfs.sh`. Lesson: a finding written here in prose is not
+the same as a captured build input — check `mkrootfs.sh`/`rootfs-files/`
+directly when verifying a fix survived a reflash, don't just trust that
+documenting it here was enough.
 
 **X-exit console damage (recurring):** killing Xorg leaves (a) the
 matrix-keypad driver with stuck-pressed keys — new presses are swallowed,

@@ -8312,3 +8312,153 @@ Bluetooth explicitly blocked on the same gate.
 **Device state after test:** reflash #269
 (`logs/2026-07-20-269-*/new_kali_boot.img`) to return to current
 feature set (touchscreen/audio/right-port HS absent under #262).
+
+---
+
+## 2026-07-20 — BUILD #270: msdc1 microSD enablement (Phase 9) — BUILT, NOT YET FLASHED
+
+**Provenance:** `logs/2026-07-20-270-msdc1-sd/` — sha256
+`863973787b423e7c66d07748a9e8422bf6d56f184c5d877a6ffe7ad3e55eeb84`,
+banner `#270 SMP PREEMPT Mon Jul 20 06:25:22 UTC 2026`. DTB spot-check:
+`mmc@11240000` present.
+
+**What changed** (base = #269 + two patches):
+- `dts/0020-arm64-dts-mediatek-gemini-add-msdc1-sd.patch` — new
+  `mmc@11240000` node: same `mediatek,mt2701-mmc` compatible as msdc0,
+  SPI 80 level-low, clocks `CLK_INFRA_MSDC1` (vendor idx 0x23) +
+  `CLK_TOP_MUX_AXI` hclk (mt8173 msdc1 precedent), assigned-clocks route
+  `MUX_MSDC30_1` → `MSDCPLL_D2` (vendor `clk_src = [02]` = entry 2 of the
+  mainline parent table = msdcpll_d2, exact match). Pins GPIO129-134
+  (CMD/DAT0-3/CLK), pinmux-only. 4-bit, 50 MHz, `cap-sd-highspeed`,
+  **broken-cd** (polled detect — vendor cd-gpios GPIO67 needs EINT/B-11
+  and unverified polarity, deferred). UHS deferred (no VMC 1.8V switch).
+- `regulator/0002` (regenerated) — mt6351-regulator grows VMCH (card
+  power) + VMC (I/O) as fixed 3.0V LDOs: enable bit1 in
+  `LDO_VMCH_CON0 0x0a2e` / `LDO_VMC_CON0 0x0aaa`, probe pins VOSELs to
+  3.0V (`VMCH_ANA_CON0 0x0ace` bit8=0, `VMC_ANA_CON0 0x0ae2` bits10:8=6)
+  — all values from vendor `upmu_hw.h`, voltages from vendor
+  `msdc_io.c` SD power-on (VMCH=VOL_3000, VMC=VOL_3000). Unlike the eMMC
+  stub regulators these are real switchable rails: LK leaves SD power
+  off, so the kernel must actually enable them.
+
+**Why:** SD card in the slot is invisible on ≤#269 — only msdc0 exists in
+our DTS (2026-07-20 live check: no `mmcblk1`, no `11240000.mmc`).
+
+**Expected on next boot (flash to `boot2` — `boot` currently holds the
+Kali harvest kernel):** `mmc1` host probes, VMCH/VMC enable via pwrap,
+card enumerates as `mmcblk1` at ≤50 MHz. Risks: hclk choice (AXI mux) is
+a precedent-based guess; broken-cd polling must not regress msdc0; VMC
+VOSEL code 6 assumes the full 8-entry E2 table (E1 chips use 4-entry
+tables — if the card powers but I/O fails, re-check chip revision).
+
+## 2026-07-20 — BUILD #271: mt6351-regulator Kconfig/Makefile wiring fix (Phase 9, msdc1) — BUILT, NOT YET FLASHED
+
+**Context:** restored `debian13-rootfs.img` to p29 and flashed build #270
+(msdc1-sd) to boot2 to verify. Booted fine (`uname -a` confirmed banner
+`#270`), rootfs resize2fs succeeded, but msdc1 never worked: `11240000.mmc`
+sat in permanent deferred probe (`cat /sys/kernel/debug/devices_deferred`
+showed `11240000.mmc platform: wait for supplier
+/pwrap@1000d000/mt6351/regulators/vmc`), and `18070000.consys` was *also*
+stuck deferred on `vcn28` for the same reason.
+
+**Root cause:** `patches/v6.6/regulator/0002-regulator-add-mt6351-vcn-regulators.patch`
+(pre-existing, from an earlier session) adds `drivers/regulator/mt6351-regulator.c`
+— including the exact `vmc`/`vmch` regulators msdc1 needs — but the patch
+**only adds the .c file**. It never touches `drivers/regulator/Kconfig` or
+`Makefile`, confirmed by `grep -i mt6351 drivers/regulator/Kconfig
+drivers/regulator/Makefile` on the clean tree returning nothing. So
+`CONFIG_REGULATOR_MT6351=y` in `configs/gemini-consys.config` was silently
+dropped by kconfig merge (no matching symbol) — confirmed absent from
+build #270's saved `.config`. The driver was never compiled into any build
+that used this config fragment, including builds that "worked" for other
+Phase 8/9 features that don't need VCN regulators.
+
+**Fix:** `patches/v6.6/regulator/0003-regulator-wire-mt6351-into-kconfig-makefile.patch`
+— adds a `config REGULATOR_MT6351` entry (`depends on OF`, no MFD
+dependency since the driver just does `dev_get_regmap(pdev->dev.parent,
+NULL)`) and the matching `obj-$(CONFIG_REGULATOR_MT6351) += mt6351-regulator.o`
+Makefile line, placed alphabetically among the existing MT63xx entries.
+
+**Build:** `./scripts/build-pack.sh 271 mt6351-regulator-kconfig-fix --dtb-grep 11240000`.
+Banner `#271`, image: `logs/2026-07-20-271-mt6351-regulator-kconfig-fix/new_kali_boot.img`
+(sha256 `db4dc83a285e9ba8ab3b39fea158f3a4e9e155d31b4500d976f15b0c54c18190`).
+DTB grep confirmed `mmc@11240000` present. Not yet flashed/tested on
+hardware — VM disk filled to 100% mid-session (vendor 3.18 harvest tree
+build artifacts, unrelated to this build) and was cleared before this
+build succeeded.
+
+**Flash:**
+```
+~/gemini-build/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 /Volumes/extdata/github/gemini_linux/logs/2026-07-20-271-mt6351-regulator-kconfig-fix/new_kali_boot.img
+```
+**Capture:**
+```
+cd /Volumes/extdata/github/gemini_linux
+python3 scripts/ftdi-monitor.py --interactive --log logs/2026-07-20-272-mt6351-regulator-verify-boot.log
+```
+**Expected on next boot:** dmesg shows `mt6351-regulator` probe (no more
+`devices_deferred` entries for `11240000.mmc`/`18070000.consys`); with a
+microSD card inserted, `mmc1`/`mmcblk1` should enumerate. If it still
+doesn't, check `dmesg | grep -i mmc1` and `cat /sys/kernel/debug/devices_deferred`
+first — the msdc1-specific hclk/VOSEL guesses from build #270 (see its
+BUILT entry above) are still unverified on real hardware and are the next
+suspect if the regulator now resolves but the card still fails to
+enumerate.
+
+## 2026-07-20 — CORRECTION to BUILD #271 entry: root cause was local file corruption, not a missing patch hunk
+
+**#271's diagnosis was wrong.** Investigation while writing session-end
+docs found that `patches/v6.6/regulator/0002-regulator-add-mt6351-vcn-regulators.patch`
+**already had** the `drivers/regulator/Kconfig`/`Makefile` wiring in its
+committed (git HEAD) form, with `depends on MTK_PMIC_WRAP` — the correct
+parent dependency. The Mac-side **on-disk working copy** of that same file
+had somehow been silently truncated down to just the `.c`-file hunk before
+today's builds (#270, #271) ran — `git status` confirmed it as locally
+modified relative to a clean session start, but the exact prior action
+that truncated it is not identified. Build #270 (and my own "fix" build
+#271) both compiled against this corrupted local copy, so the msdc1/consys
+deferred-probe symptom was real, but #271's patch 0003
+(`0003-regulator-wire-mt6351-into-kconfig-makefile.patch`, `depends on OF`)
+was solving a problem that only existed due to local corruption — and used
+a less accurate dependency than the original.
+
+**Fix:** `git checkout -- patches/v6.6/regulator/0002-...patch` restored
+the correct 3-file (Kconfig+Makefile+.c) committed version; patch 0003 was
+deleted as redundant. Rebuilt as **build #272**
+(`mt6351-regulator-patch-corruption-fix`) using the corrected, original
+patch set. See its own entry below for image/sha256/flash commands — that
+is the build to actually flash and test, not #271.
+
+**Lesson:** when a patch looks incomplete, check `git diff`/`git status`
+on the patch file itself before concluding the patch was always wrong —
+local working-tree corruption of a patch file is possible and gives
+identical symptoms (missing hunks) to a genuinely incomplete patch.
+
+## 2026-07-20 — BUILD #272: mt6351-regulator patch-corruption fix (Phase 9, msdc1) — BUILT, NOT YET FLASHED
+
+Rebuild with `patches/v6.6/regulator/0002` restored to its correct
+committed 3-file form (see correction entry above). This is the build to
+flash and test, not #271.
+
+Image: `logs/2026-07-20-272-mt6351-regulator-patch-corruption-fix/new_kali_boot.img`
+sha256: `b4f97365f8891635654360d696d505ca89d84bfa0434328b58c8db30cdfb51a3`
+Banner: `#272 SMP PREEMPT Mon Jul 20 09:17:48 UTC 2026`
+DTB grep confirmed `mmc@11240000` present.
+
+**Flash:**
+```
+~/gemini-build/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 /Volumes/extdata/github/gemini_linux/logs/2026-07-20-272-mt6351-regulator-patch-corruption-fix/new_kali_boot.img
+```
+**Capture:**
+```
+cd /Volumes/extdata/github/gemini_linux
+python3 scripts/ftdi-monitor.py --interactive --log logs/2026-07-20-273-mt6351-regulator-verify-boot.log
+```
+**Expected:** `dmesg | grep -i mmc1` shows the `mt6351-regulator` driver
+probing and `11240000.mmc` resolving out of deferred probe; `cat
+/sys/kernel/debug/devices_deferred` should no longer list
+`11240000.mmc`/`18070000.consys`. With a microSD card inserted,
+`mmc1`/`mmcblk1` should enumerate. If the regulator now resolves but the
+card still fails to enumerate, the msdc1-specific hclk/VOSEL guesses from
+build #270 are the next suspect (see that build's original BUILT entry
+for the caveats).

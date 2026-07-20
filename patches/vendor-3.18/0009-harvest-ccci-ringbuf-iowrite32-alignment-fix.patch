@@ -1,0 +1,36 @@
+diff --git a/kernel-3.18/drivers/misc/mediatek/eccci/ccci_ringbuf.c b/kernel-3.18/drivers/misc/mediatek/eccci/ccci_ringbuf.c
+index 98938144..b36745b8 100644
+--- a/kernel-3.18/drivers/misc/mediatek/eccci/ccci_ringbuf.c
++++ b/kernel-3.18/drivers/misc/mediatek/eccci/ccci_ringbuf.c
+@@ -144,18 +144,24 @@ struct ccci_ringbuf *ccci_create_ringbuf(int md_id, unsigned char *buf, int buf_
+ 	if (buf_size < buflen)
+ 		return NULL;
+ 	memset_io(buf, 0x0, buflen);
++	/* HARVEST: buf is the ioremap()'d CCIF/MD1 shared-memory region (Device
++	 * memory, same class as memset_io() above). GCC14 merges these adjacent
++	 * raw 32-bit pointer stores into a wider unaligned access, which Device
++	 * memory forbids -- root-caused via an alignment fault (0x96000061) in
++	 * ccci_create_ringbuf() during MD bring-up. Use iowrite32() (matching
++	 * the existing memset_io() call above) so the compiler can't merge them. */
+ 	/*set ccif header */
+-	*((unsigned int *)buf) = CCCI_RBF_HEADER;
+-	*((unsigned int *)(buf + sizeof(unsigned int))) = CCCI_RBF_HEADER;
++	iowrite32(CCCI_RBF_HEADER, buf);
++	iowrite32(CCCI_RBF_HEADER, buf + sizeof(unsigned int));
+ 	CCCI_NORMAL_LOG(md_id, TAG, "crb:Header(0x%p)=0x%x %x\n", buf,
+-		     *((unsigned int *)buf), *((unsigned int *)(buf + sizeof(unsigned int))));
++		     ioread32(buf), ioread32(buf + sizeof(unsigned int)));
+ 	/*set ccif footer */
+-	*((unsigned int *)(buf + buflen - sizeof(unsigned int))) = CCCI_RBF_FOOTER;
+-	*((unsigned int *)(buf + buflen - 2 * sizeof(unsigned int))) = CCCI_RBF_FOOTER;
++	iowrite32(CCCI_RBF_FOOTER, buf + buflen - sizeof(unsigned int));
++	iowrite32(CCCI_RBF_FOOTER, buf + buflen - 2 * sizeof(unsigned int));
+ 	CCCI_NORMAL_LOG(md_id, TAG, "crb:Footer(0x%p)=0x%x %x\n",
+ 		     buf + buflen - sizeof(int),
+-		     *((unsigned int *)(buf + buflen - sizeof(unsigned int))),
+-		     *((unsigned int *)(buf + buflen - 2 * sizeof(unsigned int))));
++		     ioread32(buf + buflen - sizeof(unsigned int)),
++		     ioread32(buf + buflen - 2 * sizeof(unsigned int)));
+ 	buf += sizeof(int) * 2;
+ 	ringbuf = (struct ccci_ringbuf *)buf;
+ 	ringbuf->rx_control.length = rx_size;

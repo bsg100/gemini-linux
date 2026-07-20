@@ -1,0 +1,116 @@
+diff --git a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+index 865ada7a5..9fa2c6985 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+@@ -1055,6 +1055,86 @@ msdc0: mmc@11230000 {
+ 	};
+ };
+ 
++/*
++ * --- msdc1: microSD card slot (Phase 9, build #270) ---
++ *
++ * Values from the vendor DTB (docs/vendor-dtb/gemini_kali_boot.dts,
++ * msdc1@11240000): reg 0x11240000, interrupts <0 0x50 0x08> (SPI 80,
++ * level-low after the sysirq inversion, same encoding as msdc0's SPI 79),
++ * clock index 0x23 = CLK_INFRA_MSDC1 (35), bus-width 4. The vendor
++ * "clk_src = [02]" selects entry 2 of the msdc30_1 mux parent table,
++ * which in mainline clk-mt6797.c is msdcpll_d2 -- routed explicitly via
++ * assigned-clocks below, mirroring the msdc0 pattern.
++ *
++ * Same mt2701-mmc compatible as msdc0 (12-bit CKDIV / PAD_TUNE0@0xf0
++ * register layout, see the msdc0 comment). hclk: the MSDC30 register bus
++ * runs off the AXI mux (mt8173 msdc1 precedent: CLK_TOP_AXI_SEL), unlike
++ * msdc0's dedicated msdc50_0_hclk mux.
++ *
++ * Card detect: vendor uses cd-gpios GPIO67 plus a custom
++ * "mediatek,mt6797-sdcard-ins" EINT driver with vendor-specific cd_level
++ * polarity. EINT support in pinctrl-mt6797 is still open (B-11) and the
++ * polarity is unverified, so this first build uses broken-cd (MMC core
++ * polling) -- insertion/removal is detected by polling, ~1s latency.
++ *
++ * Power: vendor SD power-on = VMCH 3.0V (card) + VMC 3.0V (I/O)
++ * (vendor msdc_io.c msdc_sd_power) -- real switchable MT6351 LDOs, NOT
++ * fixed stubs: unlike the eMMC rails the bootloader leaves SD power off.
++ * UHS modes deferred (VMC 1.8V switch not modelled); highspeed 50 MHz cap.
++ */
++&pio {
++	/* pinmux only, no pinconf -- see the msdc0 pinctrl comment */
++	msdc1_pins_default: msdc1-default {
++		pins-cmd-dat {
++			pinmux = <MT6797_GPIO129__FUNC_MSDC1_CMD>,
++				 <MT6797_GPIO130__FUNC_MSDC1_DAT0>,
++				 <MT6797_GPIO131__FUNC_MSDC1_DAT1>,
++				 <MT6797_GPIO132__FUNC_MSDC1_DAT2>,
++				 <MT6797_GPIO133__FUNC_MSDC1_DAT3>;
++		};
++		pins-clk {
++			pinmux = <MT6797_GPIO134__FUNC_MSDC1_CLK>;
++		};
++	};
++
++	/* state_uhs required by mtk-sd probe; same mux as default */
++	msdc1_pins_uhs: msdc1-uhs {
++		pins-cmd-dat {
++			pinmux = <MT6797_GPIO129__FUNC_MSDC1_CMD>,
++				 <MT6797_GPIO130__FUNC_MSDC1_DAT0>,
++				 <MT6797_GPIO131__FUNC_MSDC1_DAT1>,
++				 <MT6797_GPIO132__FUNC_MSDC1_DAT2>,
++				 <MT6797_GPIO133__FUNC_MSDC1_DAT3>;
++		};
++		pins-clk {
++			pinmux = <MT6797_GPIO134__FUNC_MSDC1_CLK>;
++		};
++	};
++};
++
++/ {
++	msdc1: mmc@11240000 {
++		compatible = "mediatek,mt2701-mmc";
++		reg = <0 0x11240000 0 0x1000>;
++		interrupts = <GIC_SPI 80 IRQ_TYPE_LEVEL_LOW>;
++		clocks = <&infrasys CLK_INFRA_MSDC1>,
++			 <&topckgen CLK_TOP_MUX_AXI>;
++		clock-names = "source", "hclk";
++		assigned-clocks = <&topckgen CLK_TOP_MUX_MSDC30_1>;
++		assigned-clock-parents = <&topckgen CLK_TOP_MSDCPLL_D2>;
++		pinctrl-names = "default", "state_uhs";
++		pinctrl-0 = <&msdc1_pins_default>;
++		pinctrl-1 = <&msdc1_pins_uhs>;
++		bus-width = <4>;
++		max-frequency = <50000000>;
++		cap-sd-highspeed;
++		broken-cd;
++		vmmc-supply = <&mt6351_vmch_reg>;
++		vqmmc-supply = <&mt6351_vmc_reg>;
++		status = "okay";
++	};
++};
++
+ /*
+  * SSUSB (MTU3) device controller + T-PHY -- USB gadget ethernet for SSH
+  * over the left USB-C port.
+@@ -1229,6 +1309,24 @@ mt6351_vcn33_wifi_reg: vcn33_wifi {
+ 					regulator-min-microvolt = <3300000>;
+ 					regulator-max-microvolt = <3300000>;
+ 				};
++
++				/*
++				 * SD card rails (msdc1): VMCH powers the
++				 * card, VMC the I/O pads. VOSELs pinned to
++				 * 3.0V by the driver probe (vendor SD
++				 * power-on values, msdc_io.c).
++				 */
++				mt6351_vmch_reg: vmch {
++					regulator-name = "vmch";
++					regulator-min-microvolt = <3000000>;
++					regulator-max-microvolt = <3000000>;
++				};
++
++				mt6351_vmc_reg: vmc {
++					regulator-name = "vmc";
++					regulator-min-microvolt = <3000000>;
++					regulator-max-microvolt = <3000000>;
++				};
+ 			};
+ 		};
+ 

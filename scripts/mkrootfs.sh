@@ -183,6 +183,16 @@ for h in /root /home/gemini; do
 done
 chroot "$TARGET" chown gemini:gemini /home/gemini/.xinitrc
 
+# Panel config (panelSize=48/iconSize=36/mainmenu-first) — was a live-only
+# edit until 2026-07-20 (missed by this script, silently lost on every
+# reflash; regenerated to stock iconSize=22/panelSize=32/fancymenu defaults
+# instead). Now captured for both users, matching research.md sec 9.
+for h in /root /home/gemini; do
+    mkdir -p "$TARGET$h/.config/lxqt"
+    cp "$SCRIPT_DIR/../rootfs-files/panel.conf" "$TARGET$h/.config/lxqt/panel.conf"
+done
+chroot "$TARGET" chown -R gemini:gemini /home/gemini/.config
+
 # Audio first-light script (build #267 verified DPCM routing) for both users
 for h in /root /home/gemini; do
     install -m 755 "$SCRIPT_DIR/audio-test.sh" "$TARGET$h/audio-test.sh"
