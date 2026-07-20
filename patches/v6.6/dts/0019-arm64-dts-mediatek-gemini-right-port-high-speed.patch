@@ -1,0 +1,25 @@
+diff --git a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+index 1c2f3a4b5..2d3e4f5a6 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+@@ -1300,12 +1300,15 @@
+ 		clock-names = "main";
+ 		dr_mode = "host";
+ 		/*
+-		 * High-speed bulk through the SW7226/FUSB301 mux chain fails
+-		 * (three-strikes RX errors + babble, builds #249-#251);
+-		 * full-speed keeps the link inside what the pad chain
+-		 * carries. 12 Mbps is SSH-grade, not a file-transfer port.
++		 * The B-22 full-speed cap (builds #249-#252) predated the real
++		 * root cause: mainline's MT8516-shaped 8-EP config on the
++		 * musbfsh IP. Build #252 showed bulk failing even at full
++		 * speed, falsifying the pad-chain signal-integrity theory;
++		 * the num_eps=6 FIFO fix (usb/0002, build #254) removed the
++		 * actual defect, so high-speed (480 Mbps) is re-enabled.
++		 * If HS regresses, drop back to "full-speed" (known good).
+ 		 */
+-		maximum-speed = "full-speed";
++		maximum-speed = "high-speed";
+ 		status = "okay";
+ 	};
+ };

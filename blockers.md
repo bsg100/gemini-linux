@@ -3314,6 +3314,32 @@ leftover B-19 host-mode DTS (`dts/0012` behaviour) back to
 `dr_mode="peripheral"` (`dts/0015`, build #255) so BQ25896 isn't forced
 into OTG-source mode at every boot, blocking charger input.
 
+**FOLLOW-UP 2026-07-20 — full-speed cap (fix #1) retired, build #269
+awaiting flash:** iperf3 measured ~7 Mbit/s both ways on the right-port
+ethernet — the DTS cap itself is the ceiling. Fix #1 was based on the
+signal-integrity theory that build #252 falsified; the real defect was
+fixed by #2 (num_eps=6, build #254), and the cap was never re-tested.
+`dts/0019` re-enabled `maximum-speed = "high-speed"`; details boot.md
+BUILD #269.
+
+**OUTCOME 2026-07-20 (final) — HS works, adapter-dependent; dts/0019
+stays:** first #269 boot with an RTL8156 2.5G adapter enumerated HS then
+died at t=131s (ep3/ep2 RX three-strikes → Babble → disconnect, MUSB host
+wedged until reboot — no re-enumeration on replug). Initially read as
+"the FS cap is load-bearing" and build #270 (full-speed revert) was
+prepared — but a reboot with the SZNX 100M cdc_ether adapter overturned
+that: SZNX runs at HS stably (zero link errors after >200 MB iperf3,
+15-min babble watch clean). So HS is good with the SZNX; the RTL8156 is
+the incompatible device (candidate factors: missing rtl8156b-2.fw
+firmware — install `firmware-realtek` — or its 2.5G-class USB behaviour).
+dts/0019 re-enabled; #270 kept unflashed as fallback
+(`logs/2026-07-20-270-revert-right-port-full-speed/`). Throughput at HS:
+43/51 Mbit/s single-stream, 40/64 Mbit/s -P4 — ceiling is
+CONFIG_MUSB_PIO_ONLY + single-buffered 512B FIFOs (downlink RX overruns
+→ heavy TCP retransmits), not the link. Known residual risk: a babbling
+device wedges the port until reboot. Details boot.md "#269 OUTCOME
+REVISED".
+
 **UPDATE 2026-07-16 (latest) — root cause found for "charger plugged in
 but not charging": LEFT port DTS still forced host mode, unconditionally
 enabling the BQ25896 OTG boost at every boot.** User plugged a charger

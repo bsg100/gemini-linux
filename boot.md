@@ -8173,3 +8173,88 @@ silent. Evidence chain (all on build #268, Debian, LAN SSH):
 **Parked 2026-07-20 (user decision).** Resume plan: next time the
 vendor Kali 3.18 image is flashed (root shell, unlike Android), harvest
 everything in one session — see blockers.md B-23 for the checklist.
+
+## BUILD #269 — RIGHT-PORT USB HIGH-SPEED RE-ENABLE (2026-07-20) — AWAITING FLASH
+
+**Motivation:** iperf3 over the right-port USB ethernet (SZNX 100M adapter,
+192.168.100.146) measured ~7 Mbit/s both directions — the link is capped by
+our own DTS: `musb-mtk 11200000.usb: capping port to full-speed (DT
+maximum-speed)` (dts/0014). That cap was a B-22-era workaround for the
+HS-signal-integrity theory, which build #252 falsified (bulk failed even at
+full speed); the real defect was the MT8516-shaped 8-EP config, fixed by
+`num_eps=6` + vendor FIFO table in build #254. The cap was never re-tested
+after that fix.
+
+**Change:** new patch `dts/0019-arm64-dts-mediatek-gemini-right-port-high-speed.patch`
+flips the right-port MUSB node to `maximum-speed = "high-speed"` (480 Mbps)
+with an updated rationale comment. Also disabled the leftover B-23 debug
+patch `zz-debug/0023-GEMINI-DEBUG-regmap-allow-write-debugfs.patch`
+(→ `.disabled`) — the first #269 pack failed the no-debug-instrumentation
+verify because of it.
+
+- Provenance: `logs/2026-07-20-269-right-port-high-speed/`
+- sha256: `34ad280cd095f4d78d04ebe3696bdfdda3e93a268efaae3d912333344b733e0c`
+- Banner: `#269 SMP PREEMPT Mon Jul 20 02:12:43 UTC 2026` (matches build number)
+- DTB spot-check: both `maximum-speed` occurrences now `"high-speed"`
+- Flash: `mtk w boot|boot2 logs/2026-07-20-269-right-port-high-speed/new_kali_boot.img`
+
+**Expected outcome:** adapter enumerates high-speed on the right port
+(`usb 1-1: new high-speed USB device` in dmesg, `/sys/.../speed` = 480),
+cdc_ether binds, and iperf3 rises well above the 7 Mbit/s FS ceiling
+(baseline measured 2026-07-20: 7.1 Mbit/s Mac→Gemini with 1468 retransmits,
+7.0 Mbit/s reverse). **Failure mode to watch:** return of the B-22 symptoms
+(ep2 RX three-strikes, babble, TXPKTRDY-stuck TX watchdog) — if HS bulk
+regresses, revert to full-speed by dropping dts/0019 (known good).
+
+## BUILD #269 OUTCOME — HIGH-SPEED FAILS AFTER ~2 MIN + BUILD #270 REVERT (2026-07-20)
+
+**#269 result (evidence: `logs/2026-07-20-270-right-port-hs-fail-dmesg.log`,
+captured over the left-port gadget SSH):** the RTL8156 2.5G adapter
+enumerated at high-speed and worked — driver bound, carrier up at t=17s —
+then died at t=131s: `ep3 RX three-strikes` (x10, the interrupt endpoint),
+`ep2 RX three-strikes`, `Babble` at t=133s, `USB disconnect`. After the
+babble the MUSB host was wedged: replugging the adapter produced no
+enumeration at all (user-observed). So the B-22 full-speed cap was NOT
+stale after all — HS *enumeration* and short-lived bulk work post-#254,
+but sustained HS traffic still babbles out, consistent with the original
+pad-chain/signal-integrity concern. Two caveats for any future retry:
+(1) this boot used the RTL8156, not the SZNX cdc_ether adapter from the
+7 Mbit/s baseline — adapter-dependence untested; (2) the r8152 firmware
+patch `rtl_nic/rtl8156b-2.fw` is missing from the rootfs (install
+`firmware-realtek`) — unlikely but not ruled out as a factor.
+
+**BUILD #270 — revert to full-speed:** dts/0019 disabled (renamed
+`.disabled`, kept for reference). Right port back at
+`maximum-speed = "full-speed"` (known good since #255); left-port gadget
+unchanged at high-speed.
+
+- Provenance: `logs/2026-07-20-270-revert-right-port-full-speed/`
+- sha256: `39fc1b372fe9a0e7f466d1541babc1693d8c2b193b813d58a9e75f81f7401262`
+- Banner: `#270 SMP PREEMPT Mon Jul 20 02:22:19 UTC 2026`
+- Expected outcome: adapter enumerates full-speed, stable ~7 Mbit/s link,
+  no three-strikes/babble.
+
+## #269 OUTCOME REVISED — HS IS ADAPTER-DEPENDENT; SZNX STABLE AT HIGH SPEED (2026-07-20)
+
+After a reboot (clearing the babble-wedged MUSB) with the SZNX 100M
+cdc_ether adapter, build #269 enumerated it at HIGH-SPEED (480) and it is
+stable: zero errors in `ip -s link` after >200 MB of iperf3 traffic, no
+three-strikes/babble (15-min dmesg watch). So the #269 failure was the
+RTL8156 specifically, not high-speed per se — dts/0019 stays ENABLED and
+build #270 (the full-speed revert) is NOT flashed (kept in
+`logs/2026-07-20-270-revert-right-port-full-speed/` as a fallback image).
+
+Measured throughput at HS (iperf3, SZNX): 43 Mbit/s down / 51 Mbit/s up
+single stream; 40/64 Mbit/s with -P4. Downlink shows heavy TCP
+retransmits (~6800/10s) = device RX overruns, consistent with the known
+constraints: CONFIG_MUSB_PIO_ONLY=y (CPU-copied transfers) + vendor
+single-buffered 512B EP FIFOs. That ~40-64 Mbit/s is the driver ceiling,
+not the dongle or the ethernet link (logs clean, no MII exposure on
+CDC-ECM to read PHY speed). Note: user-level transfers over scp/ssh will
+read lower (~16 Mbit/s seen) — ssh crypto on the A53s is its own
+bottleneck; iperf3 is the honest link measure. Future headroom if ever
+needed: MUSB DMA (vendor musbfsh used DMA) or double-buffered FIFOs.
+
+**Soak result (2026-07-20):** 15-minute dmesg watch on the SZNX HS link
+completed clean — no three-strikes, no babble, no link loss. High-speed
+configuration confirmed stable and stands.

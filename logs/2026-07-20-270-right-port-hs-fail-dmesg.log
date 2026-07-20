@@ -1,0 +1,41 @@
+Linux gemini 6.6.0-dirty #269 SMP PREEMPT Mon Jul 20 02:12:43 UTC 2026 aarch64 GNU/Linux
+[    0.469596] usbcore: registered new interface driver cdc_ether
+[    0.495334] musb-hdrc musb-hdrc.3.auto: MUSB HDRC host driver
+[    0.496097] musb-hdrc musb-hdrc.3.auto: new USB bus registered, assigned bus number 1
+[    0.905475] usb 1-1: new high-speed USB device number 2 using musb-hdrc
+[    1.181497] r8152-cfgselector 1-1: reset high-speed USB device number 2 using musb-hdrc
+[  131.343517] musb-hdrc musb-hdrc.3.auto: ep3 RX three-strikes error
+[  131.344898] musb-hdrc musb-hdrc.3.auto: ep3 RX three-strikes error
+[  131.346230] musb-hdrc musb-hdrc.3.auto: ep3 RX three-strikes error
+[  131.347507] musb-hdrc musb-hdrc.3.auto: ep3 RX three-strikes error
+[  131.348769] musb-hdrc musb-hdrc.3.auto: ep3 RX three-strikes error
+[  131.350089] musb-hdrc musb-hdrc.3.auto: ep3 RX three-strikes error
+[  131.351358] musb-hdrc musb-hdrc.3.auto: ep3 RX three-strikes error
+[  131.352628] musb-hdrc musb-hdrc.3.auto: ep3 RX three-strikes error
+[  131.353929] musb-hdrc musb-hdrc.3.auto: ep3 RX three-strikes error
+[  131.355191] musb-hdrc musb-hdrc.3.auto: ep3 RX three-strikes error
+[  131.408241] musb-hdrc musb-hdrc.3.auto: ep2 RX three-strikes error
+[  133.483987] musb-hdrc musb-hdrc.3.auto: Babble
+[    0.466461] usbcore: registered new device driver r8152-cfgselector
+[    0.467300] usbcore: registered new interface driver r8152
+[    0.471941] usbcore: registered new interface driver r8153_ecm
+[    0.905475] usb 1-1: new high-speed USB device number 2 using musb-hdrc
+[    1.181497] r8152-cfgselector 1-1: reset high-speed USB device number 2 using musb-hdrc
+[    1.334688] r8152 1-1:1.0: Direct firmware load for rtl_nic/rtl8156b-2.fw failed with error -2
+[    1.335811] r8152 1-1:1.0: unable to load firmware patch rtl_nic/rtl8156b-2.fw (-2)
+[    1.374424] r8152 1-1:1.0 eth0: v1.12.13
+[   16.491671] r8152: exports duplicate symbol rtl8152_get_version (owned by kernel)
+[   16.601086] r8152 1-1:1.0 enx00e04c6800cd: renamed from eth0
+[   17.237035] r8152 1-1:1.0 enx00e04c6800cd: carrier on
+[  131.409552] r8152 1-1:1.0 enx00e04c6800cd: Stop submitting intr, status -108
+[  133.502989] r8152-cfgselector 1-1: USB disconnect, device number 2
+---
+lo               UNKNOWN        00:00:00:00:00:00 <LOOPBACK,UP,LOWER_UP> 
+usb0             UP             42:00:15:19:82:01 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+usb0             UP             10.15.19.82/24 fdd6:470e:a53e:bc60:4000:15ff:fe19:8201/64 fe80::4000:15ff:fe19:8201/64 
+---
+1-0:1.0
+usb1
+1-1 gone
+ssh: connect to host 10.15.19.82 port 22: Operation timed out
