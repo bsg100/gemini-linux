@@ -2907,15 +2907,24 @@ with the host attached now just works.
 
 ## ⏸️ B-21 — Internal WiFi via MT6797 CONSYS (Phase 8 Stage 2, activated 2026-07-14, **PARKED 2026-07-16**)
 
-**PARKED (user decision 2026-07-16):** WiFi work paused in favour of
-Phase 9. Parking state: **build #262** (`consys-g2b-fw-push`) is packed,
-banner-verified and ready in `logs/2026-07-16-262-consys-g2b-fw-push/`
-but **never flashed or tested** — it implements the full re-scoped G2b
-firmware push (protocol in research.md "WMT Firmware-Push Protocol").
-Resuming = flash that image to `boot2`, capture serial, judge the gate
-per the boot.md #262 expected-outcome checklist. Interim networking:
-USB ethernet on the right port (internet-enabled 2026-07-16, boot.md
-entry) covers connectivity needs meanwhile.
+**RE-PARKED 2026-07-20 after #262 tested — G2b FAIL, firmware-push
+theory falsified.** #262 was flashed and run (unparked to attempt
+Bluetooth, which sits behind the same gate): G2a still passes, but the
+BTIF transport jams after exactly one frame ("BTIF TX stuck, LSR=0x20"
+×13 — TEMT never sets), so the firmware push never reached the ROM;
+the ROM is deaf on BTIF entirely, not opcode-selective. CPUPCR decays
+to the known-bad 0x55AA55xx spin; 0x10001f00 still 0x11403200 vs
+golden 0x6D403A00 (bit-11 delta = top open suspect). Full entry:
+boot.md 2026-07-20 "#262 FLASHED AND TESTED". Resuming now means
+root-causing the abnormal ROM execution state (what precondition does
+vendor LK/boot set that we don't?), not pushing more protocol. Interim
+networking: right-port USB ethernet (internet-enabled 2026-07-16)
+covers connectivity; **Bluetooth is explicitly blocked on this same
+gate.**
+
+Original parking note (2026-07-16), kept for history: build #262
+implements the re-scoped G2b firmware push (protocol in research.md
+"WMT Firmware-Push Protocol").
 
 **Goal:** working internal WiFi (scan/associate/DHCP/SSH-over-WiFi) via
 the on-die CONSYS block — the vendor gen2 stack is the only

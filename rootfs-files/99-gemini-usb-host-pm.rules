@@ -1,0 +1,7 @@
+# B-19 USB host mode: runtime-PM autosuspend clears IPPC HOST_SEL and
+# power-cycles the U2 PHY; no USB wakeup source is wired on MT6797, so
+# autosuspend permanently kills connect detection (boot.md build #231
+# defect 2). Pin the controllers and all USB devices to "on".
+ACTION=="add", SUBSYSTEM=="platform", KERNEL=="11270000.usb", TEST=="power/control", ATTR{power/control}="on"
+ACTION=="add", SUBSYSTEM=="platform", KERNEL=="11271000.usb", TEST=="power/control", ATTR{power/control}="on"
+ACTION=="add", SUBSYSTEM=="usb", TEST=="power/control", ATTR{power/control}="on"

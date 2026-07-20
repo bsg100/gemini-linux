@@ -8258,3 +8258,57 @@ needed: MUSB DMA (vendor musbfsh used DMA) or double-buffered FIFOs.
 **Soak result (2026-07-20):** 15-minute dmesg watch on the SZNX HS link
 completed clean — no three-strikes, no babble, no link loss. High-speed
 configuration confirmed stable and stands.
+
+---
+
+## 2026-07-20 — BUILD #262 FLASHED AND TESTED: Gate G2b FAIL (-110) — ROM deaf on BTIF entirely; firmware push never reached it
+
+**Context:** B-21 unparked to attempt Bluetooth (which needs the same
+CONSYS/WMT handshake as WiFi). The parked, never-tested #262 image
+(`logs/2026-07-16-262-consys-g2b-fw-push/`, sha256 `c8a958d2…`) was
+flashed to `boot2` by the user. **No serial capture for this boot** —
+all evidence gathered over right-port LAN SSH (192.168.100.146); banner
+verified `#262 SMP PREEMPT Thu Jul 16 09:57:05 UTC 2026`. Note: gadget
+usb0 (10.15.19.82) did not respond this boot — untested whether that is
+a #262-era regression or cabling; LAN SSH was used throughout.
+
+**Result: GATE G2B FAIL (-110), but the build's diagnostic question is
+answered.** Sequence from dmesg:
+
+- G2a PASS unchanged: chip-ID 0x279 on first read at 0.62s.
+- EMI remap + ctrl-window zero + BTIF init OK (LSR=0x60 at init).
+- MCU reset released; post-release RX = 0 bytes (golden hardware answers
+  ~50ms after release — ours never speaks).
+- First ROM-only WMT_QUERY_STP TX went out (no TX-stuck error), RX 0.
+- **Every subsequent TX — retry query, all 3 DLM power-on cmds, all 4
+  mcuclk cmds, the patch-address cmd, all mcuclk-restore cmds, final
+  post-push query — failed "BTIF TX stuck, LSR=0x20" (13 occurrences):
+  THRE set but TEMT never sets, i.e. the shift register cannot drain.**
+  This reproduces #240's finding precisely: the CONSYS link FIFO
+  swallows exactly one frame and then hardware flow-control jams the
+  channel because the ROM never consumes its RX FIFO.
+- Firmware push therefore aborted (-110) without a single fragment sent;
+  the opcode-0x08 vs opcode-0x04 question is answered: **the ROM is deaf
+  on BTIF entirely, not opcode-selective** — it never drains any frame.
+- CPUPCR samples degraded over the run: 0x408/0x1998/0x130c0 (real
+  addresses, ROM executing) at 2.5s → 0x55AA55xx abnormal idle pattern
+  by 3.8s, the same known-bad signature as #240/#247 (golden =
+  0x0009997A steady).
+
+**Post-mortem devmem (read-only, state left up by the driver):**
+CPUPCR 0x55AA55E6 (abnormal), chip-ID still 0x279, 0x10001f00 =
+0x11403200 (unchanged from our known-bad value; golden 0x6D403A00 —
+bit-11 delta still unexplained and still the top open suspect).
+
+**Conclusion:** the firmware-push theory is falsified as the missing
+step — firmware cannot be pushed because the transport itself is dead
+from frame one. The blocker remains what it was after #240: the ROM
+boots into an abnormal execution state (0x55AA55xx spin) in which it
+never services BTIF. Until the cause of that abnormal ROM state is
+found (0x10001f00 bit 11? an SPM/EMI precondition LK does on vendor
+boots?), neither WiFi nor Bluetooth can proceed. B-21 re-parked;
+Bluetooth explicitly blocked on the same gate.
+
+**Device state after test:** reflash #269
+(`logs/2026-07-20-269-*/new_kali_boot.img`) to return to current
+feature set (touchscreen/audio/right-port HS absent under #262).
