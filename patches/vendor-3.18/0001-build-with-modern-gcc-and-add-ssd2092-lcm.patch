@@ -1,0 +1,3405 @@
+diff --git a/kernel-3.18/Documentation/kbuild/makefiles.txt b/kernel-3.18/Documentation/kbuild/makefiles.txt
+index a311db82..454bf122 100644
+--- a/kernel-3.18/Documentation/kbuild/makefiles.txt
++++ b/kernel-3.18/Documentation/kbuild/makefiles.txt
+@@ -324,7 +324,7 @@ more details, with real examples.
+ 	the options specified using the non-subdir variants.
+ 
+ 	Example:
+-		subdir-ccflags-y := -Werror
++		subdir-ccflags-y := 
+ 
+     CFLAGS_$@, AFLAGS_$@
+ 
+diff --git a/kernel-3.18/arch/alpha/lib/Makefile b/kernel-3.18/arch/alpha/lib/Makefile
+index 59660743..0f02a602 100644
+--- a/kernel-3.18/arch/alpha/lib/Makefile
++++ b/kernel-3.18/arch/alpha/lib/Makefile
+@@ -3,7 +3,7 @@
+ #
+ 
+ asflags-y := $(KBUILD_CFLAGS)
+-ccflags-y := -Werror
++ccflags-y := 
+ 
+ # Many of these routines have implementations tuned for ev6.
+ # Choose them iff we're targeting ev6 specifically.
+diff --git a/kernel-3.18/arch/alpha/mm/Makefile b/kernel-3.18/arch/alpha/mm/Makefile
+index c993d3f9..4fa3377a 100644
+--- a/kernel-3.18/arch/alpha/mm/Makefile
++++ b/kernel-3.18/arch/alpha/mm/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for the linux alpha-specific parts of the memory manager.
+ #
+ 
+-ccflags-y := -Werror
++ccflags-y := 
+ 
+ obj-y	:= init.o fault.o extable.o
+ 
+diff --git a/kernel-3.18/arch/alpha/oprofile/Makefile b/kernel-3.18/arch/alpha/oprofile/Makefile
+index 3473de75..943efd7a 100644
+--- a/kernel-3.18/arch/alpha/oprofile/Makefile
++++ b/kernel-3.18/arch/alpha/oprofile/Makefile
+@@ -1,4 +1,4 @@
+-ccflags-y := -Werror -Wno-sign-compare
++ccflags-y :=  -Wno-sign-compare
+ 
+ obj-$(CONFIG_OPROFILE) += oprofile.o
+ 
+diff --git a/kernel-3.18/arch/arm/boot/Makefile b/kernel-3.18/arch/arm/boot/Makefile
+index 60f549bb..bd2451ad 100644
+--- a/kernel-3.18/arch/arm/boot/Makefile
++++ b/kernel-3.18/arch/arm/boot/Makefile
+@@ -11,7 +11,7 @@
+ # Copyright (C) 1995-2002 Russell King
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ ifneq ($(MACHINE),)
+ include $(srctree)/$(MACHINE)/Makefile.boot
+diff --git a/kernel-3.18/arch/arm/common/Makefile b/kernel-3.18/arch/arm/common/Makefile
+index c544b8a7..a0ffd07f 100644
+--- a/kernel-3.18/arch/arm/common/Makefile
++++ b/kernel-3.18/arch/arm/common/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for the linux kernel.
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-y				+= firmware.o
+ 
+diff --git a/kernel-3.18/arch/arm/crypto/Makefile b/kernel-3.18/arch/arm/crypto/Makefile
+index dd83c6ab..ace9a328 100644
+--- a/kernel-3.18/arch/arm/crypto/Makefile
++++ b/kernel-3.18/arch/arm/crypto/Makefile
+@@ -2,7 +2,7 @@
+ # Arch-specific CryptoAPI modules.
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-$(CONFIG_CRYPTO_AES_ARM) += aes-arm.o
+ obj-$(CONFIG_CRYPTO_AES_ARM_BS) += aes-arm-bs.o
+diff --git a/kernel-3.18/arch/arm/kernel/Makefile b/kernel-3.18/arch/arm/kernel/Makefile
+index 615e9f7d..7fb3b2f5 100644
+--- a/kernel-3.18/arch/arm/kernel/Makefile
++++ b/kernel-3.18/arch/arm/kernel/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for the linux kernel.
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ CPPFLAGS_vmlinux.lds := -DTEXT_OFFSET=$(TEXT_OFFSET)
+ AFLAGS_head.o        := -DTEXT_OFFSET=$(TEXT_OFFSET)
+diff --git a/kernel-3.18/arch/arm/lib/Makefile b/kernel-3.18/arch/arm/lib/Makefile
+index b5a74534..e197c62a 100644
+--- a/kernel-3.18/arch/arm/lib/Makefile
++++ b/kernel-3.18/arch/arm/lib/Makefile
+@@ -4,7 +4,7 @@
+ # Copyright (C) 1995-2000 Russell King
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ lib-y		:= backtrace.o changebit.o csumipv6.o csumpartial.o   \
+ 		   csumpartialcopy.o csumpartialcopyuser.o clearbit.o \
+diff --git a/kernel-3.18/arch/arm/mach-mediatek/Makefile b/kernel-3.18/arch/arm/mach-mediatek/Makefile
+index c6e87990..54868e44 100644
+--- a/kernel-3.18/arch/arm/mach-mediatek/Makefile
++++ b/kernel-3.18/arch/arm/mach-mediatek/Makefile
+@@ -1,4 +1,4 @@
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ ifeq ($(CONFIG_SMP),y)
+ obj-$(CONFIG_ARCH_MEDIATEK) += platsmp.o
+diff --git a/kernel-3.18/arch/arm/mm/Makefile b/kernel-3.18/arch/arm/mm/Makefile
+index 71af17b7..7a2eebee 100644
+--- a/kernel-3.18/arch/arm/mm/Makefile
++++ b/kernel-3.18/arch/arm/mm/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for the linux arm-specific parts of the memory manager.
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-y				:= dma-mapping.o extable.o fault.o init.o \
+ 				   iomap.o
+@@ -104,7 +104,7 @@ obj-$(CONFIG_CACHE_XSC3L2)	+= cache-xsc3l2.o
+ obj-$(CONFIG_CACHE_TAUROS2)	+= cache-tauros2.o
+ 
+ MTK_PLATFORM := $(CONFIG_MTK_PLATFORM:"%"=%)
+-KBUILD_CPPFLAGS += -Werror -I$(srctree)/drivers/misc/mediatek/include
++KBUILD_CPPFLAGS +=  -I$(srctree)/drivers/misc/mediatek/include
+ 
+ obj-$(CONFIG_MEDIATEK_SOLUTION)	+= mt_cache_v7.o
+ obj-$(CONFIG_MEDIATEK_SOLUTION)	+= mt_innercache.o
+diff --git a/kernel-3.18/arch/arm/net/Makefile b/kernel-3.18/arch/arm/net/Makefile
+index 0e0a4a1a..81c6bb1f 100644
+--- a/kernel-3.18/arch/arm/net/Makefile
++++ b/kernel-3.18/arch/arm/net/Makefile
+@@ -1,5 +1,5 @@
+ # ARM-specific networking code
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-$(CONFIG_BPF_JIT) += bpf_jit_32.o
+diff --git a/kernel-3.18/arch/arm/vfp/Makefile b/kernel-3.18/arch/arm/vfp/Makefile
+index a0576cc7..be271bff 100644
+--- a/kernel-3.18/arch/arm/vfp/Makefile
++++ b/kernel-3.18/arch/arm/vfp/Makefile
+@@ -7,7 +7,7 @@
+ # ccflags-y := -DDEBUG
+ # asflags-y := -DDEBUG
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ KBUILD_AFLAGS	:=$(KBUILD_AFLAGS:-msoft-float=-Wa,-mfpu=softvfp+vfp -mfloat-abi=soft)
+ LDFLAGS		+=--no-warn-mismatch
+diff --git a/kernel-3.18/arch/arm64/boot/Makefile b/kernel-3.18/arch/arm64/boot/Makefile
+index d6a4a7f1..4e495f0b 100644
+--- a/kernel-3.18/arch/arm64/boot/Makefile
++++ b/kernel-3.18/arch/arm64/boot/Makefile
+@@ -14,7 +14,7 @@
+ # Based on the ia64 boot/Makefile.
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ include $(srctree)/arch/arm64/boot/dts/Makefile
+ 
+diff --git a/kernel-3.18/arch/arm64/crypto/Makefile b/kernel-3.18/arch/arm64/crypto/Makefile
+index da5b4302..25ddb00e 100644
+--- a/kernel-3.18/arch/arm64/crypto/Makefile
++++ b/kernel-3.18/arch/arm64/crypto/Makefile
+@@ -8,7 +8,7 @@
+ # published by the Free Software Foundation.
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-$(CONFIG_CRYPTO_SHA1_ARM64_CE) += sha1-ce.o
+ sha1-ce-y := sha1-ce-glue.o sha1-ce-core.o
+diff --git a/kernel-3.18/arch/arm64/kernel/Makefile b/kernel-3.18/arch/arm64/kernel/Makefile
+index 3ccba727..004ccb3b 100644
+--- a/kernel-3.18/arch/arm64/kernel/Makefile
++++ b/kernel-3.18/arch/arm64/kernel/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for the linux kernel.
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ CPPFLAGS_vmlinux.lds	:= -DTEXT_OFFSET=$(TEXT_OFFSET)
+ AFLAGS_head.o		:= -DTEXT_OFFSET=$(TEXT_OFFSET)
+diff --git a/kernel-3.18/arch/arm64/lib/Makefile b/kernel-3.18/arch/arm64/lib/Makefile
+index eaaad593..4c5366af 100644
+--- a/kernel-3.18/arch/arm64/lib/Makefile
++++ b/kernel-3.18/arch/arm64/lib/Makefile
+@@ -1,4 +1,4 @@
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ lib-y		:= bitops.o clear_user.o delay.o copy_from_user.o	\
+ 		   copy_to_user.o copy_in_user.o copy_page.o		\
+diff --git a/kernel-3.18/arch/arm64/mm/Makefile b/kernel-3.18/arch/arm64/mm/Makefile
+index 20f77744..2124161d 100644
+--- a/kernel-3.18/arch/arm64/mm/Makefile
++++ b/kernel-3.18/arch/arm64/mm/Makefile
+@@ -1,4 +1,4 @@
+-sr-ccflags-y += -Werror
++sr-ccflags-y += 
+ 
+ obj-y				:= dma-mapping.o extable.o fault.o init.o \
+ 				   cache.o copypage.o flush.o \
+@@ -7,7 +7,7 @@ obj-y				:= dma-mapping.o extable.o fault.o init.o \
+ obj-$(CONFIG_HUGETLB_PAGE)	+= hugetlbpage.o
+ 
+ MTK_PLATFORM := $(CONFIG_MTK_PLATFORM:"%"=%)
+-KBUILD_CPPFLAGS += -Werror -I$(srctree)/drivers/misc/mediatek/include
++KBUILD_CPPFLAGS +=  -I$(srctree)/drivers/misc/mediatek/include
+ 
+ obj-$(CONFIG_MEDIATEK_SOLUTION)	+= mt_cache_v8.o
+ obj-$(CONFIG_MEDIATEK_SOLUTION)	+= mt_innercache.o
+diff --git a/kernel-3.18/arch/arm64/mm/proc.S b/kernel-3.18/arch/arm64/mm/proc.S
+index 302353d9..22f35fb5 100644
+--- a/kernel-3.18/arch/arm64/mm/proc.S
++++ b/kernel-3.18/arch/arm64/mm/proc.S
+@@ -186,7 +186,7 @@ ENTRY(cpu_do_switch_mm)
+ 	ret
+ ENDPROC(cpu_do_switch_mm)
+ 
+-	.section ".text.init", #alloc, #execinstr
++	.section ".text.init", "ax"
+ 
+ /*
+  *	__cpu_setup
+diff --git a/kernel-3.18/arch/arm64/net/Makefile b/kernel-3.18/arch/arm64/net/Makefile
+index 6d49dec8..a5381c36 100644
+--- a/kernel-3.18/arch/arm64/net/Makefile
++++ b/kernel-3.18/arch/arm64/net/Makefile
+@@ -1,5 +1,5 @@
+ #
+ # ARM64 networking code
+ #
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ obj-$(CONFIG_BPF_JIT) += bpf_jit_comp.o
+diff --git a/kernel-3.18/arch/metag/oprofile/Makefile b/kernel-3.18/arch/metag/oprofile/Makefile
+index c9639d47..f8910b2e 100644
+--- a/kernel-3.18/arch/metag/oprofile/Makefile
++++ b/kernel-3.18/arch/metag/oprofile/Makefile
+@@ -14,4 +14,4 @@ oprofile-y	+= backtrace.o
+ oprofile-y	+= common.o
+ oprofile-y	+= $(addprefix ../../../drivers/oprofile/,$(oprofile-core-y))
+ 
+-ccflags-y	+= -Werror
++ccflags-y	+= 
+diff --git a/kernel-3.18/arch/mips/Kbuild b/kernel-3.18/arch/mips/Kbuild
+index dd295335..effc203a 100644
+--- a/kernel-3.18/arch/mips/Kbuild
++++ b/kernel-3.18/arch/mips/Kbuild
+@@ -1,7 +1,7 @@
+ # Fail on warnings - also for files referenced in subdirs
+-# -Werror can be disabled for specific files using:
++#  can be disabled for specific files using:
+ # CFLAGS_<file.o> := -Wno-error
+-subdir-ccflags-y := -Werror
++subdir-ccflags-y := 
+ 
+ # platform specific definitions
+ include arch/mips/Kbuild.platforms
+diff --git a/kernel-3.18/arch/powerpc/Kconfig.debug b/kernel-3.18/arch/powerpc/Kconfig.debug
+index ec2e40f2..2720817f 100644
+--- a/kernel-3.18/arch/powerpc/Kconfig.debug
++++ b/kernel-3.18/arch/powerpc/Kconfig.debug
+@@ -7,7 +7,7 @@ config PPC_DISABLE_WERROR
+ 	default n
+ 	help
+ 	  This option tells the compiler NOT to build the code under
+-	  arch/powerpc with the -Werror flag (which means warnings
++	  arch/powerpc with the  flag (which means warnings
+ 	  are treated as errors).
+ 
+ 	  Only enable this if you are hitting a build failure in the
+diff --git a/kernel-3.18/arch/powerpc/kernel/Makefile b/kernel-3.18/arch/powerpc/kernel/Makefile
+index 502cf69b..ef5fe54b 100644
+--- a/kernel-3.18/arch/powerpc/kernel/Makefile
++++ b/kernel-3.18/arch/powerpc/kernel/Makefile
+@@ -5,7 +5,7 @@
+ CFLAGS_prom.o		= -I$(src)/../../../scripts/dtc/libfdt
+ CFLAGS_ptrace.o		+= -DUTS_MACHINE='"$(UTS_MACHINE)"'
+ 
+-subdir-ccflags-$(CONFIG_PPC_WERROR) := -Werror
++subdir-ccflags-$(CONFIG_PPC_WERROR) := 
+ 
+ ifeq ($(CONFIG_PPC64),y)
+ CFLAGS_prom_init.o	+= $(NO_MINIMAL_TOC)
+diff --git a/kernel-3.18/arch/powerpc/kvm/Makefile b/kernel-3.18/arch/powerpc/kvm/Makefile
+index 0570eef8..f7de6923 100644
+--- a/kernel-3.18/arch/powerpc/kvm/Makefile
++++ b/kernel-3.18/arch/powerpc/kvm/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for Kernel-based Virtual Machine module
+ #
+ 
+-subdir-ccflags-$(CONFIG_PPC_WERROR) := -Werror
++subdir-ccflags-$(CONFIG_PPC_WERROR) := 
+ 
+ ccflags-y := -Ivirt/kvm -Iarch/powerpc/kvm
+ KVM := ../../../virt/kvm
+diff --git a/kernel-3.18/arch/powerpc/lib/Makefile b/kernel-3.18/arch/powerpc/lib/Makefile
+index 9f342f13..7bcc4606 100644
+--- a/kernel-3.18/arch/powerpc/lib/Makefile
++++ b/kernel-3.18/arch/powerpc/lib/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for ppc-specific library files..
+ #
+ 
+-subdir-ccflags-$(CONFIG_PPC_WERROR) := -Werror
++subdir-ccflags-$(CONFIG_PPC_WERROR) := 
+ 
+ ccflags-$(CONFIG_PPC64)	:= $(NO_MINIMAL_TOC)
+ 
+diff --git a/kernel-3.18/arch/powerpc/mm/Makefile b/kernel-3.18/arch/powerpc/mm/Makefile
+index 325e8616..6afdc5ed 100644
+--- a/kernel-3.18/arch/powerpc/mm/Makefile
++++ b/kernel-3.18/arch/powerpc/mm/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for the linux ppc-specific parts of the memory manager.
+ #
+ 
+-subdir-ccflags-$(CONFIG_PPC_WERROR) := -Werror
++subdir-ccflags-$(CONFIG_PPC_WERROR) := 
+ 
+ ccflags-$(CONFIG_PPC64)	:= $(NO_MINIMAL_TOC)
+ 
+diff --git a/kernel-3.18/arch/powerpc/oprofile/Makefile b/kernel-3.18/arch/powerpc/oprofile/Makefile
+index cedbbece..7e529056 100644
+--- a/kernel-3.18/arch/powerpc/oprofile/Makefile
++++ b/kernel-3.18/arch/powerpc/oprofile/Makefile
+@@ -1,4 +1,4 @@
+-subdir-ccflags-$(CONFIG_PPC_WERROR) := -Werror
++subdir-ccflags-$(CONFIG_PPC_WERROR) := 
+ 
+ ccflags-$(CONFIG_PPC64)	:= $(NO_MINIMAL_TOC)
+ 
+diff --git a/kernel-3.18/arch/powerpc/perf/Makefile b/kernel-3.18/arch/powerpc/perf/Makefile
+index f9c083a5..ac75699a 100644
+--- a/kernel-3.18/arch/powerpc/perf/Makefile
++++ b/kernel-3.18/arch/powerpc/perf/Makefile
+@@ -1,4 +1,4 @@
+-subdir-ccflags-$(CONFIG_PPC_WERROR) := -Werror
++subdir-ccflags-$(CONFIG_PPC_WERROR) := 
+ 
+ obj-$(CONFIG_PERF_EVENTS)	+= callchain.o
+ 
+diff --git a/kernel-3.18/arch/powerpc/platforms/Makefile b/kernel-3.18/arch/powerpc/platforms/Makefile
+index 469ef170..41748fcd 100644
+--- a/kernel-3.18/arch/powerpc/platforms/Makefile
++++ b/kernel-3.18/arch/powerpc/platforms/Makefile
+@@ -1,5 +1,5 @@
+ 
+-subdir-ccflags-$(CONFIG_PPC_WERROR) := -Werror
++subdir-ccflags-$(CONFIG_PPC_WERROR) := 
+ 
+ obj-$(CONFIG_FSL_ULI1575)	+= fsl_uli1575.o
+ 
+diff --git a/kernel-3.18/arch/powerpc/sysdev/Makefile b/kernel-3.18/arch/powerpc/sysdev/Makefile
+index f7cb2a1b..9f6a03d8 100644
+--- a/kernel-3.18/arch/powerpc/sysdev/Makefile
++++ b/kernel-3.18/arch/powerpc/sysdev/Makefile
+@@ -1,4 +1,4 @@
+-subdir-ccflags-$(CONFIG_PPC_WERROR) := -Werror
++subdir-ccflags-$(CONFIG_PPC_WERROR) := 
+ 
+ ccflags-$(CONFIG_PPC64)		:= $(NO_MINIMAL_TOC)
+ 
+@@ -68,7 +68,7 @@ obj-$(CONFIG_PPC_SCOM)		+= scom.o
+ 
+ obj-$(CONFIG_PPC_EARLY_DEBUG_MEMCONS)	+= udbg_memcons.o
+ 
+-subdir-ccflags-$(CONFIG_PPC_WERROR) := -Werror
++subdir-ccflags-$(CONFIG_PPC_WERROR) := 
+ 
+ obj-$(CONFIG_PPC_XICS)		+= xics/
+ 
+diff --git a/kernel-3.18/arch/powerpc/sysdev/xics/Makefile b/kernel-3.18/arch/powerpc/sysdev/xics/Makefile
+index c606aa8b..5f36a9e2 100644
+--- a/kernel-3.18/arch/powerpc/sysdev/xics/Makefile
++++ b/kernel-3.18/arch/powerpc/sysdev/xics/Makefile
+@@ -1,4 +1,4 @@
+-subdir-ccflags-$(CONFIG_PPC_WERROR) := -Werror
++subdir-ccflags-$(CONFIG_PPC_WERROR) := 
+ 
+ obj-y				+= xics-common.o
+ obj-$(CONFIG_PPC_ICP_NATIVE)	+= icp-native.o
+diff --git a/kernel-3.18/arch/powerpc/xmon/Makefile b/kernel-3.18/arch/powerpc/xmon/Makefile
+index 1278788d..9a03cc74 100644
+--- a/kernel-3.18/arch/powerpc/xmon/Makefile
++++ b/kernel-3.18/arch/powerpc/xmon/Makefile
+@@ -1,6 +1,6 @@
+ # Makefile for xmon
+ 
+-subdir-ccflags-$(CONFIG_PPC_WERROR) := -Werror
++subdir-ccflags-$(CONFIG_PPC_WERROR) := 
+ 
+ GCOV_PROFILE := n
+ 
+diff --git a/kernel-3.18/arch/sh/cchips/hd6446x/Makefile b/kernel-3.18/arch/sh/cchips/hd6446x/Makefile
+index 59c34833..926e3f31 100644
+--- a/kernel-3.18/arch/sh/cchips/hd6446x/Makefile
++++ b/kernel-3.18/arch/sh/cchips/hd6446x/Makefile
+@@ -1,3 +1,3 @@
+ obj-$(CONFIG_HD64461)	+= hd64461.o
+ 
+-ccflags-y := -Werror
++ccflags-y := 
+diff --git a/kernel-3.18/arch/sh/kernel/Makefile b/kernel-3.18/arch/sh/kernel/Makefile
+index 2ccf36c8..a46d2a18 100644
+--- a/kernel-3.18/arch/sh/kernel/Makefile
++++ b/kernel-3.18/arch/sh/kernel/Makefile
+@@ -48,4 +48,4 @@ obj-$(CONFIG_PERF_EVENTS)	+= perf_event.o perf_callchain.o
+ obj-$(CONFIG_HAVE_HW_BREAKPOINT)		+= hw_breakpoint.o
+ obj-$(CONFIG_GENERIC_CLOCKEVENTS_BROADCAST)	+= localtimer.o
+ 
+-ccflags-y := -Werror
++ccflags-y := 
+diff --git a/kernel-3.18/arch/sh/lib/Makefile b/kernel-3.18/arch/sh/lib/Makefile
+index 3baff31e..3d840bae 100644
+--- a/kernel-3.18/arch/sh/lib/Makefile
++++ b/kernel-3.18/arch/sh/lib/Makefile
+@@ -30,4 +30,4 @@ lib-$(CONFIG_MMU)		+= copy_page.o __clear_user.o
+ lib-$(CONFIG_MCOUNT)		+= mcount.o
+ lib-y				+= $(memcpy-y) $(memset-y) $(udivsi3-y)
+ 
+-ccflags-y := -Werror
++ccflags-y := 
+diff --git a/kernel-3.18/arch/sh/mm/Makefile b/kernel-3.18/arch/sh/mm/Makefile
+index cee6b999..50a734e1 100644
+--- a/kernel-3.18/arch/sh/mm/Makefile
++++ b/kernel-3.18/arch/sh/mm/Makefile
+@@ -69,4 +69,4 @@ CFLAGS_tlbex_64.o += -ffixed-r7 \
+ 	-ffixed-r60 -ffixed-r61 -ffixed-r62 \
+ 	-fomit-frame-pointer
+ 
+-ccflags-y := -Werror
++ccflags-y := 
+diff --git a/kernel-3.18/arch/sparc/kernel/Makefile b/kernel-3.18/arch/sparc/kernel/Makefile
+index fdb13327..c7948ee7 100644
+--- a/kernel-3.18/arch/sparc/kernel/Makefile
++++ b/kernel-3.18/arch/sparc/kernel/Makefile
+@@ -4,7 +4,7 @@
+ #
+ 
+ asflags-y := -ansi
+-ccflags-y := -Werror
++ccflags-y := 
+ 
+ extra-y     := head_$(BITS).o
+ 
+diff --git a/kernel-3.18/arch/sparc/lib/Makefile b/kernel-3.18/arch/sparc/lib/Makefile
+index 3269b023..88e5c5ed 100644
+--- a/kernel-3.18/arch/sparc/lib/Makefile
++++ b/kernel-3.18/arch/sparc/lib/Makefile
+@@ -2,7 +2,7 @@
+ #
+ 
+ asflags-y := -ansi -DST_DIV0=0x02
+-ccflags-y := -Werror
++ccflags-y := 
+ 
+ lib-$(CONFIG_SPARC32) += ashrdi3.o
+ lib-$(CONFIG_SPARC32) += memcpy.o memset.o
+diff --git a/kernel-3.18/arch/sparc/mm/Makefile b/kernel-3.18/arch/sparc/mm/Makefile
+index 30c3eccf..860482f8 100644
+--- a/kernel-3.18/arch/sparc/mm/Makefile
++++ b/kernel-3.18/arch/sparc/mm/Makefile
+@@ -2,7 +2,7 @@
+ #
+ 
+ asflags-y := -ansi
+-ccflags-y := -Werror
++ccflags-y := 
+ 
+ obj-$(CONFIG_SPARC64)   += ultra.o tlb.o tsb.o gup.o
+ obj-y                   += fault_$(BITS).o
+diff --git a/kernel-3.18/arch/sparc/prom/Makefile b/kernel-3.18/arch/sparc/prom/Makefile
+index 020300b1..4eaa6900 100644
+--- a/kernel-3.18/arch/sparc/prom/Makefile
++++ b/kernel-3.18/arch/sparc/prom/Makefile
+@@ -2,7 +2,7 @@
+ # Linux.
+ #
+ asflags := -ansi
+-ccflags := -Werror
++ccflags := 
+ 
+ lib-y                 := bootstr_$(BITS).o
+ lib-y                 += init_$(BITS).o
+diff --git a/kernel-3.18/block/Makefile b/kernel-3.18/block/Makefile
+index a3bb40da..ce9533eb 100644
+--- a/kernel-3.18/block/Makefile
++++ b/kernel-3.18/block/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for the kernel block layer
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-$(CONFIG_BLOCK) := bio.o elevator.o blk-core.o blk-tag.o blk-sysfs.o \
+ 			blk-flush.o blk-settings.o blk-ioc.o blk-map.o \
+diff --git a/kernel-3.18/crypto/Makefile b/kernel-3.18/crypto/Makefile
+index f89fdbc2..a5d9c64a 100644
+--- a/kernel-3.18/crypto/Makefile
++++ b/kernel-3.18/crypto/Makefile
+@@ -2,7 +2,7 @@
+ # Cryptographic API
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-$(CONFIG_CRYPTO) += crypto.o
+ crypto-y := api.o cipher.o compress.o memneq.o
+diff --git a/kernel-3.18/drivers/base/Makefile b/kernel-3.18/drivers/base/Makefile
+index 8d36df64..03bba7c5 100644
+--- a/kernel-3.18/drivers/base/Makefile
++++ b/kernel-3.18/drivers/base/Makefile
+@@ -1,6 +1,6 @@
+ # Makefile for the Linux device tree
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ ccflags-y += -Idrivers/misc/mediatek/mtprof/
+ 
+ obj-y			:= component.o core.o bus.o dd.o syscore.o \
+diff --git a/kernel-3.18/drivers/block/Makefile b/kernel-3.18/drivers/block/Makefile
+index 0625b3f0..0847c80c 100644
+--- a/kernel-3.18/drivers/block/Makefile
++++ b/kernel-3.18/drivers/block/Makefile
+@@ -5,7 +5,7 @@
+ # Rewritten to use lists instead of if-statements.
+ # 
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-$(CONFIG_MAC_FLOPPY)	+= swim3.o
+ obj-$(CONFIG_BLK_DEV_SWIM)	+= swim_mod.o
+diff --git a/kernel-3.18/drivers/clk/Makefile b/kernel-3.18/drivers/clk/Makefile
+index 5d147395..e3f09089 100644
+--- a/kernel-3.18/drivers/clk/Makefile
++++ b/kernel-3.18/drivers/clk/Makefile
+@@ -1,5 +1,5 @@
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ # common clock types
+ obj-$(CONFIG_HAVE_CLK)		+= clk-devres.o
+diff --git a/kernel-3.18/drivers/clocksource/Makefile b/kernel-3.18/drivers/clocksource/Makefile
+index 36f601b7..584e9497 100644
+--- a/kernel-3.18/drivers/clocksource/Makefile
++++ b/kernel-3.18/drivers/clocksource/Makefile
+@@ -1,4 +1,4 @@
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include \
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include \
+ -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include \
+ -I$(srctree)/drivers/misc/mediatek/include/mt-plat
+ 
+diff --git a/kernel-3.18/drivers/cpufreq/Makefile b/kernel-3.18/drivers/cpufreq/Makefile
+index e4c007d4..ff285324 100644
+--- a/kernel-3.18/drivers/cpufreq/Makefile
++++ b/kernel-3.18/drivers/cpufreq/Makefile
+@@ -1,5 +1,5 @@
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ # CPUfreq core
+ obj-$(CONFIG_CPU_FREQ)			+= cpufreq.o freq_table.o
+diff --git a/kernel-3.18/drivers/cpuidle/Makefile b/kernel-3.18/drivers/cpuidle/Makefile
+index 11f2654e..52c4c0ed 100644
+--- a/kernel-3.18/drivers/cpuidle/Makefile
++++ b/kernel-3.18/drivers/cpuidle/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for cpuidle.
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-y += cpuidle.o driver.o governor.o sysfs.o governors/
+ obj-$(CONFIG_ARCH_NEEDS_CPU_IDLE_COUPLED) += coupled.o
+diff --git a/kernel-3.18/drivers/gpu/Makefile b/kernel-3.18/drivers/gpu/Makefile
+index 20f4dde4..9f7f6f3e 100644
+--- a/kernel-3.18/drivers/gpu/Makefile
++++ b/kernel-3.18/drivers/gpu/Makefile
+@@ -1,4 +1,4 @@
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-y			+= drm/ vga/ arm/
+ obj-$(CONFIG_TEGRA_HOST1X)	+= host1x/
+diff --git a/kernel-3.18/drivers/gpu/drm/msm/Makefile b/kernel-3.18/drivers/gpu/drm/msm/Makefile
+index 6283dcb9..f9026d0c 100644
+--- a/kernel-3.18/drivers/gpu/drm/msm/Makefile
++++ b/kernel-3.18/drivers/gpu/drm/msm/Makefile
+@@ -1,6 +1,6 @@
+ ccflags-y := -Iinclude/drm -Idrivers/gpu/drm/msm
+ ifeq (, $(findstring -W,$(EXTRA_CFLAGS)))
+-	ccflags-y += -Werror
++	ccflags-y += 
+ endif
+ 
+ msm-y := \
+diff --git a/kernel-3.18/drivers/gpu/drm/omapdrm/Makefile b/kernel-3.18/drivers/gpu/drm/omapdrm/Makefile
+index 778372b0..c1f57064 100644
+--- a/kernel-3.18/drivers/gpu/drm/omapdrm/Makefile
++++ b/kernel-3.18/drivers/gpu/drm/omapdrm/Makefile
+@@ -3,7 +3,7 @@
+ # Direct Rendering Infrastructure (DRI)
+ #
+ 
+-ccflags-y := -Iinclude/drm -Werror
++ccflags-y := -Iinclude/drm 
+ omapdrm-y := omap_drv.o \
+ 	omap_irq.o \
+ 	omap_debugfs.o \
+diff --git a/kernel-3.18/drivers/gpu/drm/tilcdc/Makefile b/kernel-3.18/drivers/gpu/drm/tilcdc/Makefile
+index 7d2eefe9..3e696943 100644
+--- a/kernel-3.18/drivers/gpu/drm/tilcdc/Makefile
++++ b/kernel-3.18/drivers/gpu/drm/tilcdc/Makefile
+@@ -1,6 +1,6 @@
+ ccflags-y := -Iinclude/drm
+ ifeq (, $(findstring -W,$(EXTRA_CFLAGS)))
+-	ccflags-y += -Werror
++	ccflags-y += 
+ endif
+ 
+ tilcdc-y := \
+diff --git a/kernel-3.18/drivers/i2c/Makefile b/kernel-3.18/drivers/i2c/Makefile
+index 9d6c082d..84bfe4fa 100644
+--- a/kernel-3.18/drivers/i2c/Makefile
++++ b/kernel-3.18/drivers/i2c/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for the i2c core.
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-$(CONFIG_I2C_BOARDINFO)	+= i2c-boardinfo.o
+ obj-$(CONFIG_I2C)		+= i2c-core.o
+diff --git a/kernel-3.18/drivers/input/Makefile b/kernel-3.18/drivers/input/Makefile
+index 6a2d22a2..fe84a369 100755
+--- a/kernel-3.18/drivers/input/Makefile
++++ b/kernel-3.18/drivers/input/Makefile
+@@ -4,7 +4,7 @@
+ 
+ # Each configuration option enables a list of files.
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ obj-$(CONFIG_INPUT)		+= input-core.o
+ input-core-y := input.o input-compat.o input-mt.o ff-core.o
+ 
+diff --git a/kernel-3.18/drivers/input/fingerprint/fpc/Makefile b/kernel-3.18/drivers/input/fingerprint/fpc/Makefile
+index d41f7b2e..664afcce 100644
+--- a/kernel-3.18/drivers/input/fingerprint/fpc/Makefile
++++ b/kernel-3.18/drivers/input/fingerprint/fpc/Makefile
+@@ -1,5 +1,5 @@
+ MTK_PLATFORM := $(subst ",,$(CONFIG_MTK_PLATFORM))
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include
+ subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
+ subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat
+diff --git a/kernel-3.18/drivers/input/keyboard/mediatek/Makefile b/kernel-3.18/drivers/input/keyboard/mediatek/Makefile
+index f826538b..b72b5932 100644
+--- a/kernel-3.18/drivers/input/keyboard/mediatek/Makefile
++++ b/kernel-3.18/drivers/input/keyboard/mediatek/Makefile
+@@ -11,7 +11,7 @@
+ # GNU General Public License for more details.
+ #
+ 
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(CONFIG_MTK_PLATFORM)/include/
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(CONFIG_MTK_PLATFORM)/include/
+ subdir-ccflags-y += -I$(srctree)/drivers/input/keyboard/mediatek/$(CONFIG_MTK_PLATFORM)/
+ subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/
+ obj-$(CONFIG_KEYBOARD_MTK) := kpd.o
+diff --git a/kernel-3.18/drivers/input/keyboard/mediatek/mt6797/Makefile b/kernel-3.18/drivers/input/keyboard/mediatek/mt6797/Makefile
+index a678ba5e..478c6696 100644
+--- a/kernel-3.18/drivers/input/keyboard/mediatek/mt6797/Makefile
++++ b/kernel-3.18/drivers/input/keyboard/mediatek/mt6797/Makefile
+@@ -1,4 +1,4 @@
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/input/keyboard/mediatek/
++subdir-ccflags-y +=  -I$(srctree)/drivers/input/keyboard/mediatek/
+ 
+ ifeq ($(CONFIG_MT_SND_SOC_6797),y)
+ 	EXTRA_CFLAGS += -I$(srctree)/sound/soc/mediatek/mt_soc_audio_6797
+diff --git a/kernel-3.18/drivers/input/touchscreen/mediatek/Makefile b/kernel-3.18/drivers/input/touchscreen/mediatek/Makefile
+index e1866f21..5ae5fb39 100755
+--- a/kernel-3.18/drivers/input/touchscreen/mediatek/Makefile
++++ b/kernel-3.18/drivers/input/touchscreen/mediatek/Makefile
+@@ -1,4 +1,4 @@
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat/
+ ccflags-y += -I$(srctree)/drivers/input/touchscreen/mediatek
+ # In case the platform does NOT support this type of sensors
+diff --git a/kernel-3.18/drivers/input/touchscreen/mediatek/mediatek/unified_driver_4/MIT300/Makefile b/kernel-3.18/drivers/input/touchscreen/mediatek/mediatek/unified_driver_4/MIT300/Makefile
+index 81188944..f2202e87 100644
+--- a/kernel-3.18/drivers/input/touchscreen/mediatek/mediatek/unified_driver_4/MIT300/Makefile
++++ b/kernel-3.18/drivers/input/touchscreen/mediatek/mediatek/unified_driver_4/MIT300/Makefile
+@@ -1,4 +1,4 @@
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/input/touchscreen/mediatek/unified_driver_4/inc
++subdir-ccflags-y +=  -I$(srctree)/drivers/input/touchscreen/mediatek/unified_driver_4/inc
+ 
+ obj-y += lgtp_device_mit300.o
+ obj-y += mit300_fw_upgrade.o
+diff --git a/kernel-3.18/drivers/input/touchscreen/mediatek/mediatek/unified_driver_4/Makefile b/kernel-3.18/drivers/input/touchscreen/mediatek/mediatek/unified_driver_4/Makefile
+index f398ddb9..5d45220d 100644
+--- a/kernel-3.18/drivers/input/touchscreen/mediatek/mediatek/unified_driver_4/Makefile
++++ b/kernel-3.18/drivers/input/touchscreen/mediatek/mediatek/unified_driver_4/Makefile
+@@ -1,7 +1,7 @@
+ subdir-ccflags-y += -I$(srctree)/drivers/input/touchscreen/mediatek/
+ subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
+ subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat/
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/input/touchscreen/mediatek/unified_driver_4/inc
++subdir-ccflags-y +=  -I$(srctree)/drivers/input/touchscreen/mediatek/unified_driver_4/inc
+ 
+ obj-y	+=  lgtp_common_driver.o
+ obj-y	+=  lgtp_model_config_i2c.o
+diff --git a/kernel-3.18/drivers/iommu/Makefile b/kernel-3.18/drivers/iommu/Makefile
+index ae7fd6c4..0c10fd25 100644
+--- a/kernel-3.18/drivers/iommu/Makefile
++++ b/kernel-3.18/drivers/iommu/Makefile
+@@ -1,5 +1,5 @@
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-$(CONFIG_IOMMU_API) += iommu.o
+ obj-$(CONFIG_IOMMU_API) += iommu-traces.o
+diff --git a/kernel-3.18/drivers/irqchip/Makefile b/kernel-3.18/drivers/irqchip/Makefile
+index bb6acfef..d279d2c0 100644
+--- a/kernel-3.18/drivers/irqchip/Makefile
++++ b/kernel-3.18/drivers/irqchip/Makefile
+@@ -1,4 +1,4 @@
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-$(CONFIG_IRQCHIP)			+= irqchip.o
+ 
+diff --git a/kernel-3.18/drivers/media/Makefile b/kernel-3.18/drivers/media/Makefile
+index 383428c9..92c6d733 100644
+--- a/kernel-3.18/drivers/media/Makefile
++++ b/kernel-3.18/drivers/media/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for the kernel multimedia device drivers.
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ media-objs	:= media-device.o media-devnode.o media-entity.o
+ 
+diff --git a/kernel-3.18/drivers/memory/Makefile b/kernel-3.18/drivers/memory/Makefile
+index a5ac3ca3..934eddcb 100644
+--- a/kernel-3.18/drivers/memory/Makefile
++++ b/kernel-3.18/drivers/memory/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for memory devices
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ ifeq ($(CONFIG_DDR),y)
+ obj-$(CONFIG_OF)		+= of_memory.o
+diff --git a/kernel-3.18/drivers/mfd/Makefile b/kernel-3.18/drivers/mfd/Makefile
+index 3d97d011..53ffc796 100644
+--- a/kernel-3.18/drivers/mfd/Makefile
++++ b/kernel-3.18/drivers/mfd/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for multifunction miscellaneous devices
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ 88pm860x-objs			:= 88pm860x-core.o 88pm860x-i2c.o
+ obj-$(CONFIG_MFD_88PM860X)	+= 88pm860x.o
+diff --git a/kernel-3.18/drivers/misc/Makefile b/kernel-3.18/drivers/misc/Makefile
+index 3548c918..1ec1cf5e 100644
+--- a/kernel-3.18/drivers/misc/Makefile
++++ b/kernel-3.18/drivers/misc/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for misc devices that really don't fit anywhere else.
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-$(CONFIG_IBM_ASM)		+= ibmasm/
+ obj-$(CONFIG_AD525X_DPOT)	+= ad525x_dpot.o
+diff --git a/kernel-3.18/drivers/misc/mediatek/Makefile b/kernel-3.18/drivers/misc/mediatek/Makefile
+index dcac01a5..14ed0f9d 100755
+--- a/kernel-3.18/drivers/misc/mediatek/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/Makefile
+@@ -13,7 +13,7 @@
+ 
+ #$(call all-subdir-src-or-makefile)
+ MTK_PLATFORM := $(subst ",,$(CONFIG_MTK_PLATFORM))
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include
+ subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
+ subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat
+diff --git a/kernel-3.18/drivers/misc/mediatek/accdet/Makefile b/kernel-3.18/drivers/misc/mediatek/accdet/Makefile
+index 35999689..27ab73e8 100644
+--- a/kernel-3.18/drivers/misc/mediatek/accdet/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/accdet/Makefile
+@@ -1,5 +1,5 @@
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/accdet/$(MTK_PLATFORM)
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat/
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/accdet/$(MTK_PLATFORM)
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat/
+ 
+ obj-$(CONFIG_MTK_ACCDET) := accdet_drv.o
+ obj-$(CONFIG_MTK_ACCDET) += $(subst ",,$(CONFIG_MTK_PLATFORM))/
+diff --git a/kernel-3.18/drivers/misc/mediatek/base/power/mt6797/Makefile b/kernel-3.18/drivers/misc/mediatek/base/power/mt6797/Makefile
+index 1fc061d1..0459a760 100755
+--- a/kernel-3.18/drivers/misc/mediatek/base/power/mt6797/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/base/power/mt6797/Makefile
+@@ -76,3 +76,4 @@ obj-y += mt_hotplug_strategy_cpu.o
+ obj-y += mt_hotplug_strategy_api.o
+ obj-y += mt_hotplug_strategy_algo.o
+ obj-y += mt_hotplug_strategy_ops_mt6797.o
++ccflags-y += -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)
+diff --git a/kernel-3.18/drivers/misc/mediatek/base/power/ppm_v1/src/mach/mt6797/Makefile b/kernel-3.18/drivers/misc/mediatek/base/power/ppm_v1/src/mach/mt6797/Makefile
+index 7d73f8c0..f858ec2c 100644
+--- a/kernel-3.18/drivers/misc/mediatek/base/power/ppm_v1/src/mach/mt6797/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/base/power/ppm_v1/src/mach/mt6797/Makefile
+@@ -17,3 +17,4 @@ ccflags-y +=	\
+ 
+ # power state settings
+ obj-y += mt_ppm_power_state.o
++ccflags-y += -I$(srctree)/drivers/misc/mediatek/base/power/ppm_v1/src/mach/$(MTK_PLATFORM)
+diff --git a/kernel-3.18/drivers/misc/mediatek/btcvsd/Makefile b/kernel-3.18/drivers/misc/mediatek/btcvsd/Makefile
+index 107a89a5..07a3a061 100644
+--- a/kernel-3.18/drivers/misc/mediatek/btcvsd/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/btcvsd/Makefile
+@@ -15,7 +15,7 @@ MTK_PLATFORM:= $(subst ",,$(CONFIG_MTK_PLATFORM))
+ 
+ ccflags-y += -I$(srctree)/drivers/misc/mediatek/btcvsd/inc/$(MTK_PLATFORM)
+ #ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat/
+-#subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat/
++#subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat/
+ 
+ #obj-$(CONFIG_MTK_BTCVSD) += AudDrv_BTCVSD.o
+ obj-y += AudDrv_BTCVSD.o
+diff --git a/kernel-3.18/drivers/misc/mediatek/chip/Makefile b/kernel-3.18/drivers/misc/mediatek/chip/Makefile
+index 92400036..9996da90 100644
+--- a/kernel-3.18/drivers/misc/mediatek/chip/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/chip/Makefile
+@@ -11,7 +11,7 @@
+ # GNU General Public License for more details.
+ #
+ 
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/chip/
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/chip/
+ 
+ obj-$(CONFIG_MTK_CHIP) += CHIP_COMMON.o
+ CHIP_COMMON-$(CONFIG_MTK_CHIP) := mt_chip_common.o
+diff --git a/kernel-3.18/drivers/misc/mediatek/cmdq/v2/Makefile b/kernel-3.18/drivers/misc/mediatek/cmdq/v2/Makefile
+index 7168b789..630a22f4 100644
+--- a/kernel-3.18/drivers/misc/mediatek/cmdq/v2/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/cmdq/v2/Makefile
+@@ -121,3 +121,4 @@ obj-y += mtee/
+ endif
+ 
+ obj-y += $(subst ",,$(CONFIG_MTK_PLATFORM))/
++ccflags-y += -I$(srctree)/drivers/misc/mediatek/cmdq/v2/$(MTK_PLATFORM)
+diff --git a/kernel-3.18/drivers/misc/mediatek/cmdq/v2/mt6797/Makefile b/kernel-3.18/drivers/misc/mediatek/cmdq/v2/mt6797/Makefile
+index 3a1a4804..ecf8de3f 100644
+--- a/kernel-3.18/drivers/misc/mediatek/cmdq/v2/mt6797/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/cmdq/v2/mt6797/Makefile
+@@ -24,4 +24,6 @@ ifneq ($(CONFIG_MTK_CLKMGR),y)
+ ccflags-y += -DCMDQ_USE_CCF
+ endif
+ 
+-obj-y += cmdq_mdp.o
+\ No newline at end of file
++obj-y += cmdq_mdp.o
++
++ccflags-y += -I$(srctree)/drivers/misc/mediatek/cmdq/v2/$(MTK_PLATFORM)
+diff --git a/kernel-3.18/drivers/misc/mediatek/connectivity/common/Makefile b/kernel-3.18/drivers/misc/mediatek/connectivity/common/Makefile
+index f6e7813d..824131a9 100644
+--- a/kernel-3.18/drivers/misc/mediatek/connectivity/common/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/connectivity/common/Makefile
+@@ -1,5 +1,5 @@
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat
+ 
+ ifneq ($(filter "MT6628",$(CONFIG_MTK_COMBO_CHIP)),)
+ 	subdir-ccflags-y += -D MT6628
+diff --git a/kernel-3.18/drivers/misc/mediatek/ext_disp/mt6797/Makefile b/kernel-3.18/drivers/misc/mediatek/ext_disp/mt6797/Makefile
+index f4297103..65adbf09 100644
+--- a/kernel-3.18/drivers/misc/mediatek/ext_disp/mt6797/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/ext_disp/mt6797/Makefile
+@@ -57,3 +57,5 @@ obj-y :=  \
+     ./../extd_epd.o \
+     ./../extd_multi_control.o \
+     ./../extd_factory.o
++
++ccflags-y += -I$(srctree)/drivers/misc/mediatek/ext_disp/$(MTK_PLATFORM)
+diff --git a/kernel-3.18/drivers/misc/mediatek/gpio/Makefile b/kernel-3.18/drivers/misc/mediatek/gpio/Makefile
+index 35ed3d6f..a0dab829 100755
+--- a/kernel-3.18/drivers/misc/mediatek/gpio/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/gpio/Makefile
+@@ -1,2 +1,2 @@
+-obj-$(CONFIG_MTK_GPIO)	+= mt_gpio_core.o aeon_gpio.o
++obj-$(CONFIG_MTK_GPIO)	+= mt_gpio_core.o aeon_gpio.o lp3101.o
+ obj-$(CONFIG_MTK_GPIO)  += $(subst ",,$(CONFIG_MTK_PLATFORM))/
+diff --git a/kernel-3.18/drivers/misc/mediatek/gpio/lp3101.c b/kernel-3.18/drivers/misc/mediatek/gpio/lp3101.c
+new file mode 100755
+index 00000000..3cd7bfe3
+--- /dev/null
++++ b/kernel-3.18/drivers/misc/mediatek/gpio/lp3101.c
+@@ -0,0 +1,153 @@
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/fs.h>
++#include <linux/slab.h>
++#include <linux/init.h>
++#include <linux/list.h>
++#include <linux/i2c.h>
++#include <linux/irq.h>
++/* #include <linux/jiffies.h> */
++/* #include <linux/delay.h> */
++#include <linux/uaccess.h>
++#include <linux/interrupt.h>
++#include <linux/io.h>
++#include <linux/platform_device.h>
++
++
++
++#define LP_I2C_BUSNUM  I2C_I2C_LCD_BIAS_CHANNEL    /* for I2C channel 0 */
++#define I2C_ID_NAME "lp3101"
++#define LP_ADDR 0x3E
++
++#if defined(CONFIG_MTK_LEGACY)
++static struct i2c_board_info lp3101_board_info __initdata = {I2C_BOARD_INFO(I2C_ID_NAME, LP_ADDR)};
++#endif
++#if !defined(CONFIG_MTK_LEGACY)
++static const struct of_device_id lcm_of_match[] = {
++		{.compatible = "mediatek,I2C_LCD_BIAS"},
++		{},
++};
++#endif
++
++static struct i2c_client *lp3101_i2c_client;
++
++/*****************************************************************************
++ * Function Prototype
++ *****************************************************************************/
++static int lp3101_probe(struct i2c_client *client, const struct i2c_device_id *id);
++static int lp3101_remove(struct i2c_client *client);
++/*****************************************************************************
++ * Data Structure
++ *****************************************************************************/
++struct lp3101_dev	{	
++	struct i2c_client *client;
++
++};
++
++static const struct i2c_device_id lp3101_id[] = {
++	{I2C_ID_NAME, 0},
++	{}
++};
++
++/* #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36)) */
++/* static struct i2c_client_address_data addr_data = { .forces = forces,}; */
++/* #endif */
++static struct i2c_driver lp3101_iic_driver = {
++	.id_table	= lp3101_id,
++	.probe		= lp3101_probe,
++	.remove		= lp3101_remove,
++	/* .detect               = mt6605_detect, */
++	.driver = {
++		.owner = THIS_MODULE,
++		.name	= "lp3101",
++#if !defined(CONFIG_MTK_LEGACY)
++			.of_match_table = lcm_of_match,
++#endif
++	},
++};
++
++/*****************************************************************************
++ * Function
++ *****************************************************************************/
++static int lp3101_probe(struct i2c_client *client, const struct i2c_device_id *id)
++{
++	printk("lp3101_iic_probe\n");
++	printk("LP: info==>name=%s addr=0x%x\n",client->name,client->addr);
++	lp3101_i2c_client  = client;		
++	return 0;
++}
++
++static int lp3101_remove(struct i2c_client *client)
++{
++	printk("lp3101_remove\n");
++	lp3101_i2c_client = NULL;
++	i2c_unregister_device(client);
++	return 0;
++}
++
++static int lp3101_write_bytes(unsigned char addr, unsigned char value)
++{
++	int ret = 0;
++	struct i2c_client *client = lp3101_i2c_client;
++	char write_data[2] = { 0 };
++	if (client == NULL) {
++		printk("i2c_client = NULL, skip lp3101_write_bytes\n");
++		return 0;
++	}
++	write_data[0] = addr;
++	write_data[1] = value;
++	ret = i2c_master_send(client, write_data, 2);
++	if (ret < 0)
++		printk("lp3101 write data fail !!\n");
++	return ret;
++}
++
++void lp3101_poweron(void)
++{
++	unsigned char cmd = 0x0;
++	unsigned char data = 0xFF;
++	int ret = 0;
++
++	cmd = 0x00;
++	data = 0x0f;
++	ret=lp3101_write_bytes(cmd,data);
++	if (ret < 0)
++		printk("lp3101---cmd=%0x-- i2c write error-----\n",cmd);
++	else
++		printk("lp3101---cmd=%0x-- i2c write success-----\n",cmd);
++
++	cmd = 0x01;
++	data = 0x0f;
++	ret=lp3101_write_bytes(cmd,data);
++	if (ret < 0)
++		printk("lp3101----cmd=%0x--i2c write error----\n", cmd);
++	else
++		printk("lp3101----cmd=%0x--i2c write success----\n", cmd);
++
++}
++EXPORT_SYMBOL(lp3101_poweron);
++
++static int __init lp3101_iic_init(void)
++{
++	printk( "lp3101_iic_init\n");
++#if defined(CONFIG_MTK_LEGACY)
++	i2c_register_board_info(LP_I2C_BUSNUM, &lp3101_board_info, 1);
++#endif
++	printk( "lp3101_iic_init2\n");
++	i2c_add_driver(&lp3101_iic_driver);
++	printk( "lp3101_iic_init success\n");	
++	return 0;
++}
++
++static void __exit lp3101_iic_exit(void)
++{
++  printk( "lp3101_iic_exit\n");
++  i2c_del_driver(&lp3101_iic_driver);  
++}
++
++module_init(lp3101_iic_init);
++module_exit(lp3101_iic_exit);
++
++MODULE_AUTHOR("Xiaokuan Shi");
++MODULE_DESCRIPTION("MTK lp3101 I2C Driver");
++MODULE_LICENSE("GPL");
+diff --git a/kernel-3.18/drivers/misc/mediatek/gud/302c/Makefile b/kernel-3.18/drivers/misc/mediatek/gud/302c/Makefile
+index 4937fb49..e807e158 100644
+--- a/kernel-3.18/drivers/misc/mediatek/gud/302c/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/gud/302c/Makefile
+@@ -1,4 +1,4 @@
+-#ccflags-y += -Werror
++#ccflags-y += 
+ 
+ ifeq ($(CONFIG_ARM64), y)
+ obj-$(CONFIG_TRUSTONIC_TEE_SUPPORT) += gud/
+diff --git a/kernel-3.18/drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/.aeon_ssd2092_fhd_dsi_solomon.o.cmd b/kernel-3.18/drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/.aeon_ssd2092_fhd_dsi_solomon.o.cmd
+new file mode 100644
+index 00000000..621f0e73
+--- /dev/null
++++ b/kernel-3.18/drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/.aeon_ssd2092_fhd_dsi_solomon.o.cmd
+@@ -0,0 +1,661 @@
++cmd_drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.o := gcc -Wp,-MD,drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/.aeon_ssd2092_fhd_dsi_solomon.o.d -nostdinc -isystem /usr/lib/gcc/aarch64-linux-gnu/14/include -I./arch/arm64/include -Iarch/arm64/include/generated  -Iinclude -I./arch/arm64/include/uapi -Iarch/arm64/include/generated/uapi -I./include/uapi -Iinclude/generated/uapi -include ./include/linux/kconfig.h  -D__KERNEL__ -mlittle-endian -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -Wno-format-security -std=gnu89 -mgeneral-regs-only -fno-pic -fstack-usage -mpc-relative-literal-loads -fno-delete-null-pointer-checks -O2 -Werror=frame-larger-than=1 -Wframe-larger-than=2048 -fstack-protector -Wno-unused-but-set-variable -Wno-unused-const-variable -fno-omit-frame-pointer -fno-optimize-sibling-calls -fno-var-tracking-assignments -g -Wdeclaration-after-statement -Wno-pointer-sign -fno-strict-overflow -fconserve-stack -Werror=implicit-int -Werror=strict-prototypes -Werror=date-time -Wno-error -I./drivers/misc/mediatek/include -I./drivers/misc/mediatek/include/mt-plat/mt6797/include -I./drivers/misc/mediatek/include/mt-plat -I./drivers/mmc/host/mediatek/mt6797 -I./drivers/misc/mediatek/lcm/inc -I./drivers/misc/mediatek/video/mt6797/dispsys -I./drivers/misc/mediatek/video/mt6797/dispsys/mt6735 -I./drivers/misc/mediatek/video/mt6797/videox -I./drivers/misc/mediatek/video/mt6797/ -I./drivers/misc/mediatek/video/mt6797/mt6735/ -I./drivers/misc/mediatek/video/include -I./drivers/misc/mediatek/lcm/inc    -D"KBUILD_STR(s)=#s" -D"KBUILD_BASENAME=KBUILD_STR(aeon_ssd2092_fhd_dsi_solomon)"  -D"KBUILD_MODNAME=KBUILD_STR(aeon_ssd2092_fhd_dsi_solomon)" -c -o drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.o drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.c
++
++source_drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.o := drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.c
++
++deps_drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.o := \
++    $(wildcard include/config/mtk/legacy.h) \
++    $(wildcard include/config/fpga/early/porting.h) \
++  include/linux/string.h \
++    $(wildcard include/config/binary/printf.h) \
++  include/linux/compiler.h \
++    $(wildcard include/config/sparse/rcu/pointer.h) \
++    $(wildcard include/config/trace/branch/profiling.h) \
++    $(wildcard include/config/profile/all/branches.h) \
++    $(wildcard include/config/64bit.h) \
++    $(wildcard include/config/enable/must/check.h) \
++    $(wildcard include/config/enable/warn/deprecated.h) \
++    $(wildcard include/config/kprobes.h) \
++  include/linux/compiler-gcc.h \
++    $(wildcard include/config/arch/supports/optimized/inlining.h) \
++    $(wildcard include/config/optimize/inlining.h) \
++    $(wildcard include/config/gcov/kernel.h) \
++    $(wildcard include/config/arch/use/builtin/bswap.h) \
++  include/uapi/linux/types.h \
++  arch/arm64/include/generated/asm/types.h \
++  include/uapi/asm-generic/types.h \
++  include/asm-generic/int-ll64.h \
++  include/uapi/asm-generic/int-ll64.h \
++  arch/arm64/include/uapi/asm/bitsperlong.h \
++  include/asm-generic/bitsperlong.h \
++  include/uapi/asm-generic/bitsperlong.h \
++  include/uapi/linux/posix_types.h \
++  include/linux/stddef.h \
++  include/uapi/linux/stddef.h \
++  arch/arm64/include/uapi/asm/posix_types.h \
++  include/uapi/asm-generic/posix_types.h \
++  include/linux/types.h \
++    $(wildcard include/config/uid16.h) \
++    $(wildcard include/config/lbdaf.h) \
++    $(wildcard include/config/arch/dma/addr/t/64bit.h) \
++    $(wildcard include/config/phys/addr/t/64bit.h) \
++  /usr/lib/gcc/aarch64-linux-gnu/14/include/stdarg.h \
++  include/uapi/linux/string.h \
++  arch/arm64/include/asm/string.h \
++  include/linux/kernel.h \
++    $(wildcard include/config/preempt/voluntary.h) \
++    $(wildcard include/config/debug/atomic/sleep.h) \
++    $(wildcard include/config/mmu.h) \
++    $(wildcard include/config/prove/locking.h) \
++    $(wildcard include/config/panic/timeout.h) \
++    $(wildcard include/config/ring/buffer.h) \
++    $(wildcard include/config/tracing.h) \
++    $(wildcard include/config/ftrace/mcount/record.h) \
++  include/linux/linkage.h \
++  include/linux/stringify.h \
++  include/linux/export.h \
++    $(wildcard include/config/have/underscore/symbol/prefix.h) \
++    $(wildcard include/config/modules.h) \
++    $(wildcard include/config/modversions.h) \
++    $(wildcard include/config/unused/symbols.h) \
++  arch/arm64/include/asm/linkage.h \
++  include/linux/bitops.h \
++  arch/arm64/include/asm/bitops.h \
++  arch/arm64/include/asm/barrier.h \
++    $(wildcard include/config/smp.h) \
++  include/asm-generic/bitops/builtin-__ffs.h \
++  include/asm-generic/bitops/builtin-ffs.h \
++  include/asm-generic/bitops/builtin-__fls.h \
++  include/asm-generic/bitops/builtin-fls.h \
++  include/asm-generic/bitops/ffz.h \
++  include/asm-generic/bitops/fls64.h \
++  include/asm-generic/bitops/find.h \
++    $(wildcard include/config/generic/find/first/bit.h) \
++  include/asm-generic/bitops/sched.h \
++  include/asm-generic/bitops/hweight.h \
++  include/asm-generic/bitops/arch_hweight.h \
++  include/asm-generic/bitops/const_hweight.h \
++  include/asm-generic/bitops/lock.h \
++  include/asm-generic/bitops/non-atomic.h \
++  include/asm-generic/bitops/le.h \
++  arch/arm64/include/uapi/asm/byteorder.h \
++  include/linux/byteorder/little_endian.h \
++  include/uapi/linux/byteorder/little_endian.h \
++  include/linux/swab.h \
++  include/uapi/linux/swab.h \
++  arch/arm64/include/generated/asm/swab.h \
++  include/uapi/asm-generic/swab.h \
++  include/linux/byteorder/generic.h \
++  include/linux/log2.h \
++    $(wildcard include/config/arch/has/ilog2/u32.h) \
++    $(wildcard include/config/arch/has/ilog2/u64.h) \
++  include/linux/typecheck.h \
++  include/linux/printk.h \
++    $(wildcard include/config/mt/printk/uart/console.h) \
++    $(wildcard include/config/mtk/aee/feature.h) \
++    $(wildcard include/config/printk/mt/prefix.h) \
++    $(wildcard include/config/mt/eng/build.h) \
++    $(wildcard include/config/log/too/much/warning.h) \
++    $(wildcard include/config/message/loglevel/default.h) \
++    $(wildcard include/config/early/printk.h) \
++    $(wildcard include/config/printk.h) \
++    $(wildcard include/config/dynamic/debug.h) \
++  include/linux/init.h \
++    $(wildcard include/config/broken/rodata.h) \
++    $(wildcard include/config/lto.h) \
++  include/linux/kern_levels.h \
++  include/linux/cache.h \
++    $(wildcard include/config/arch/has/cache/line/size.h) \
++  include/uapi/linux/kernel.h \
++  include/uapi/linux/sysinfo.h \
++  arch/arm64/include/asm/cache.h \
++  arch/arm64/include/asm/cachetype.h \
++  arch/arm64/include/asm/cputype.h \
++  include/linux/dynamic_debug.h \
++  drivers/misc/mediatek/lcm/inc/lcm_drv.h \
++    $(wildcard include/config/params.h) \
++    $(wildcard include/config/arch/mt6735.h) \
++    $(wildcard include/config/arch/mt6735m.h) \
++    $(wildcard include/config/arch/mt6753.h) \
++    $(wildcard include/config/arch/mt6570.h) \
++    $(wildcard include/config/arch/mt6580.h) \
++    $(wildcard include/config/arch/mt8167.h) \
++  include/linux/device.h \
++    $(wildcard include/config/debug/devres.h) \
++    $(wildcard include/config/acpi.h) \
++    $(wildcard include/config/pinctrl.h) \
++    $(wildcard include/config/numa.h) \
++    $(wildcard include/config/dma/cma.h) \
++    $(wildcard include/config/pm/sleep.h) \
++    $(wildcard include/config/devtmpfs.h) \
++    $(wildcard include/config/sysfs/deprecated.h) \
++  include/linux/ioport.h \
++    $(wildcard include/config/memory/hotremove.h) \
++  include/linux/kobject.h \
++    $(wildcard include/config/uevent/helper.h) \
++    $(wildcard include/config/debug/kobject/release.h) \
++  include/linux/list.h \
++    $(wildcard include/config/debug/list.h) \
++  include/linux/poison.h \
++    $(wildcard include/config/illegal/pointer/value.h) \
++  include/uapi/linux/const.h \
++  include/linux/sysfs.h \
++    $(wildcard include/config/debug/lock/alloc.h) \
++    $(wildcard include/config/sysfs.h) \
++  include/linux/kernfs.h \
++    $(wildcard include/config/kernfs.h) \
++  include/linux/err.h \
++  arch/arm64/include/generated/asm/errno.h \
++  include/uapi/asm-generic/errno.h \
++  include/uapi/asm-generic/errno-base.h \
++  include/linux/mutex.h \
++    $(wildcard include/config/debug/mutexes.h) \
++    $(wildcard include/config/mutex/spin/on/owner.h) \
++  arch/arm64/include/generated/asm/current.h \
++  include/asm-generic/current.h \
++  include/linux/thread_info.h \
++    $(wildcard include/config/compat.h) \
++    $(wildcard include/config/debug/stack/usage.h) \
++  include/linux/bug.h \
++    $(wildcard include/config/generic/bug.h) \
++  arch/arm64/include/generated/asm/bug.h \
++  include/asm-generic/bug.h \
++    $(wildcard include/config/bug.h) \
++    $(wildcard include/config/generic/bug/relative/pointers.h) \
++    $(wildcard include/config/debug/bugverbose.h) \
++  arch/arm64/include/asm/memory.h \
++    $(wildcard include/config/arm64/va/bits.h) \
++  arch/arm64/include/generated/asm/sizes.h \
++  include/asm-generic/sizes.h \
++  include/linux/sizes.h \
++  include/asm-generic/memory_model.h \
++    $(wildcard include/config/flatmem.h) \
++    $(wildcard include/config/discontigmem.h) \
++    $(wildcard include/config/sparsemem/vmemmap.h) \
++    $(wildcard include/config/sparsemem.h) \
++  arch/arm64/include/asm/thread_info.h \
++    $(wildcard include/config/arm64/64k/pages.h) \
++  include/linux/spinlock_types.h \
++    $(wildcard include/config/generic/lockbreak.h) \
++    $(wildcard include/config/debug/spinlock.h) \
++  arch/arm64/include/asm/spinlock_types.h \
++  include/linux/lockdep.h \
++    $(wildcard include/config/lockdep.h) \
++    $(wildcard include/config/lock/stat.h) \
++    $(wildcard include/config/trace/irqflags.h) \
++    $(wildcard include/config/prove/rcu.h) \
++  include/linux/rwlock_types.h \
++  include/linux/atomic.h \
++    $(wildcard include/config/arch/has/atomic/or.h) \
++    $(wildcard include/config/generic/atomic64.h) \
++  arch/arm64/include/asm/atomic.h \
++  arch/arm64/include/asm/cmpxchg.h \
++  include/asm-generic/atomic-long.h \
++  arch/arm64/include/asm/processor.h \
++  arch/arm64/include/asm/fpsimd.h \
++  arch/arm64/include/asm/ptrace.h \
++    $(wildcard include/config/cpu/big/endian.h) \
++  arch/arm64/include/uapi/asm/ptrace.h \
++  arch/arm64/include/asm/hwcap.h \
++  arch/arm64/include/uapi/asm/hwcap.h \
++  arch/arm64/include/asm/hw_breakpoint.h \
++    $(wildcard include/config/have/hw/breakpoint.h) \
++  include/linux/osq_lock.h \
++  include/linux/idr.h \
++  include/linux/rcupdate.h \
++    $(wildcard include/config/tree/rcu.h) \
++    $(wildcard include/config/tree/preempt/rcu.h) \
++    $(wildcard include/config/rcu/trace.h) \
++    $(wildcard include/config/preempt/rcu.h) \
++    $(wildcard include/config/rcu/stall/common.h) \
++    $(wildcard include/config/rcu/user/qs.h) \
++    $(wildcard include/config/rcu/nocb/cpu.h) \
++    $(wildcard include/config/tasks/rcu.h) \
++    $(wildcard include/config/tiny/rcu.h) \
++    $(wildcard include/config/debug/objects/rcu/head.h) \
++    $(wildcard include/config/hotplug/cpu.h) \
++    $(wildcard include/config/preempt/count.h) \
++    $(wildcard include/config/preempt.h) \
++    $(wildcard include/config/rcu/boost.h) \
++    $(wildcard include/config/rcu/nocb/cpu/all.h) \
++    $(wildcard include/config/no/hz/full/sysidle.h) \
++  include/linux/spinlock.h \
++  include/linux/preempt.h \
++    $(wildcard include/config/debug/preempt.h) \
++    $(wildcard include/config/preempt/tracer.h) \
++    $(wildcard include/config/context/tracking.h) \
++    $(wildcard include/config/preempt/notifiers.h) \
++  arch/arm64/include/generated/asm/preempt.h \
++  include/asm-generic/preempt.h \
++  include/linux/irqflags.h \
++    $(wildcard include/config/preempt/monitor.h) \
++    $(wildcard include/config/mtprof.h) \
++    $(wildcard include/config/irqsoff/tracer.h) \
++    $(wildcard include/config/trace/irqflags/support.h) \
++  arch/arm64/include/asm/irqflags.h \
++  include/linux/bottom_half.h \
++  include/linux/preempt_mask.h \
++  arch/arm64/include/asm/spinlock.h \
++  include/linux/rwlock.h \
++  include/linux/spinlock_api_smp.h \
++    $(wildcard include/config/inline/spin/lock.h) \
++    $(wildcard include/config/inline/spin/lock/bh.h) \
++    $(wildcard include/config/inline/spin/lock/irq.h) \
++    $(wildcard include/config/inline/spin/lock/irqsave.h) \
++    $(wildcard include/config/inline/spin/trylock.h) \
++    $(wildcard include/config/inline/spin/trylock/bh.h) \
++    $(wildcard include/config/uninline/spin/unlock.h) \
++    $(wildcard include/config/inline/spin/unlock/bh.h) \
++    $(wildcard include/config/inline/spin/unlock/irq.h) \
++    $(wildcard include/config/inline/spin/unlock/irqrestore.h) \
++  include/linux/rwlock_api_smp.h \
++    $(wildcard include/config/inline/read/lock.h) \
++    $(wildcard include/config/inline/write/lock.h) \
++    $(wildcard include/config/inline/read/lock/bh.h) \
++    $(wildcard include/config/inline/write/lock/bh.h) \
++    $(wildcard include/config/inline/read/lock/irq.h) \
++    $(wildcard include/config/inline/write/lock/irq.h) \
++    $(wildcard include/config/inline/read/lock/irqsave.h) \
++    $(wildcard include/config/inline/write/lock/irqsave.h) \
++    $(wildcard include/config/inline/read/trylock.h) \
++    $(wildcard include/config/inline/write/trylock.h) \
++    $(wildcard include/config/inline/read/unlock.h) \
++    $(wildcard include/config/inline/write/unlock.h) \
++    $(wildcard include/config/inline/read/unlock/bh.h) \
++    $(wildcard include/config/inline/write/unlock/bh.h) \
++    $(wildcard include/config/inline/read/unlock/irq.h) \
++    $(wildcard include/config/inline/write/unlock/irq.h) \
++    $(wildcard include/config/inline/read/unlock/irqrestore.h) \
++    $(wildcard include/config/inline/write/unlock/irqrestore.h) \
++  include/linux/threads.h \
++    $(wildcard include/config/nr/cpus.h) \
++    $(wildcard include/config/base/small.h) \
++  include/linux/cpumask.h \
++    $(wildcard include/config/cpumask/offstack.h) \
++    $(wildcard include/config/debug/per/cpu/maps.h) \
++    $(wildcard include/config/disable/obsolete/cpumask/functions.h) \
++  include/linux/bitmap.h \
++  include/linux/seqlock.h \
++  include/linux/completion.h \
++  include/linux/wait.h \
++  include/uapi/linux/wait.h \
++  include/linux/debugobjects.h \
++    $(wildcard include/config/debug/objects.h) \
++    $(wildcard include/config/debug/objects/free.h) \
++  include/linux/rcutree.h \
++  include/linux/rbtree.h \
++  include/linux/errno.h \
++  include/uapi/linux/errno.h \
++  include/linux/kobject_ns.h \
++  include/linux/stat.h \
++  arch/arm64/include/asm/stat.h \
++  arch/arm64/include/uapi/asm/stat.h \
++  include/uapi/asm-generic/stat.h \
++  arch/arm64/include/asm/compat.h \
++  include/linux/sched.h \
++    $(wildcard include/config/sched/debug.h) \
++    $(wildcard include/config/no/hz/common.h) \
++    $(wildcard include/config/lockup/detector.h) \
++    $(wildcard include/config/detect/hung/task.h) \
++    $(wildcard include/config/core/dump/default/elf/headers.h) \
++    $(wildcard include/config/sched/autogroup.h) \
++    $(wildcard include/config/virt/cpu/accounting/native.h) \
++    $(wildcard include/config/bsd/process/acct.h) \
++    $(wildcard include/config/taskstats.h) \
++    $(wildcard include/config/audit.h) \
++    $(wildcard include/config/cgroups.h) \
++    $(wildcard include/config/inotify/user.h) \
++    $(wildcard include/config/fanotify.h) \
++    $(wildcard include/config/epoll.h) \
++    $(wildcard include/config/posix/mqueue.h) \
++    $(wildcard include/config/keys.h) \
++    $(wildcard include/config/perf/events.h) \
++    $(wildcard include/config/schedstats.h) \
++    $(wildcard include/config/task/delay/acct.h) \
++    $(wildcard include/config/mtk/sched/cmp/tgs.h) \
++    $(wildcard include/config/sched/smt.h) \
++    $(wildcard include/config/disable/cpu/sched/domain/balance.h) \
++    $(wildcard include/config/sched/mc.h) \
++    $(wildcard include/config/mtk/sched/cmp.h) \
++    $(wildcard include/config/sched/hmp.h) \
++    $(wildcard include/config/sched/hmp/prio/filter.h) \
++    $(wildcard include/config/hmp/tracer.h) \
++    $(wildcard include/config/mtprof/cputime.h) \
++    $(wildcard include/config/fair/group/sched.h) \
++    $(wildcard include/config/mt/rt/throttle/mon.h) \
++    $(wildcard include/config/rt/group/sched.h) \
++    $(wildcard include/config/mt/sched/trace.h) \
++    $(wildcard include/config/mt/sched/debug.h) \
++    $(wildcard include/config/cgroup/sched.h) \
++    $(wildcard include/config/blk/dev/io/trace.h) \
++    $(wildcard include/config/compat/brk.h) \
++    $(wildcard include/config/cc/stackprotector.h) \
++    $(wildcard include/config/virt/cpu/accounting/gen.h) \
++    $(wildcard include/config/swap.h) \
++    $(wildcard include/config/sysvipc.h) \
++    $(wildcard include/config/auditsyscall.h) \
++    $(wildcard include/config/rt/mutexes.h) \
++    $(wildcard include/config/block.h) \
++    $(wildcard include/config/task/xacct.h) \
++    $(wildcard include/config/cpusets.h) \
++    $(wildcard include/config/futex.h) \
++    $(wildcard include/config/numa/balancing.h) \
++    $(wildcard include/config/fault/injection.h) \
++    $(wildcard include/config/latencytop.h) \
++    $(wildcard include/config/function/graph/tracer.h) \
++    $(wildcard include/config/memcg.h) \
++    $(wildcard include/config/uprobes.h) \
++    $(wildcard include/config/bcache.h) \
++    $(wildcard include/config/have/unstable/sched/clock.h) \
++    $(wildcard include/config/irq/time/accounting.h) \
++    $(wildcard include/config/no/hz/full.h) \
++    $(wildcard include/config/proc/fs.h) \
++    $(wildcard include/config/stack/growsup.h) \
++  include/uapi/linux/sched.h \
++  include/linux/sched/prio.h \
++  arch/arm64/include/uapi/asm/param.h \
++  include/asm-generic/param.h \
++    $(wildcard include/config/hz.h) \
++  include/uapi/asm-generic/param.h \
++  include/linux/capability.h \
++  include/uapi/linux/capability.h \
++  include/linux/timex.h \
++  include/uapi/linux/timex.h \
++  include/linux/time.h \
++    $(wildcard include/config/arch/uses/gettimeoffset.h) \
++  include/linux/math64.h \
++    $(wildcard include/config/arch/supports/int128.h) \
++  arch/arm64/include/generated/asm/div64.h \
++  include/asm-generic/div64.h \
++  include/linux/time64.h \
++  include/uapi/linux/time.h \
++  include/uapi/linux/param.h \
++  arch/arm64/include/asm/timex.h \
++  arch/arm64/include/asm/arch_timer.h \
++  include/clocksource/arm_arch_timer.h \
++    $(wildcard include/config/arm/arch/timer.h) \
++  include/linux/clocksource.h \
++    $(wildcard include/config/arch/clocksource/data.h) \
++    $(wildcard include/config/clocksource/watchdog.h) \
++    $(wildcard include/config/clksrc/of.h) \
++  include/linux/timer.h \
++    $(wildcard include/config/timer/stats.h) \
++    $(wildcard include/config/debug/objects/timers.h) \
++  include/linux/ktime.h \
++  include/linux/jiffies.h \
++  include/linux/timekeeping.h \
++  arch/arm64/include/asm/io.h \
++  include/linux/blk_types.h \
++    $(wildcard include/config/blk/cgroup.h) \
++    $(wildcard include/config/blk/dev/integrity.h) \
++  arch/arm64/include/asm/pgtable.h \
++    $(wildcard include/config/transparent/hugepage.h) \
++    $(wildcard include/config/have/rcu/table/free.h) \
++    $(wildcard include/config/arm64/pgtable/levels.h) \
++  arch/arm64/include/asm/proc-fns.h \
++  arch/arm64/include/asm/page.h \
++    $(wildcard include/config/have/arch/pfn/valid.h) \
++  arch/arm64/include/asm/pgtable-types.h \
++  include/asm-generic/pgtable-nopud.h \
++  include/asm-generic/getorder.h \
++  arch/arm64/include/asm/pgtable-hwdef.h \
++  include/asm-generic/pgtable.h \
++    $(wildcard include/config/have/arch/soft/dirty.h) \
++  include/linux/mm_types.h \
++    $(wildcard include/config/split/ptlock/cpus.h) \
++    $(wildcard include/config/arch/enable/split/pmd/ptlock.h) \
++    $(wildcard include/config/have/cmpxchg/double.h) \
++    $(wildcard include/config/have/aligned/struct/page.h) \
++    $(wildcard include/config/want/page/debug/flags.h) \
++    $(wildcard include/config/kmemcheck.h) \
++    $(wildcard include/config/aio.h) \
++    $(wildcard include/config/mmu/notifier.h) \
++    $(wildcard include/config/compaction.h) \
++  include/linux/auxvec.h \
++  include/uapi/linux/auxvec.h \
++  arch/arm64/include/uapi/asm/auxvec.h \
++  include/linux/rwsem.h \
++    $(wildcard include/config/rwsem/spin/on/owner.h) \
++    $(wildcard include/config/rwsem/generic/spinlock.h) \
++  arch/arm64/include/generated/asm/rwsem.h \
++  include/asm-generic/rwsem.h \
++  include/linux/page-debug-flags.h \
++    $(wildcard include/config/page/poisoning.h) \
++    $(wildcard include/config/page/guard.h) \
++    $(wildcard include/config/page/debug/something/else.h) \
++  include/linux/uprobes.h \
++  include/linux/page-flags-layout.h \
++  include/linux/numa.h \
++    $(wildcard include/config/nodes/shift.h) \
++  include/generated/bounds.h \
++  arch/arm64/include/asm/sparsemem.h \
++  arch/arm64/include/asm/mmu.h \
++  arch/arm64/include/generated/asm/early_ioremap.h \
++  include/asm-generic/early_ioremap.h \
++    $(wildcard include/config/generic/early/ioremap.h) \
++  arch/arm64/include/asm/alternative.h \
++  arch/arm64/include/asm/cpufeature.h \
++  include/xen/xen.h \
++    $(wildcard include/config/xen.h) \
++    $(wildcard include/config/xen/dom0.h) \
++    $(wildcard include/config/xen/pvh.h) \
++  include/asm-generic/iomap.h \
++    $(wildcard include/config/has/ioport/map.h) \
++    $(wildcard include/config/pci.h) \
++    $(wildcard include/config/generic/iomap.h) \
++  include/asm-generic/pci_iomap.h \
++    $(wildcard include/config/no/generic/pci/ioport/map.h) \
++    $(wildcard include/config/generic/pci/iomap.h) \
++  include/asm-generic/timex.h \
++  include/linux/plist.h \
++    $(wildcard include/config/debug/pi/list.h) \
++  include/linux/nodemask.h \
++    $(wildcard include/config/highmem.h) \
++    $(wildcard include/config/movable/node.h) \
++  include/linux/cputime.h \
++  arch/arm64/include/generated/asm/cputime.h \
++  include/asm-generic/cputime.h \
++    $(wildcard include/config/virt/cpu/accounting.h) \
++  include/asm-generic/cputime_jiffies.h \
++  include/linux/smp.h \
++    $(wildcard include/config/profile/cpu.h) \
++    $(wildcard include/config/mtk/cpu/hotplug/debug/3.h) \
++    $(wildcard include/config/mtk/ram/console.h) \
++  include/linux/llist.h \
++    $(wildcard include/config/arch/have/nmi/safe/cmpxchg.h) \
++  arch/arm64/include/asm/smp.h \
++  include/linux/sem.h \
++  include/uapi/linux/sem.h \
++  include/linux/ipc.h \
++  include/linux/uidgid.h \
++    $(wildcard include/config/user/ns.h) \
++  include/linux/highuid.h \
++  include/uapi/linux/ipc.h \
++  arch/arm64/include/generated/asm/ipcbuf.h \
++  include/uapi/asm-generic/ipcbuf.h \
++  arch/arm64/include/generated/asm/sembuf.h \
++  include/uapi/asm-generic/sembuf.h \
++  include/linux/shm.h \
++  include/uapi/linux/shm.h \
++  arch/arm64/include/generated/asm/shmbuf.h \
++  include/uapi/asm-generic/shmbuf.h \
++  arch/arm64/include/asm/shmparam.h \
++  include/uapi/asm-generic/shmparam.h \
++  include/linux/signal.h \
++    $(wildcard include/config/old/sigaction.h) \
++  include/uapi/linux/signal.h \
++  arch/arm64/include/uapi/asm/signal.h \
++  include/asm-generic/signal.h \
++  include/uapi/asm-generic/signal.h \
++  include/uapi/asm-generic/signal-defs.h \
++  arch/arm64/include/uapi/asm/sigcontext.h \
++  arch/arm64/include/uapi/asm/siginfo.h \
++  include/asm-generic/siginfo.h \
++  include/uapi/asm-generic/siginfo.h \
++  include/linux/pid.h \
++  include/linux/percpu.h \
++    $(wildcard include/config/need/per/cpu/embed/first/chunk.h) \
++    $(wildcard include/config/need/per/cpu/page/first/chunk.h) \
++    $(wildcard include/config/have/setup/per/cpu/area.h) \
++  include/linux/mmdebug.h \
++    $(wildcard include/config/debug/vm.h) \
++    $(wildcard include/config/debug/virtual.h) \
++  include/linux/pfn.h \
++  arch/arm64/include/asm/percpu.h \
++  include/asm-generic/percpu.h \
++  include/linux/percpu-defs.h \
++    $(wildcard include/config/debug/force/weak/per/cpu.h) \
++  include/linux/topology.h \
++    $(wildcard include/config/use/percpu/numa/node/id.h) \
++    $(wildcard include/config/have/memoryless/nodes.h) \
++  include/linux/mmzone.h \
++    $(wildcard include/config/force/max/zoneorder.h) \
++    $(wildcard include/config/cma.h) \
++    $(wildcard include/config/memory/isolation.h) \
++    $(wildcard include/config/zone/dma.h) \
++    $(wildcard include/config/zone/dma32.h) \
++    $(wildcard include/config/memory/hotplug.h) \
++    $(wildcard include/config/have/memblock/node/map.h) \
++    $(wildcard include/config/mtk/memcfg.h) \
++    $(wildcard include/config/flat/node/mem/map.h) \
++    $(wildcard include/config/page/extension.h) \
++    $(wildcard include/config/no/bootmem.h) \
++    $(wildcard include/config/have/memory/present.h) \
++    $(wildcard include/config/need/node/memmap/size.h) \
++    $(wildcard include/config/need/multiple/nodes.h) \
++    $(wildcard include/config/have/arch/early/pfn/to/nid.h) \
++    $(wildcard include/config/sparsemem/extreme.h) \
++    $(wildcard include/config/nodes/span/other/nodes.h) \
++    $(wildcard include/config/holes/in/zone.h) \
++    $(wildcard include/config/arch/has/holes/memorymodel.h) \
++  include/linux/pageblock-flags.h \
++    $(wildcard include/config/hugetlb/page.h) \
++    $(wildcard include/config/hugetlb/page/size/variable.h) \
++  include/linux/memory_hotplug.h \
++    $(wildcard include/config/have/arch/nodedata/extension.h) \
++    $(wildcard include/config/have/bootmem/info/node.h) \
++  include/linux/notifier.h \
++  include/linux/srcu.h \
++  include/linux/workqueue.h \
++    $(wildcard include/config/debug/objects/work.h) \
++    $(wildcard include/config/freezer.h) \
++  arch/arm64/include/asm/topology.h \
++    $(wildcard include/config/arm/cpu/topology.h) \
++    $(wildcard include/config/mtk/cpu/topology.h) \
++  include/asm-generic/topology.h \
++  include/linux/proportions.h \
++  include/linux/percpu_counter.h \
++  include/linux/gfp.h \
++    $(wildcard include/config/dmauser/pages.h) \
++    $(wildcard include/config/zone/movable/cma.h) \
++  include/linux/seccomp.h \
++    $(wildcard include/config/seccomp.h) \
++    $(wildcard include/config/have/arch/seccomp/filter.h) \
++    $(wildcard include/config/seccomp/filter.h) \
++  include/uapi/linux/seccomp.h \
++  arch/arm64/include/asm/seccomp.h \
++  arch/arm64/include/asm/unistd.h \
++  arch/arm64/include/uapi/asm/unistd.h \
++  include/asm-generic/unistd.h \
++  include/uapi/asm-generic/unistd.h \
++  include/asm-generic/seccomp.h \
++  include/uapi/linux/unistd.h \
++  include/linux/rculist.h \
++  include/linux/rtmutex.h \
++    $(wildcard include/config/debug/rt/mutexes.h) \
++  include/linux/resource.h \
++  include/uapi/linux/resource.h \
++  arch/arm64/include/generated/asm/resource.h \
++  include/asm-generic/resource.h \
++  include/uapi/asm-generic/resource.h \
++  include/linux/hrtimer.h \
++    $(wildcard include/config/high/res/timers.h) \
++    $(wildcard include/config/timerfd.h) \
++  include/linux/timerqueue.h \
++  include/linux/task_io_accounting.h \
++    $(wildcard include/config/task/io/accounting.h) \
++  include/linux/latencytop.h \
++  include/linux/cred.h \
++    $(wildcard include/config/debug/credentials.h) \
++    $(wildcard include/config/security.h) \
++  include/linux/key.h \
++    $(wildcard include/config/sysctl.h) \
++  include/linux/sysctl.h \
++  include/uapi/linux/sysctl.h \
++  include/linux/assoc_array.h \
++    $(wildcard include/config/associative/array.h) \
++  include/linux/selinux.h \
++    $(wildcard include/config/security/selinux.h) \
++  include/uapi/linux/magic.h \
++  include/linux/ptrace.h \
++  include/linux/pid_namespace.h \
++    $(wildcard include/config/pid/ns.h) \
++  include/linux/mm.h \
++    $(wildcard include/config/have/arch/mmap/rnd/bits.h) \
++    $(wildcard include/config/have/arch/mmap/rnd/compat/bits.h) \
++    $(wildcard include/config/mem/soft/dirty.h) \
++    $(wildcard include/config/x86.h) \
++    $(wildcard include/config/ppc.h) \
++    $(wildcard include/config/parisc.h) \
++    $(wildcard include/config/metag.h) \
++    $(wildcard include/config/ia64.h) \
++    $(wildcard include/config/ksm.h) \
++    $(wildcard include/config/shmem.h) \
++    $(wildcard include/config/debug/vm/rb.h) \
++    $(wildcard include/config/debug/pagealloc.h) \
++    $(wildcard include/config/hibernation.h) \
++    $(wildcard include/config/hugetlbfs.h) \
++  include/linux/debug_locks.h \
++    $(wildcard include/config/debug/locking/api/selftests.h) \
++  include/linux/range.h \
++  include/linux/bit_spinlock.h \
++  include/linux/shrinker.h \
++  include/linux/page_ext.h \
++    $(wildcard include/config/page/owner.h) \
++  include/linux/stacktrace.h \
++    $(wildcard include/config/stacktrace.h) \
++    $(wildcard include/config/user/stacktrace/support.h) \
++  include/linux/page-flags.h \
++    $(wildcard include/config/pageflags/extended.h) \
++    $(wildcard include/config/arch/uses/pg/uncached.h) \
++    $(wildcard include/config/memory/failure.h) \
++    $(wildcard include/config/toi/incremental.h) \
++  include/linux/huge_mm.h \
++  include/linux/vmstat.h \
++    $(wildcard include/config/vm/event/counters.h) \
++    $(wildcard include/config/debug/tlbflush.h) \
++    $(wildcard include/config/debug/vm/vmacache.h) \
++  include/linux/vm_event_item.h \
++    $(wildcard include/config/migration.h) \
++    $(wildcard include/config/memory/balloon.h) \
++    $(wildcard include/config/balloon/compaction.h) \
++  include/linux/nsproxy.h \
++  include/linux/kref.h \
++  include/uapi/linux/ptrace.h \
++  include/uapi/linux/stat.h \
++  include/linux/klist.h \
++  include/linux/pinctrl/devinfo.h \
++    $(wildcard include/config/pm.h) \
++  include/linux/pinctrl/consumer.h \
++  include/linux/seq_file.h \
++  include/linux/pinctrl/pinctrl-state.h \
++  include/linux/pm.h \
++    $(wildcard include/config/vt/console/sleep.h) \
++    $(wildcard include/config/pm/runtime.h) \
++    $(wildcard include/config/pm/clk.h) \
++    $(wildcard include/config/pm/generic/domains.h) \
++  include/linux/ratelimit.h \
++  arch/arm64/include/asm/device.h \
++    $(wildcard include/config/iommu/api.h) \
++  include/linux/pm_wakeup.h \
++  include/linux/platform_device.h \
++    $(wildcard include/config/suspend.h) \
++    $(wildcard include/config/hibernate/callbacks.h) \
++  include/linux/mod_devicetable.h \
++  include/linux/uuid.h \
++  include/uapi/linux/uuid.h \
++  include/linux/regulator/consumer.h \
++    $(wildcard include/config/regulator.h) \
++
++drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.o: $(deps_drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.o)
++
++$(deps_drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.o):
+diff --git a/kernel-3.18/drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/.built-in.o.cmd b/kernel-3.18/drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/.built-in.o.cmd
+new file mode 100644
+index 00000000..63c3b560
+--- /dev/null
++++ b/kernel-3.18/drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/.built-in.o.cmd
+@@ -0,0 +1 @@
++cmd_drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/built-in.o :=  ld -EL   -r -o drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/built-in.o drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.o 
+diff --git a/kernel-3.18/drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/Makefile b/kernel-3.18/drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/Makefile
+new file mode 100755
+index 00000000..25b07ee2
+--- /dev/null
++++ b/kernel-3.18/drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/Makefile
+@@ -0,0 +1,11 @@
++#
++# Makefile for misc devices that really don't fit anywhere else.
++#
++#include $(srctree)/drivers/misc/mediatek/Makefile.custom
++
++obj-y += aeon_ssd2092_fhd_dsi_solomon.o
++
++ccflags-$(CONFIG_MTK_LCM) += -I$(srctree)/drivers/misc/mediatek/lcm/inc
++
++
++
+diff --git a/kernel-3.18/drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.c b/kernel-3.18/drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.c
+new file mode 100755
+index 00000000..c844cf96
+--- /dev/null
++++ b/kernel-3.18/drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.c
+@@ -0,0 +1,700 @@
++#define LOG_TAG "LCM"
++
++#ifndef BUILD_LK
++#include <linux/string.h>
++#include <linux/kernel.h>
++#endif
++
++#include "lcm_drv.h"
++
++#ifdef BUILD_LK
++#include <platform/upmu_common.h>
++#include <platform/mt_gpio.h>
++#include <platform/mt_i2c.h>
++#include <platform/mt_pmic.h>
++#include <string.h>
++#elif defined(BUILD_UBOOT)
++#include <asm/arch/mt_gpio.h>
++#else
++/*#include <mach/mt_pm_ldo.h>*/
++#ifdef CONFIG_MTK_LEGACY
++#include <mach/mt_gpio.h>
++#endif
++#endif
++#ifdef CONFIG_MTK_LEGACY
++#include <cust_gpio_usage.h>
++#endif
++#ifndef CONFIG_FPGA_EARLY_PORTING
++#if defined(CONFIG_MTK_LEGACY)
++#include <cust_i2c.h>
++#endif
++#endif
++
++#ifdef BUILD_LK
++#define LCM_LOGI(string, args...)  dprintf(0, "[LK/"LOG_TAG"]"string, ##args)
++#define LCM_LOGD(string, args...)  dprintf(1, "[LK/"LOG_TAG"]"string, ##args)
++#else
++#define LCM_LOGI(fmt, args...)  pr_debug("[KERNEL/"LOG_TAG"]"fmt, ##args)
++#define LCM_LOGD(fmt, args...)  pr_debug("[KERNEL/"LOG_TAG"]"fmt, ##args)
++#endif
++
++extern int aeon_gpio_set(const char *name);
++extern void lp3101_poweron(void);
++
++static LCM_UTIL_FUNCS lcm_util;
++
++#define LCM_ID_SSD2092                  0x01572098
++
++#define SET_RESET_PIN(v)    (lcm_util.set_reset_pin((v)))
++#define MDELAY(n)       (lcm_util.mdelay(n))
++#define UDELAY(n)       (lcm_util.udelay(n))
++
++#define dsi_set_cmdq_V22(cmdq, cmd, count, ppara, force_update) \
++	lcm_util.dsi_set_cmdq_V22(cmdq, cmd, count, ppara, force_update)
++#define dsi_set_cmdq_V2(cmd, count, ppara, force_update) \
++        lcm_util.dsi_set_cmdq_V2(cmd, count, ppara, force_update)
++#define dsi_set_cmdq(pdata, queue_size, force_update) \
++        lcm_util.dsi_set_cmdq(pdata, queue_size, force_update)
++#define wrtie_cmd(cmd) lcm_util.dsi_write_cmd(cmd)
++#define write_regs(addr, pdata, byte_nums) \
++        lcm_util.dsi_write_regs(addr, pdata, byte_nums)
++#define read_reg(cmd) \
++        lcm_util.dsi_dcs_read_lcm_reg(cmd)
++#define read_reg_v2(cmd, buffer, buffer_size) \
++        lcm_util.dsi_dcs_read_lcm_reg_v2(cmd, buffer, buffer_size)
++
++#define set_gpio_lcd_enp(cmd) \
++		lcm_util.set_gpio_lcd_enp_bias(cmd)
++#if 0		
++#ifndef BUILD_LK
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/fs.h>
++#include <linux/slab.h>
++#include <linux/init.h>
++#include <linux/list.h>
++#include <linux/i2c.h>
++#include <linux/irq.h>
++/* #include <linux/jiffies.h> */
++/* #include <linux/delay.h> */
++#include <linux/uaccess.h>
++#include <linux/interrupt.h>
++#include <linux/io.h>
++#include <linux/platform_device.h>
++
++
++#ifndef CONFIG_FPGA_EARLY_PORTING
++
++#define LP_I2C_BUSNUM  I2C_I2C_LCD_BIAS_CHANNEL    /* for I2C channel 0 */
++#define I2C_ID_NAME "lp3101"
++#define LP_ADDR 0x3E
++
++#if defined(CONFIG_MTK_LEGACY)
++static struct i2c_board_info lp3101_board_info __initdata = {I2C_BOARD_INFO(I2C_ID_NAME, LP_ADDR)};
++#endif
++#if !defined(CONFIG_MTK_LEGACY)
++static const struct of_device_id lcm_of_match[] = {
++		{.compatible = "mediatek,I2C_LCD_BIAS"},
++		{},
++};
++#endif
++
++static struct i2c_client *lp3101_i2c_client;
++
++/*****************************************************************************
++ * Function Prototype
++ *****************************************************************************/
++static int lp3101_probe(struct i2c_client *client, const struct i2c_device_id *id);
++static int lp3101_remove(struct i2c_client *client);
++/*****************************************************************************
++ * Data Structure
++ *****************************************************************************/
++struct lp3101_dev	{	
++	struct i2c_client *client;
++
++};
++
++static const struct i2c_device_id lp3101_id[] = {
++	{I2C_ID_NAME, 0},
++	{}
++};
++
++/* #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36)) */
++/* static struct i2c_client_address_data addr_data = { .forces = forces,}; */
++/* #endif */
++static struct i2c_driver lp3101_iic_driver = {
++	.id_table	= lp3101_id,
++	.probe		= lp3101_probe,
++	.remove		= lp3101_remove,
++	/* .detect               = mt6605_detect, */
++	.driver = {
++		.owner = THIS_MODULE,
++		.name	= "lp3101",
++#if !defined(CONFIG_MTK_LEGACY)
++			.of_match_table = lcm_of_match,
++#endif
++	},
++};
++
++/*****************************************************************************
++ * Function
++ *****************************************************************************/
++static int lp3101_probe(struct i2c_client *client, const struct i2c_device_id *id)
++{
++	LCM_LOGI("lp3101_iic_probe ssd2092\n");
++	LCM_LOGI("LP: info==>name=%s addr=0x%x  ssd2092\n",client->name,client->addr);
++	lp3101_i2c_client  = client;		
++	return 0;
++}
++
++static int lp3101_remove(struct i2c_client *client)
++{
++	LCM_LOGI("lp3101_remove ssd2092\n");
++	lp3101_i2c_client = NULL;
++	i2c_unregister_device(client);
++	return 0;
++}
++
++static int lp3101_write_bytes(unsigned char addr, unsigned char value)
++{
++	int ret = 0;
++	struct i2c_client *client = lp3101_i2c_client;
++	char write_data[2] = { 0 };
++	if (client == NULL) {
++		LCM_LOGI("i2c_client = NULL, skip lp3101_write_bytes ssd2092\n");
++		return 0;
++	}
++	write_data[0] = addr;
++	write_data[1] = value;
++	ret = i2c_master_send(client, write_data, 2);
++	if (ret < 0)
++		LCM_LOGI("lp3101 write data fail ssd2092!!\n");
++	return ret;
++}
++
++static int __init lp3101_iic_init(void)
++{
++	LCM_LOGI( "lp3101_iic_init ssd2092\n");
++#if defined(CONFIG_MTK_LEGACY)
++	i2c_register_board_info(LP_I2C_BUSNUM, &lp3101_board_info, 1);
++#endif
++	i2c_add_driver(&lp3101_iic_driver);
++	LCM_LOGI( "lp3101_iic_init success ssd2092\n");	
++	return 0;
++}
++
++static void __exit lp3101_iic_exit(void)
++{
++  LCM_LOGI( "lp3101_iic_exit ssd2092\n");
++  i2c_del_driver(&lp3101_iic_driver);  
++}
++
++module_init(lp3101_iic_init);
++module_exit(lp3101_iic_exit);
++
++MODULE_AUTHOR("Xiaokuan Shi");
++MODULE_DESCRIPTION("MTK lp3101 I2C Driver");
++MODULE_LICENSE("GPL");
++#endif
++#endif
++#endif
++/* static unsigned char lcd_id_pins_value = 0xFF; */
++//static const unsigned char LCD_MODULE_ID = 0x01;
++#define LCM_DSI_CMD_MODE									0
++#define FRAME_WIDTH                                     (1080)
++#define FRAME_HEIGHT                                    (2160)
++
++#ifndef CONFIG_FPGA_EARLY_PORTING
++#define GPIO_65132_EN GPIO_LCD_BIAS_ENP_PIN
++#endif
++
++#define REGFLAG_DELAY       0xFFFC
++#define REGFLAG_UDELAY  0xFFFB
++#define REGFLAG_END_OF_TABLE    0xFFFD
++#define REGFLAG_RESET_LOW   0xFFFE
++#define REGFLAG_RESET_HIGH  0xFFFF
++
++//static LCM_DSI_MODE_SWITCH_CMD lcm_switch_mode_cmd;
++
++#ifndef TRUE
++#define TRUE 1
++#endif
++
++#ifndef FALSE
++#define FALSE 0
++#endif
++
++struct LCM_setting_table {
++	unsigned int cmd;
++	unsigned char count;
++	unsigned char para_list[64];
++};
++
++static struct LCM_setting_table lcm_suspend_setting[] = {
++	{0x28,0,{}},
++	{REGFLAG_DELAY, 50, {}},
++	{0x10,0,{}},
++	{REGFLAG_DELAY, 120, {}},
++
++	{REGFLAG_END_OF_TABLE, 0x00, {}}
++};
++
++static struct LCM_setting_table init_setting[] = {
++	{0x28, 0, {}},
++	{0x10, 0, {}},
++	{0xB5, 2, {0x00,0x00}},
++	{0xB3, 2, {0x03,0x96}},
++	{0xB4, 2, {0x21,0xFF}},
++	{0xE1, 2, {0x00,0x00}},
++	{0xE1, 3, {0x03,0x00,0x10}},
++	{0xB0, 2, {0x04,0x01}},
++	{0xB0, 2, {0x07,0x14}},
++	{0xC6, 2, {0x04,0x2D}},
++	{0xB9, 2, {0x0E,0x44}},
++	{0xC1, 2, {0x0C,0x26}},
++	{0xC1, 2, {0x08,0x99}},
++	{0xB9, 2, {0x23,0x00}},
++	{0xC2, 2, {0x04,0x0F}},
++	{0xB9, 2, {0x11,0x22}},
++	{0xB9, 2, {0x12,0x22}},
++	{0xB9, 2, {0x13,0x22}},
++	{0xB3, 2, {0x19,0x0B}},
++	{0xB0, 2, {0x3D,0xC8}},
++	{0xB3, 2, {0x0F,0x20}},
++	{0x36, 1, {0x02}},
++	{0xC7, 2, {0x01,0x09}},
++	{0xB3, 2, {0x15,0x80}},
++	{0xB3, 2, {0x1E,0x02}},
++	{0xB3, 2, {0x14,0xC0}},
++	{0xB3, 2, {0x16,0x50}},
++	{0xB3, 2, {0x1C,0xE4}},
++	{0xB3, 2, {0x28,0x09}},
++	{0xB3, 2, {0x24,0x19}},
++	{0xB0, 2, {0x12,0x00}},
++	{0xB0, 2, {0x13,0x14}},  //0x18
++	{0xB0, 2, {0x1A,0x00}},
++	{0xB0, 2, {0x1B,0x14}},  //0x18
++	{0xC1, 2, {0x0D,0x87}},
++	{0xC1, 2, {0x0E,0x87}},
++	{0xC3, 22, {0x00,0x10,0x2E,0x3E,0x48,0x5E,0x6B,0x7A,0x83,0x97,0xA3,0xA8,0xA5,0xAC,0xAD,0xB5,0xC1,0xC4,0x4E,0x4F,0x59,0x5A}},
++	{0xC3, 22, {0x15,0x10,0x2E,0x3E,0x48,0x5E,0x6B,0x7A,0x83,0x97,0xA3,0xA8,0xA5,0xAC,0xAD,0xB5,0xC1,0xC4,0x4E,0x4F,0x59,0x5A}},
++	{0xBB, 2, {0x01,0x8A}},
++	{0xBB, 2, {0x02,0x23}},
++	{0xBB, 2, {0x03,0xBC}},
++	{0xBB, 2, {0x04,0xC0}},
++	{0xBB, 2, {0x05,0x19}},
++	{0xBB, 2, {0x06,0x37}},
++	{0xBB, 2, {0x07,0xEE}},
++	{0xBB, 2, {0x08,0xDD}},
++	{0xBB, 2, {0x09,0xCC}},
++	{0xBB, 2, {0x0A,0x36}},
++	{0xBB, 2, {0x0B,0x70}},
++	{0xBB, 2, {0x0C,0x00}},
++	{0xBB, 2, {0x0D,0x8A}},
++	{0xBB, 2, {0x0E,0x23}},
++	{0xBB, 2, {0x0F,0xBC}},
++	{0xBB, 2, {0x10,0xC0}},
++	{0xBB, 2, {0x11,0x18}},
++	{0xBB, 2, {0x12,0xA7}},
++	{0xBB, 2, {0x13,0xEE}},
++	{0xBB, 2, {0x14,0xDD}},
++	{0xBB, 2, {0x15,0xCC}},
++	{0xBB, 2, {0x16,0x36}},
++	{0xBB, 2, {0x17,0x70}},
++	{0xBB, 2, {0x18,0x00}},
++	{0xBB, 2, {0x31,0x01}},
++	{0xBD, 2, {0x00,0xF0}},
++	{0xBD, 2, {0x01,0xF0}},
++	{0xBD, 2, {0x02,0xF0}},
++	{0xBD, 2, {0x03,0xF0}},
++	{0xBD, 2, {0x1A,0x02}},
++	{0xBD, 2, {0x1B,0x24}},
++	{0xBD, 2, {0x1D,0x01}},
++	{0xBD, 2, {0x1E,0x01}},
++	{0xBD, 2, {0x21,0x00}},
++	{0xBD, 2, {0x1F,0x79}},
++	{0xBD, 2, {0x20,0x14}},
++	{0xBD, 2, {0x22,0x89}},
++	{0xBD, 2, {0x23,0x13}},
++	{0xBD, 2, {0x24,0x35}},
++	{0xBD, 2, {0x26,0x01}},
++	{0xBD, 2, {0x27,0x01}},
++	{0xBD, 2, {0x2A,0x00}},
++	{0xBD, 2, {0x28,0x79}},
++	{0xBD, 2, {0x29,0x14}},
++	{0xBD, 2, {0x2B,0x89}},
++	{0xBD, 2, {0x2C,0x33}},
++	{0xBD, 2, {0x2D,0x33}},
++	{0xBD, 2, {0x2E,0x11}},
++	{0xBD, 2, {0x2F,0x11}},
++	{0xBD, 2, {0x31,0x22}},
++	{0xBD, 2, {0x32,0x01}},
++	{0xBD, 2, {0x33,0x04}},
++	{0xBD, 2, {0x34,0x11}},
++	{0xBD, 2, {0x35,0x11}},
++	{0xBD, 2, {0x37,0x22}},
++	{0xBD, 2, {0x38,0x01}},
++	{0xBD, 2, {0x39,0x04}},
++	{0xBD, 2, {0x3A,0x1E}},
++	{0xBD, 2, {0x3B,0x1E}},
++	{0xBD, 2, {0x3C,0x1E}},
++	{0xBD, 2, {0x3D,0x1E}},
++	{0xBD, 2, {0x40,0xAA}},
++	{0xBD, 2, {0x42,0x1E}},
++	{0xBD, 2, {0x43,0x1E}},
++	{0xBD, 2, {0x44,0x1E}},
++	{0xBD, 2, {0x45,0x1E}},
++	{0xBD, 2, {0x48,0xAA}},
++	{0xBA, 2, {0x02,0x05}},
++	{0xBA, 2, {0x03,0x01}},
++	{0xBC, 2, {0x1E,0x71}},
++	{0xBC, 2, {0x24,0x83}},
++	{0xB8, 2, {0x03,0xA9}},
++	{0xBA, 2, {0x15,0x41}},
++	{0xBB, 2, {0x19,0x8A}},
++	{0xBB, 2, {0x1A,0x32}},
++	{0xBB, 2, {0x1B,0xBC}},
++	{0xBB, 2, {0x1C,0xC2}},
++	{0xBB, 2, {0x1D,0x39}},
++	{0xBB, 2, {0x1E,0x37}},
++	{0xBB, 2, {0x1F,0xEE}},
++	{0xBB, 2, {0x20,0xDD}},
++	{0xBB, 2, {0x21,0xCC}},
++	{0xBB, 2, {0x22,0x36}},
++	{0xBB, 2, {0x23,0x70}},
++	{0xBB, 2, {0x24,0x00}},
++	{0xBB, 2, {0x25,0x8A}},
++	{0xBB, 2, {0x26,0x32}},
++	{0xBB, 2, {0x27,0xBC}},
++	{0xBB, 2, {0x28,0xC2}},
++	{0xBB, 2, {0x29,0x38}},
++	{0xBB, 2, {0x2A,0xA7}},
++	{0xBB, 2, {0x2B,0xEE}},
++	{0xBB, 2, {0x2C,0xDD}},
++	{0xBB, 2, {0x2D,0xCC}},
++	{0xBB, 2, {0x2E,0x36}},
++	{0xBB, 2, {0x2F,0x70}},
++	{0xBB, 2, {0x30,0x00}},
++	{0xB8, 2, {0x15,0xA2}},
++	{0xB0, 2, {0x39,0x00}},
++	{0xC6, 3, {0x00,0x03,0x40}},
++	{0xB3, 2, {0x18,0x00}},
++	{0xBA, 2, {0x17,0x28}},
++	{0xBA, 2, {0x23,0x15}},
++	{0xB0, 2, {0x06,0x2C}},
++	{0xBA, 2, {0x17,0x28}},
++	{0xBA, 2, {0x23,0x15}},
++	{0xBA, 2, {0x16,0x00}},
++	{0xBA, 3, {0x28,0x02,0x02}},
++	{0xBA, 2, {0x0F,0x8C}},
++	{0xBA, 2, {0x10,0x0C}},
++	{0xBA, 2, {0x11,0x23}},
++	{0xBA, 4, {0x12,0x9D,0x9D,0x9D}},
++	{0xBA, 2, {0x25,0x22}},
++	{0xBA, 3, {0x0D,0x40,0x02}},
++	{0xBA, 2, {0x2F,0x8C}},
++	{0xC2, 2, {0x04,0x00}},
++	{0xC2, 2, {0x05,0xC0}},
++	{0xB9, 10, {0x11,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00}},
++	{0xBA, 2, {0x15,0x33}},
++	{0xB9, 5, {0x00,0x5F,0x5F,0x61,0x0A}},
++	{0xBD, 2, {0x08,0x07}},
++	{0xBD, 2, {0x09,0x07}},
++	{0xBC, 2, {0x03,0x00}},
++	{0xBC, 2, {0x04,0x00}},
++	{0xBC, 2, {0x05,0x00}},
++	{0xBC, 2, {0x07,0x10}},
++	{0xBC, 2, {0x08,0x10}},
++	{0xBC, 2, {0x09,0x10}},
++	{0xB9, 2, {0x11,0x00}},
++	{0xB9, 2, {0x12,0x00}},
++	{0xB9, 2, {0x13,0x00}},
++	{0xB9, 2, {0x1D,0x00}},
++	{0xB9, 2, {0x1E,0x00}},
++	{0xB9, 2, {0x1F,0x00}},
++	{0xC2, 2, {0x00,0x07}},
++	{0xC1, 2, {0x0B,0x1F}},
++	{0xB1, 2, {0x05,0x2F}},
++	{0x35, 1, {0x00}},
++	{0xB0, 3, {0x01,0x08,0x70}},
++	{0xB9, 2, {0x25,0xA0}},
++	{0xBA, 2, {0x2F,0xCC}},
++	{0xC1, 2, {0x02,0xB0}},
++	{0xB3, 2, {0x1C,0xC4}},
++	{0xB3, 2, {0x1D,0x80}},
++	{0xBD, 3, {0x11,0x02,0x22}},
++    {0x36, 1, {0x09}},  //0x0A
++
++    {0x11, 1, {0x00}},
++    {REGFLAG_DELAY, 120, {}},
++    {0x29, 1,{0x00}},
++	{REGFLAG_DELAY, 50, {}},
++	{REGFLAG_END_OF_TABLE, 0x00, {}}
++};
++
++
++static void push_table(void *cmdq, struct LCM_setting_table *table,
++	unsigned int count, unsigned char force_update)
++{
++	unsigned int i;
++	unsigned cmd;
++
++	for (i = 0; i < count; i++) {
++		cmd = table[i].cmd;
++
++		switch (cmd) {
++
++			case REGFLAG_DELAY:
++				if (table[i].count <= 10)
++					MDELAY(table[i].count);
++				else
++					MDELAY(table[i].count);
++				break;
++
++			case REGFLAG_UDELAY:
++				UDELAY(table[i].count);
++				break;
++
++			case REGFLAG_END_OF_TABLE:
++				break;
++
++			default:
++			dsi_set_cmdq_V22(cmdq, cmd, table[i].count, table[i].para_list, force_update);
++		}
++	}
++}
++
++
++static void lcm_set_util_funcs(const LCM_UTIL_FUNCS *util)
++{
++	memcpy(&lcm_util, util, sizeof(LCM_UTIL_FUNCS));
++}
++
++static void lcm_get_params(LCM_PARAMS *params)
++{
++	memset(params, 0, sizeof(LCM_PARAMS));
++
++    params->type   = LCM_TYPE_DSI;
++
++    params->width  = FRAME_WIDTH;
++    params->height = FRAME_HEIGHT;
++
++    // enable tearing-free
++    params->dbi.te_mode 			= LCM_DBI_TE_MODE_DISABLED;
++    //params->dbi.te_edge_polarity		= LCM_POLARITY_RISING;
++
++    #if (LCM_DSI_CMD_MODE)
++    params->dsi.mode   = CMD_MODE;
++    #else
++    params->dsi.mode   = SYNC_PULSE_VDO_MODE; //SYNC_PULSE_VDO_MODE;//BURST_VDO_MODE;
++    #endif
++
++    // DSI
++    /* Command mode setting */
++    //1 Three lane or Four lane
++    params->dsi.LANE_NUM				= LCM_FOUR_LANE;
++
++    //The following defined the fomat for data coming from LCD engine.
++    params->dsi.data_format.color_order = LCM_COLOR_ORDER_RGB;
++    params->dsi.data_format.trans_seq   = LCM_DSI_TRANS_SEQ_MSB_FIRST;
++    params->dsi.data_format.padding     = LCM_DSI_PADDING_ON_LSB;
++    params->dsi.data_format.format      = LCM_DSI_FORMAT_RGB888;
++
++    // Highly depends on LCD driver capability.
++    // Not support in MT6573
++    params->dsi.packet_size=256;
++    // Video mode setting
++    params->dsi.intermediat_buffer_num = 2;
++
++    params->dsi.PS=LCM_PACKED_PS_24BIT_RGB888;
++
++    params->dsi.word_count=FRAME_WIDTH*3;	//DSI CMD mode need set these two bellow params, different to 6577
++    //params->dsi.vertical_active_line=FRAME_HEIGHT;
++
++
++	params->dsi.vertical_sync_active				= 1;	//10
++	params->dsi.vertical_backporch = 43;
++	params->dsi.vertical_frontporch = 76;
++	params->dsi.vertical_active_line				= FRAME_HEIGHT;
++
++	params->dsi.horizontal_sync_active				= 4;
++	params->dsi.horizontal_backporch				= 20;
++	params->dsi.horizontal_frontporch				= 26;
++	params->dsi.horizontal_active_pixel				= FRAME_WIDTH;
++
++	params->dsi.PLL_CLOCK=502;	
++	/*params->dsi.esd_check_enable = 1;
++	params->dsi.customization_esd_check_enable = 1;
++	params->dsi.lcm_esd_check_table[0].cmd          = 0x0a;
++	params->dsi.lcm_esd_check_table[0].count        = 1;
++	params->dsi.lcm_esd_check_table[0].para_list[0] = 0x9C;	*/	
++}
++
++#ifdef BUILD_LK
++#ifndef CONFIG_FPGA_EARLY_PORTING
++#define lp3101_SLAVE_ADDR_WRITE  0x7C  
++static struct mt_i2c_t lp3101_i2c;
++
++static int lp3101_write_byte(kal_uint8 addr, kal_uint8 value)
++{
++	kal_uint32 ret_code = I2C_OK;
++	kal_uint8 write_data[2];
++	kal_uint16 len;
++
++	write_data[0] = addr;
++	write_data[1] = value;
++
++  lp3101_i2c.id = 1; /* I2C1; */
++	/* Since i2c will left shift 1 bit, we need to set FAN5405 I2C address to >>1 */
++  lp3101_i2c.addr = (lp3101_SLAVE_ADDR_WRITE >> 1);
++  lp3101_i2c.mode = ST_MODE;
++  lp3101_i2c.speed = 400;//100;
++	len = 2;
++
++  ret_code = i2c_write(&lp3101_i2c, write_data, len);
++	/* printf("%s: i2c_write: ret_code: %d\n", __func__, ret_code); */
++
++	return ret_code;
++}
++#else
++/* extern int mt8193_i2c_write(u16 addr, u32 data); */
++/* extern int mt8193_i2c_read(u16 addr, u32 *data); */
++
++/* #define TPS65132_write_byte(add, data)  mt8193_i2c_write(add, data) */
++/* #define TPS65132_read_byte(add)  mt8193_i2c_read(add) */
++
++#endif
++#endif
++
++static void lcm_init_power(void)
++{
++/*#ifndef MACH_FPGA
++#ifdef BUILD_LK
++	mt6325_upmu_set_rg_vgp1_en(1);
++#else
++	LCM_LOGI("%s, begin\n", __func__);
++	hwPowerOn(MT6325_POWER_LDO_VGP1, VOL_DEFAULT, "LCM_DRV");
++	LCM_LOGI("%s, end\n", __func__);
++#endif
++#endif*/
++}
++
++static void lcm_suspend_power(void)
++{
++/*#ifndef MACH_FPGA
++#ifdef BUILD_LK
++	mt6325_upmu_set_rg_vgp1_en(0);
++#else
++	LCM_LOGI("%s, begin\n", __func__);
++	hwPowerDown(MT6325_POWER_LDO_VGP1, "LCM_DRV");
++	LCM_LOGI("%s, end\n", __func__);
++#endif
++#endif*/
++}
++
++static void lcm_resume_power(void)
++{
++/*#ifndef MACH_FPGA
++#ifdef BUILD_LK
++	mt6325_upmu_set_rg_vgp1_en(1);
++#else
++	LCM_LOGI("%s, begin\n", __func__);
++	hwPowerOn(MT6325_POWER_LDO_VGP1, VOL_DEFAULT, "LCM_DRV");
++	LCM_LOGI("%s, end\n", __func__);
++#endif
++#endif*/
++}
++
++static void lcm_poweron(void)
++{
++	printk("====wys===lcm_poweron=start====\n");
++	SET_RESET_PIN(0);
++	aeon_gpio_set("aeon_lcd_bias_enp1");
++	aeon_gpio_set("aeon_lcd_bias_enn1");
++
++
++	MDELAY(20);
++	lp3101_poweron();
++	SET_RESET_PIN(1);
++	MDELAY(10);
++	SET_RESET_PIN(0);
++	MDELAY(10);
++
++	SET_RESET_PIN(1);
++	MDELAY(20);	
++	printk("====wys===lcm_poweron==end====\n");
++}
++
++static void lcm_init(void)
++{
++	push_table(0,init_setting, sizeof(init_setting) / sizeof(struct LCM_setting_table), 1);
++}
++
++static void lcm_suspend(void)
++{
++	printk(" SSD2092 lcm_suspend enter!\n");
++
++	push_table(0, lcm_suspend_setting, sizeof(lcm_suspend_setting) / sizeof(struct LCM_setting_table), 1);
++	MDELAY(10);
++	
++	SET_RESET_PIN(0);
++	aeon_gpio_set("aeon_lcd_bias_enn0");
++	aeon_gpio_set("aeon_lcd_bias_enp0");
++	printk(" SSD2092 lcm_suspend end!\n");
++}
++
++static void lcm_resume(void)
++{
++	lcm_poweron();
++	lcm_init();
++	printk("====wys===lcm_resume==end====\n");
++}
++
++
++static unsigned int lcm_compare_id(void)
++{
++
++        printk("%s,ssd2092.\n", __func__);
++
++
++#ifdef BUILD_LK
++	unsigned int id0,id1,id2,id3,id = 0;
++	unsigned char buffer[4];
++
++	read_reg_v2(0xA1, &buffer,4); 
++
++	id0 = buffer[0];
++	id1 = buffer[1];
++	id2 = buffer[2];
++	id3 = buffer[3];
++	id = (id0<<24)|(id1<<16)|(id2<<8)|(id3<<0);
++
++	LCM_LOGI("%s,ssd2092 debug: ssd2092 id = 0x%08x\n", __func__, id);
++
++	if (id == LCM_ID_SSD2092)
++		return 1;
++	else
++		return 0;
++		
++#else
++	return 1;
++	
++#endif
++}
++
++/* return TRUE: need recovery */
++/* return FALSE: No need recovery */
++
++LCM_DRIVER aeon_ssd2092_fhd_dsi_solomon_lcm_drv = 
++{
++    .name			= "aeon_ssd2092_fhd_dsi_solomon",
++	.set_util_funcs = lcm_set_util_funcs,
++	.get_params     = lcm_get_params,
++	.init           = lcm_init,
++	.compare_id = lcm_compare_id,
++	.init_power = lcm_init_power,
++	.resume_power = lcm_resume_power,
++	.suspend_power = lcm_suspend_power,
++	.resume         = lcm_resume,
++	.suspend        = lcm_suspend,
++};
+diff --git a/kernel-3.18/drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.o b/kernel-3.18/drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.o
+new file mode 100644
+index 00000000..e539e86e
+Binary files /dev/null and b/kernel-3.18/drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.o differ
+diff --git a/kernel-3.18/drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.su b/kernel-3.18/drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.su
+new file mode 100644
+index 00000000..6c75c373
+--- /dev/null
++++ b/kernel-3.18/drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.su
+@@ -0,0 +1,10 @@
++drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.c:569:13:lcm_init_power	0	static
++drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.c:654:21:lcm_compare_id	16	static
++drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.c:473:13:lcm_get_params	32	static
++drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.c:468:13:lcm_set_util_funcs	16	static
++drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.c:436:13:push_table.constprop	64	static
++drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.c:633:13:lcm_suspend	32	static
++drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.c:628:13:lcm_init	16	static
++drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.c:646:13:lcm_resume	32	static
++drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.c:582:13:lcm_suspend_power	0	static
++drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/aeon_ssd2092_fhd_dsi_solomon.c:595:13:lcm_resume_power	0	static
+diff --git a/kernel-3.18/drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/built-in.o b/kernel-3.18/drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/built-in.o
+new file mode 100644
+index 00000000..250793ee
+Binary files /dev/null and b/kernel-3.18/drivers/misc/mediatek/lcm/aeon_ssd2092_fhd_dsi_solomon/built-in.o differ
+diff --git a/kernel-3.18/drivers/misc/mediatek/m4u/2.0/Makefile b/kernel-3.18/drivers/misc/mediatek/m4u/2.0/Makefile
+index a8545350..3d91b74c 100644
+--- a/kernel-3.18/drivers/misc/mediatek/m4u/2.0/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/m4u/2.0/Makefile
+@@ -35,3 +35,5 @@ endif
+ endif
+ 
+ obj-y += m4u.o m4u_mva.o m4u_pgtable.o m4u_debug.o
++
++ccflags-y += -I$(srctree)/drivers/misc/mediatek/m4u/$(MTK_PLATFORM)
+diff --git a/kernel-3.18/drivers/misc/mediatek/m4u/mt6797/Makefile b/kernel-3.18/drivers/misc/mediatek/m4u/mt6797/Makefile
+index 22a57ca2..a0552f84 100644
+--- a/kernel-3.18/drivers/misc/mediatek/m4u/mt6797/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/m4u/mt6797/Makefile
+@@ -23,3 +23,5 @@ ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat
+ ccflags-y += -I$(srctree)/drivers/misc/mediatek/m4u/2.0
+ 
+ obj-$(CONFIG_MTK_M4U) += m4u_hw.o
++
++ccflags-y += -I$(srctree)/drivers/misc/mediatek/m4u/$(MTK_PLATFORM)
+diff --git a/kernel-3.18/drivers/misc/mediatek/mu3phy/Makefile b/kernel-3.18/drivers/misc/mediatek/mu3phy/Makefile
+index dccb5e73..5b54b95e 100644
+--- a/kernel-3.18/drivers/misc/mediatek/mu3phy/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/mu3phy/Makefile
+@@ -33,3 +33,5 @@ else
+ ccflags-y += -DUSB_ELBRUS
+ endif
+ obj-$(CONFIG_PROJECT_PHY) += $(subst ",,$(CONFIG_MTK_PLATFORM))/
++
++ccflags-y += -I$(srctree)/drivers/misc/mediatek/mu3phy
+diff --git a/kernel-3.18/drivers/misc/mediatek/nfc/Makefile b/kernel-3.18/drivers/misc/mediatek/nfc/Makefile
+index 1b305a11..a6d757ae 100644
+--- a/kernel-3.18/drivers/misc/mediatek/nfc/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/nfc/Makefile
+@@ -13,4 +13,4 @@
+ 
+ 
+ obj-y += $(subst ",,$(CONFIG_MTK_PLATFORM))/
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)/
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)/
+diff --git a/kernel-3.18/drivers/misc/mediatek/ssusb/Makefile b/kernel-3.18/drivers/misc/mediatek/ssusb/Makefile
+index 45f19723..dca085a9 100644
+--- a/kernel-3.18/drivers/misc/mediatek/ssusb/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/ssusb/Makefile
+@@ -13,7 +13,7 @@
+ 
+ #ccflags-y := -I$(src)/include
+ MTK_PLATFORM := $(subst ",,$(CONFIG_MTK_PLATFORM))
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include
+ subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
+ subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat
+ subdir-ccflags-y += -I$(srctree)/drivers/power/mt81xx
+diff --git a/kernel-3.18/drivers/misc/mediatek/ssw/Makefile b/kernel-3.18/drivers/misc/mediatek/ssw/Makefile
+index 2a3a4f95..a75ecfb9 100644
+--- a/kernel-3.18/drivers/misc/mediatek/ssw/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/ssw/Makefile
+@@ -14,7 +14,7 @@
+ SSW_DIR=$(srctree)/drivers/misc/mediatek/ssw/$(subst ",,$(CONFIG_CUSTOM_KERNEL_SSW))
+ ssw_exist=$(shell if [ -d ${SSW_DIR} ]; then echo "y"; else echo "n"; fi;)
+ ifeq ($(ssw_exist), y)
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/ssw/inc
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/ssw/inc
+ obj-y += $(subst ",,$(CONFIG_CUSTOM_KERNEL_SSW))/
+ $(warning "SSW_DIR=$(SSW_DIR)ssw_exist=$(ssw_exist)")
+ else
+diff --git a/kernel-3.18/drivers/misc/mediatek/trustzone/Makefile b/kernel-3.18/drivers/misc/mediatek/trustzone/Makefile
+index 17e77144..0bb06891 100644
+--- a/kernel-3.18/drivers/misc/mediatek/trustzone/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/trustzone/Makefile
+@@ -13,7 +13,7 @@
+ 
+ # TZ KREE driver makefile.
+ 
+-ccflags-y += -I$(srctree)/include -I$(srctree)/include/trustzone -Werror
++ccflags-y += -I$(srctree)/include -I$(srctree)/include/trustzone 
+ 
+ # Build as module
+ #obj-m += tz_module.o
+diff --git a/kernel-3.18/drivers/misc/mediatek/uart/mt6797/Makefile b/kernel-3.18/drivers/misc/mediatek/uart/mt6797/Makefile
+index b27456b2..61558bd4 100644
+--- a/kernel-3.18/drivers/misc/mediatek/uart/mt6797/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/uart/mt6797/Makefile
+@@ -18,3 +18,5 @@ ccflags-y += -I$(srctree)/drivers/misc/mediatek/uart
+ ccflags-y += -I$(srctree)/drivers/misc/mediatek/base/power/$(CONFIG_MTK_PLATFORM)
+ 
+ obj-$(CONFIG_MTK_SERIAL) := platform_uart.o
++
++ccflags-y += -I$(srctree)/drivers/misc/mediatek/uart/$(MTK_PLATFORM)
+diff --git a/kernel-3.18/drivers/misc/mediatek/usb11/Makefile b/kernel-3.18/drivers/misc/mediatek/usb11/Makefile
+index 2d06d0d3..9e283aef 100644
+--- a/kernel-3.18/drivers/misc/mediatek/usb11/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/usb11/Makefile
+@@ -13,3 +13,5 @@ obj-$(CONFIG_ARCH_MT8167) += $(subst ",,$(CONFIG_MTK_PLATFORM))/
+ 
+ # QMU Realted
+ obj-$(CONFIG_MTK_MUSBFSH_QMU_SUPPORT) += mtk11_qmu.o musbfsh_qmu.o
++
++ccflags-y += -I$(srctree)/drivers/misc/mediatek/usb11
+diff --git a/kernel-3.18/drivers/misc/mediatek/video/common/Makefile b/kernel-3.18/drivers/misc/mediatek/video/common/Makefile
+index 64299b0c..fb3ea28d 100644
+--- a/kernel-3.18/drivers/misc/mediatek/video/common/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/video/common/Makefile
+@@ -124,3 +124,5 @@ endif
+ ifeq ($(CONFIG_MTK_DITHERING_SUPPORT), y)
+ ccflags-y += -DDITHERING_SUPPORT
+ endif
++
++ccflags-y += -I$(srctree)/drivers/misc/mediatek/video/$(MTK_PLATFORM)/videox -I$(srctree)/drivers/misc/mediatek/video/$(MTK_PLATFORM)/dispsys
+diff --git a/kernel-3.18/drivers/misc/mediatek/video/mt6797/Makefile b/kernel-3.18/drivers/misc/mediatek/video/mt6797/Makefile
+index 7171eb47..1f446249 100644
+--- a/kernel-3.18/drivers/misc/mediatek/video/mt6797/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/video/mt6797/Makefile
+@@ -19,3 +19,5 @@
+ 
+ obj-$(CONFIG_MTK_FB) += dispsys/
+ obj-$(CONFIG_MTK_FB) += videox/
++
++ccflags-y += -I$(srctree)/drivers/misc/mediatek/video/$(MTK_PLATFORM)/videox -I$(srctree)/drivers/misc/mediatek/video/$(MTK_PLATFORM)/dispsys
+diff --git a/kernel-3.18/drivers/misc/mediatek/video/mt6797/dispsys/Makefile b/kernel-3.18/drivers/misc/mediatek/video/mt6797/dispsys/Makefile
+index 2fd9c63c..33121508 100644
+--- a/kernel-3.18/drivers/misc/mediatek/video/mt6797/dispsys/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/video/mt6797/dispsys/Makefile
+@@ -92,3 +92,5 @@ ccflags-y +=	-DHDMI_MT8193_SUPPORT
+ endif
+ 
+ # EOF
++
++ccflags-y += -I$(srctree)/drivers/misc/mediatek/video/$(MTK_PLATFORM)/dispsys
+diff --git a/kernel-3.18/drivers/misc/mediatek/video/mt6797/videox/Makefile b/kernel-3.18/drivers/misc/mediatek/video/mt6797/videox/Makefile
+index aa4d46b6..a67b2dcf 100644
+--- a/kernel-3.18/drivers/misc/mediatek/video/mt6797/videox/Makefile
++++ b/kernel-3.18/drivers/misc/mediatek/video/mt6797/videox/Makefile
+@@ -83,3 +83,5 @@ ifeq ($(MTK_MIRAVISION_SUPPORT), yes)
+ endif
+ 
+ ccflags-$(CONFIG_MTK_LCM_DEVICE_TREE_SUPPORT) += -DMTK_LCM_DEVICE_TREE_SUPPORT
++
++ccflags-y += -I$(srctree)/drivers/misc/mediatek/video/$(MTK_PLATFORM)/videox -I$(srctree)/drivers/misc/mediatek/video/$(MTK_PLATFORM)/dispsys
+diff --git a/kernel-3.18/drivers/mmc/Makefile b/kernel-3.18/drivers/mmc/Makefile
+index f6e70711..bd96f5c5 100644
+--- a/kernel-3.18/drivers/mmc/Makefile
++++ b/kernel-3.18/drivers/mmc/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for the kernel mmc device drivers.
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ subdir-ccflags-$(CONFIG_MMC_DEBUG) := -DDEBUG
+ 
+ obj-$(CONFIG_MMC)		+= core/
+diff --git a/kernel-3.18/drivers/mmc/host/mediatek/mt6797/Makefile b/kernel-3.18/drivers/mmc/host/mediatek/mt6797/Makefile
+index 9a18e18b..b63fb23a 100644
+--- a/kernel-3.18/drivers/mmc/host/mediatek/mt6797/Makefile
++++ b/kernel-3.18/drivers/mmc/host/mediatek/mt6797/Makefile
+@@ -39,3 +39,4 @@ endif
+ ifeq ($(CONFIG_MTK_EMMC_SUPPORT_OTP),y)
+ obj-$(CONFIG_MMC_MTK) += emmc_otp.o
+ endif
++ccflags-y += -I$(srctree)/drivers/mmc/host/mediatek/$(MTK_PLATFORM)
+diff --git a/kernel-3.18/drivers/mtd/Makefile b/kernel-3.18/drivers/mtd/Makefile
+index 4ef5e711..135e5c8e 100644
+--- a/kernel-3.18/drivers/mtd/Makefile
++++ b/kernel-3.18/drivers/mtd/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for the memory technology device drivers.
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ # Core functionality.
+ obj-$(CONFIG_MTD)		+= mtd.o
+diff --git a/kernel-3.18/drivers/of/Makefile b/kernel-3.18/drivers/of/Makefile
+index 7cb9c144..50786982 100644
+--- a/kernel-3.18/drivers/of/Makefile
++++ b/kernel-3.18/drivers/of/Makefile
+@@ -1,4 +1,4 @@
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-y = base.o device.o platform.o
+ obj-$(CONFIG_OF_DYNAMIC) += dynamic.o
+diff --git a/kernel-3.18/drivers/pinctrl/Makefile b/kernel-3.18/drivers/pinctrl/Makefile
+index 4027b270..bc6f8da2 100644
+--- a/kernel-3.18/drivers/pinctrl/Makefile
++++ b/kernel-3.18/drivers/pinctrl/Makefile
+@@ -1,6 +1,6 @@
+ # generic pinmux support
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ ccflags-$(CONFIG_DEBUG_PINCTRL)	+= -DDEBUG
+ 
+ obj-$(CONFIG_PINCTRL)		+= core.o pinctrl-utils.o
+diff --git a/kernel-3.18/drivers/power/Makefile b/kernel-3.18/drivers/power/Makefile
+index 9f9be35b..9f3bdfe2 100644
+--- a/kernel-3.18/drivers/power/Makefile
++++ b/kernel-3.18/drivers/power/Makefile
+@@ -1,5 +1,5 @@
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ ccflags-$(CONFIG_POWER_SUPPLY_DEBUG) := -DDEBUG
+ 
+ power_supply-y				:= power_supply_core.o
+diff --git a/kernel-3.18/drivers/power/mediatek/Makefile b/kernel-3.18/drivers/power/mediatek/Makefile
+index d2013671..52f4d627 100644
+--- a/kernel-3.18/drivers/power/mediatek/Makefile
++++ b/kernel-3.18/drivers/power/mediatek/Makefile
+@@ -13,9 +13,9 @@
+ 
+ 
+ MTK_PLATFORM := $(subst ",,$(CONFIG_MTK_PLATFORM))
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat
+ 
+ obj-$(CONFIG_MTK_PUMP_EXPRESS_PLUS_SUPPORT) += mtk_pep_intf.o
+ obj-$(CONFIG_MTK_PUMP_EXPRESS_PLUS_20_SUPPORT) += mtk_pep20_intf.o
+diff --git a/kernel-3.18/drivers/power/mt81xx/Makefile b/kernel-3.18/drivers/power/mt81xx/Makefile
+index 374b436a..0b6061c8 100644
+--- a/kernel-3.18/drivers/power/mt81xx/Makefile
++++ b/kernel-3.18/drivers/power/mt81xx/Makefile
+@@ -12,9 +12,9 @@
+ #
+ 
+ MTK_PLATFORM := $(subst ",,$(CONFIG_MTK_PLATFORM))
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat
+ 
+ 
+ obj-$(CONFIG_MTK_SMART_BATTERY) += mt_battery_meter.o mt_battery_common.o mt_switch_charging.o mt_bm_data.o
+diff --git a/kernel-3.18/drivers/regulator/Makefile b/kernel-3.18/drivers/regulator/Makefile
+index fe3e80dd..88423440 100644
+--- a/kernel-3.18/drivers/regulator/Makefile
++++ b/kernel-3.18/drivers/regulator/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for regulator drivers.
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-$(CONFIG_REGULATOR) += core.o dummy.o fixed-helper.o helpers.o devres.o
+ obj-$(CONFIG_OF) += of_regulator.o
+diff --git a/kernel-3.18/drivers/rtc/Makefile b/kernel-3.18/drivers/rtc/Makefile
+index 8e79fa3f..2b50c171 100644
+--- a/kernel-3.18/drivers/rtc/Makefile
++++ b/kernel-3.18/drivers/rtc/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for RTC class/drivers.
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ ccflags-$(CONFIG_RTC_DEBUG)	:= -DDEBUG
+ 
+ obj-$(CONFIG_RTC_LIB)		+= rtc-lib.o
+diff --git a/kernel-3.18/drivers/scsi/aic7xxx/Makefile b/kernel-3.18/drivers/scsi/aic7xxx/Makefile
+index 741d8186..c86a2fca 100644
+--- a/kernel-3.18/drivers/scsi/aic7xxx/Makefile
++++ b/kernel-3.18/drivers/scsi/aic7xxx/Makefile
+@@ -35,7 +35,7 @@ aic79xx-y					+= aic79xx_osm.o	\
+ 
+ ccflags-y += -Idrivers/scsi
+ ifdef WARNINGS_BECOME_ERRORS
+-ccflags-y += -Werror
++ccflags-y += 
+ endif
+ 
+ # Files generated that shall be removed upon make clean
+diff --git a/kernel-3.18/drivers/scsi/lpfc/Makefile b/kernel-3.18/drivers/scsi/lpfc/Makefile
+index e2516ba8..5379ef36 100644
+--- a/kernel-3.18/drivers/scsi/lpfc/Makefile
++++ b/kernel-3.18/drivers/scsi/lpfc/Makefile
+@@ -23,7 +23,7 @@ ccflags-$(GCOV) := -fprofile-arcs -ftest-coverage
+ ccflags-$(GCOV) += -O0
+ 
+ ifdef WARNINGS_BECOME_ERRORS
+-ccflags-y += -Werror
++ccflags-y += 
+ endif
+ 
+ obj-$(CONFIG_SCSI_LPFC) := lpfc.o
+diff --git a/kernel-3.18/drivers/soc/Makefile b/kernel-3.18/drivers/soc/Makefile
+index ce400c87..d5fcc89a 100644
+--- a/kernel-3.18/drivers/soc/Makefile
++++ b/kernel-3.18/drivers/soc/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for the Linux Kernel SOC specific device drivers.
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-$(CONFIG_SOC_MEDIATEK)	+= mediatek/
+ obj-$(CONFIG_ARCH_QCOM)		+= qcom/
+diff --git a/kernel-3.18/drivers/spi/Makefile b/kernel-3.18/drivers/spi/Makefile
+index 19c62be4..325410e8 100644
+--- a/kernel-3.18/drivers/spi/Makefile
++++ b/kernel-3.18/drivers/spi/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for kernel SPI drivers.
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ ccflags-$(CONFIG_SPI_DEBUG) := -DDEBUG
+ 
+ subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)
+diff --git a/kernel-3.18/drivers/staging/Makefile b/kernel-3.18/drivers/staging/Makefile
+index 1e835ba3..637ed237 100644
+--- a/kernel-3.18/drivers/staging/Makefile
++++ b/kernel-3.18/drivers/staging/Makefile
+@@ -1,6 +1,6 @@
+ # Makefile for staging directory
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ # fix for build system bug...
+ obj-$(CONFIG_STAGING)		+= staging.o
+diff --git a/kernel-3.18/drivers/thermal/Makefile b/kernel-3.18/drivers/thermal/Makefile
+index dbc068f6..1e8c2d09 100644
+--- a/kernel-3.18/drivers/thermal/Makefile
++++ b/kernel-3.18/drivers/thermal/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for sensor chip drivers.
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-$(CONFIG_THERMAL)		+= thermal_sys.o
+ thermal_sys-y			+= thermal_core.o
+diff --git a/kernel-3.18/drivers/trusty/Makefile b/kernel-3.18/drivers/trusty/Makefile
+index 116438c9..672358e5 100644
+--- a/kernel-3.18/drivers/trusty/Makefile
++++ b/kernel-3.18/drivers/trusty/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for trusty components
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-$(CONFIG_TRUSTY)		+= trusty.o
+ obj-$(CONFIG_TRUSTY)		+= trusty-irq.o
+diff --git a/kernel-3.18/drivers/tty/Makefile b/kernel-3.18/drivers/tty/Makefile
+index 4442deb6..9e3d5b32 100644
+--- a/kernel-3.18/drivers/tty/Makefile
++++ b/kernel-3.18/drivers/tty/Makefile
+@@ -1,4 +1,4 @@
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-$(CONFIG_TTY)		+= tty_io.o n_tty.o tty_ioctl.o tty_ldisc.o \
+ 				   tty_buffer.o tty_port.o tty_mutex.o tty_ldsem.o
+diff --git a/kernel-3.18/drivers/usb/Makefile b/kernel-3.18/drivers/usb/Makefile
+index 53214c31..acc7e15e 100644
+--- a/kernel-3.18/drivers/usb/Makefile
++++ b/kernel-3.18/drivers/usb/Makefile
+@@ -4,7 +4,7 @@
+ 
+ # Object files in subdirectories
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-$(CONFIG_USB)		+= core/
+ 
+diff --git a/kernel-3.18/drivers/video/Makefile b/kernel-3.18/drivers/video/Makefile
+index 6e37522c..0edea72b 100644
+--- a/kernel-3.18/drivers/video/Makefile
++++ b/kernel-3.18/drivers/video/Makefile
+@@ -1,4 +1,4 @@
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-$(CONFIG_VGASTATE)            += vgastate.o
+ obj-$(CONFIG_HDMI)                += hdmi.o
+diff --git a/kernel-3.18/drivers/watchdog/Makefile b/kernel-3.18/drivers/watchdog/Makefile
+index b8676c03..2060c71a 100644
+--- a/kernel-3.18/drivers/watchdog/Makefile
++++ b/kernel-3.18/drivers/watchdog/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for the WatchDog device drivers.
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ # The WatchDog Timer Driver Core.
+ watchdog-objs	+= watchdog_core.o watchdog_dev.o
+@@ -191,8 +191,8 @@ obj-$(CONFIG_MENF21BMC_WATCHDOG) += menf21bmc_wdt.o
+ 
+ # mediatek
+ ifeq ($(CONFIG_MEDIATEK_WATCHDOG), y)
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
+ else
+ obj-$(CONFIG_MEDIATEK_SOLUTION) += mediatek/
+ endif
+diff --git a/kernel-3.18/drivers/watchdog/mediatek/Makefile b/kernel-3.18/drivers/watchdog/mediatek/Makefile
+index a0f7df56..e510270c 100644
+--- a/kernel-3.18/drivers/watchdog/mediatek/Makefile
++++ b/kernel-3.18/drivers/watchdog/mediatek/Makefile
+@@ -13,8 +13,8 @@
+ 
+ #$(call all-subdir-src-or-makefile)
+ MTK_PLATFORM := $(subst ",,$(CONFIG_MTK_PLATFORM))
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
+ 
+ obj-$(CONFIG_MTK_WATCHDOG)		+= wdk/
+ 
+diff --git a/kernel-3.18/fs/Makefile b/kernel-3.18/fs/Makefile
+index 42be32c8..25c0635a 100644
+--- a/kernel-3.18/fs/Makefile
++++ b/kernel-3.18/fs/Makefile
+@@ -5,7 +5,7 @@
+ # Rewritten to use lists instead of if-statements.
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-y :=	open.o read_write.o file_table.o super.o \
+ 		char_dev.o stat.o exec.o pipe.o namei.o fcntl.o \
+diff --git a/kernel-3.18/include/linux/log2.h b/kernel-3.18/include/linux/log2.h
+index fd7ff3d9..14458fdd 100644
+--- a/kernel-3.18/include/linux/log2.h
++++ b/kernel-3.18/include/linux/log2.h
+@@ -18,7 +18,7 @@
+ /*
+  * deal with unrepresentable constant logarithms
+  */
+-extern __attribute__((const, noreturn))
++extern __attribute__((const))
+ int ____ilog2_NaN(void);
+ 
+ /*
+diff --git a/kernel-3.18/init/Makefile b/kernel-3.18/init/Makefile
+index 8030d528..ab3db641 100644
+--- a/kernel-3.18/init/Makefile
++++ b/kernel-3.18/init/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for the linux kernel.
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ ccflags-y += -Idrivers/misc/mediatek/mtprof/
+ 
+ obj-y                          := main.o version.o mounts.o
+diff --git a/kernel-3.18/kernel/Makefile b/kernel-3.18/kernel/Makefile
+index 659f67de..cd60af27 100644
+--- a/kernel-3.18/kernel/Makefile
++++ b/kernel-3.18/kernel/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for the linux kernel.
+ #
+ 
+-subdir-ccflags-y += -Werror -Wno-error=maybe-uninitialized
++subdir-ccflags-y +=  -Wno-error=maybe-uninitialized
+ 
+ subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/mtprof/
+ subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/hibcore
+diff --git a/kernel-3.18/lib/Makefile b/kernel-3.18/lib/Makefile
+index 524025cc..0318c25a 100644
+--- a/kernel-3.18/lib/Makefile
++++ b/kernel-3.18/lib/Makefile
+@@ -8,7 +8,7 @@ KBUILD_CFLAGS = $(subst -pg,,$(ORIG_CFLAGS))
+ endif
+ subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ lib-y := ctype.o string.o vsprintf.o cmdline.o \
+ 	 rbtree.o radix-tree.o dump_stack.o timerqueue.o\
+diff --git a/kernel-3.18/mm/Makefile b/kernel-3.18/mm/Makefile
+index 4a46a3da..67ab735b 100644
+--- a/kernel-3.18/mm/Makefile
++++ b/kernel-3.18/mm/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for the linux memory manager.
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include
+ 
+ mmu-y			:= nommu.o
+diff --git a/kernel-3.18/net/Makefile b/kernel-3.18/net/Makefile
+index cb223a1d..acc577a9 100644
+--- a/kernel-3.18/net/Makefile
++++ b/kernel-3.18/net/Makefile
+@@ -5,7 +5,7 @@
+ # Rewritten to use lists instead of if-statements.
+ #
+ 
+-subdir-ccflags-y += -Werror -Wno-error=maybe-uninitialized
++subdir-ccflags-y +=  -Wno-error=maybe-uninitialized
+ 
+ obj-y	:= nonet.o
+ 
+diff --git a/kernel-3.18/security/Makefile b/kernel-3.18/security/Makefile
+index 6f041481..96bcca5e 100644
+--- a/kernel-3.18/security/Makefile
++++ b/kernel-3.18/security/Makefile
+@@ -2,7 +2,7 @@
+ # Makefile for the kernel security code
+ #
+ 
+-subdir-ccflags-y += -Werror
++subdir-ccflags-y += 
+ 
+ obj-$(CONFIG_KEYS)			+= keys/
+ subdir-$(CONFIG_SECURITY_SELINUX)	+= selinux
+diff --git a/kernel-3.18/sound/Makefile b/kernel-3.18/sound/Makefile
+index 2feb310b..0e009ab0 100644
+--- a/kernel-3.18/sound/Makefile
++++ b/kernel-3.18/sound/Makefile
+@@ -1,7 +1,7 @@
+ # Makefile for the Linux sound card driver
+ #
+ 
+-subdir-ccflags-y += -Werror -Wno-error=maybe-uninitialized
++subdir-ccflags-y +=  -Wno-error=maybe-uninitialized
+ 
+ obj-$(CONFIG_SOUND) += soundcore.o
+ obj-$(CONFIG_SOUND_PRIME) += sound_firmware.o
+diff --git a/kernel-3.18/sound/soc/codecs/Makefile b/kernel-3.18/sound/soc/codecs/Makefile
+index 521e76d6..88cc8dde 100644
+--- a/kernel-3.18/sound/soc/codecs/Makefile
++++ b/kernel-3.18/sound/soc/codecs/Makefile
+@@ -1,4 +1,4 @@
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include
+ 
+ snd-soc-88pm860x-objs := 88pm860x-codec.o
+ snd-soc-ab8500-codec-objs := ab8500-codec.o
+diff --git a/kernel-3.18/sound/soc/mediatek/Makefile b/kernel-3.18/sound/soc/mediatek/Makefile
+index a8e84c13..d049b7bf 100644
+--- a/kernel-3.18/sound/soc/mediatek/Makefile
++++ b/kernel-3.18/sound/soc/mediatek/Makefile
+@@ -27,21 +27,21 @@ subdir-ccflags-y += -DAUDIO_USING_WRAP_DRIVER
+ subdir-ccflags-y += -D_MT_IDLE_HEADER
+ 
+ # include path
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/base/power/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/scp/$(MTK_PLATFORM)/
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/base/power/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/scp/$(MTK_PLATFORM)/
+ 
+ # Common include path
+-subdir-ccflags-y += -Werror -I$(src)/common
++subdir-ccflags-y +=  -I$(src)/common
+ 
+ # PMIC include path
+-subdir-ccflags-y += -Werror -I$(src)/codec/$(MTK_CODEC)
++subdir-ccflags-y +=  -I$(src)/codec/$(MTK_CODEC)
+ 
+ # AP include path
+-subdir-ccflags-y += -Werror -I$(src)/$(MTK_PLATFORM)
++subdir-ccflags-y +=  -I$(src)/$(MTK_PLATFORM)
+ 
+ # Update pmic built flow to avoid codec init later than codec probe
+ obj-y += common/
+diff --git a/kernel-3.18/sound/soc/mediatek/common/Makefile b/kernel-3.18/sound/soc/mediatek/common/Makefile
+index d5c821d4..d991e5de 100644
+--- a/kernel-3.18/sound/soc/mediatek/common/Makefile
++++ b/kernel-3.18/sound/soc/mediatek/common/Makefile
+@@ -13,9 +13,9 @@
+ 
+ # Old kernel architecture
+ MTK_PLATFORM := $(subst ",,$(CONFIG_MTK_PLATFORM))
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat
+ obj-y += auddrv_devtree_parser.o
+ obj-y += auddrv_underflow_mach.o
+ 
+diff --git a/kernel-3.18/sound/soc/mediatek/mt_soc_audio_6580/Makefile b/kernel-3.18/sound/soc/mediatek/mt_soc_audio_6580/Makefile
+index 0dcb8de2..38e6377f 100644
+--- a/kernel-3.18/sound/soc/mediatek/mt_soc_audio_6580/Makefile
++++ b/kernel-3.18/sound/soc/mediatek/mt_soc_audio_6580/Makefile
+@@ -13,10 +13,10 @@
+ 
+ # MTK Platform Support
+ MTK_PLATFORM := $(subst ",,$(CONFIG_MTK_PLATFORM))
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)
+ 
+ EXTRA_CFLAGS := -I$(src)/../common
+ obj-y += AudDrv_Afe.o AudDrv_Ana.o AudDrv_Clk.o AudDrv_Gpio.o
+diff --git a/kernel-3.18/sound/soc/mediatek/mt_soc_audio_6750/Makefile b/kernel-3.18/sound/soc/mediatek/mt_soc_audio_6750/Makefile
+index 3ec95a17..40ca9ef2 100644
+--- a/kernel-3.18/sound/soc/mediatek/mt_soc_audio_6750/Makefile
++++ b/kernel-3.18/sound/soc/mediatek/mt_soc_audio_6750/Makefile
+@@ -13,14 +13,14 @@
+ 
+ # MTK Platform Support
+ MTK_PLATFORM := $(subst ",,$(CONFIG_MTK_PLATFORM))
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat
+ 
+ COMMON_CFLAGS := -I$(src)/../common
+ ccflags-y  += $(COMMON_CFLAGS)
+-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)
+-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/base/power/include
++ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)
++ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/base/power/include
+ ccflags-y += -DAUDIO_USING_WRAP_DRIVER
+ ccflags-y += -D_GIT318_READY
+ ccflags-y += -D_WCN_SUPPORT
+diff --git a/kernel-3.18/sound/soc/mediatek/mt_soc_audio_6755/Makefile b/kernel-3.18/sound/soc/mediatek/mt_soc_audio_6755/Makefile
+index 44dfcdfe..5f6d2328 100644
+--- a/kernel-3.18/sound/soc/mediatek/mt_soc_audio_6755/Makefile
++++ b/kernel-3.18/sound/soc/mediatek/mt_soc_audio_6755/Makefile
+@@ -14,11 +14,11 @@
+ # MTK Platform Support
+ 
+ MTK_PLATFORM := $(subst ",,$(CONFIG_MTK_PLATFORM))
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat
+-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)
+-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/base/power/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat
++ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)
++ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/base/power/include
+ ccflags-y += -DAUDIO_USING_WRAP_DRIVER
+ ccflags-y += -D_GIT318_READY
+ ccflags-y += -D_WCN_SUPPORT
+diff --git a/kernel-3.18/sound/soc/mediatek/mt_soc_audio_6797/Makefile b/kernel-3.18/sound/soc/mediatek/mt_soc_audio_6797/Makefile
+index d1b7cdd1..bf54622d 100644
+--- a/kernel-3.18/sound/soc/mediatek/mt_soc_audio_6797/Makefile
++++ b/kernel-3.18/sound/soc/mediatek/mt_soc_audio_6797/Makefile
+@@ -14,12 +14,12 @@
+ # MTK Platform Support
+ MTK_PLATFORM := $(subst ",,$(CONFIG_MTK_PLATFORM))
+ # include path
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/base/power/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/scp/mt6797/
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/base/power/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/scp/mt6797/
+ # flags for not ready feature, uncomment after ready
+ ccflags-y += -D_GIT318_READY
+ ccflags-y += -D_GIT318_PMIC_READY
+diff --git a/kernel-3.18/sound/soc/mediatek/mt_soc_audio_8127/Makefile b/kernel-3.18/sound/soc/mediatek/mt_soc_audio_8127/Makefile
+index 97542560..7d3db521 100644
+--- a/kernel-3.18/sound/soc/mediatek/mt_soc_audio_8127/Makefile
++++ b/kernel-3.18/sound/soc/mediatek/mt_soc_audio_8127/Makefile
+@@ -1,10 +1,10 @@
+ # MTK Platform Support
+ 
+ MTK_PLATFORM := $(subst ",,$(CONFIG_MTK_PLATFORM))
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat
+-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat
++ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)
+ # ccflags-y += -D_GIT318_READY
+ # ccflags-y += -D_GIT318_PMIC_READY
+ ccflags-y += -D_WCN_SUPPORT
+diff --git a/kernel-3.18/sound/soc/mediatek/mt_soc_audio_8163/Makefile b/kernel-3.18/sound/soc/mediatek/mt_soc_audio_8163/Makefile
+index 05fba1ee..d518bca3 100644
+--- a/kernel-3.18/sound/soc/mediatek/mt_soc_audio_8163/Makefile
++++ b/kernel-3.18/sound/soc/mediatek/mt_soc_audio_8163/Makefile
+@@ -14,10 +14,10 @@
+ # MTK Platform Support
+ 
+ MTK_PLATFORM := $(subst ",,$(CONFIG_MTK_PLATFORM))
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat
+-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat
++ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)
+ # ccflags-y += -D_GIT318_READY
+ # ccflags-y += -D_GIT318_PMIC_READY
+ ccflags-y += -D_WCN_SUPPORT
+diff --git a/kernel-3.18/sound/soc/mediatek/mt_soc_audio_8167/Makefile b/kernel-3.18/sound/soc/mediatek/mt_soc_audio_8167/Makefile
+index 158a9a41..ade766b2 100644
+--- a/kernel-3.18/sound/soc/mediatek/mt_soc_audio_8167/Makefile
++++ b/kernel-3.18/sound/soc/mediatek/mt_soc_audio_8167/Makefile
+@@ -1,8 +1,8 @@
+ MTK_PLATFORM := $(subst ",,$(CONFIG_MTK_PLATFORM))
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)
+ 
+ snd-soc-mt8167-pcm-objs := \
+     mtk-afe-pcm.o mtk-afe-util.o mtk-afe-controls.o mtk-afe-debug.o
+diff --git a/kernel-3.18/sound/soc/mediatek/mt_soc_audio_8173/Makefile b/kernel-3.18/sound/soc/mediatek/mt_soc_audio_8173/Makefile
+index 85756f8c..7d0c9e04 100644
+--- a/kernel-3.18/sound/soc/mediatek/mt_soc_audio_8173/Makefile
++++ b/kernel-3.18/sound/soc/mediatek/mt_soc_audio_8173/Makefile
+@@ -1,8 +1,8 @@
+ MTK_PLATFORM := $(subst ",,$(CONFIG_MTK_PLATFORM))
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)
+ 
+ snd-soc-mt8173-pcm-objs := \
+     mt_afe_reg.o mt_afe_clk.o mt_afe_control.o mt_afe_connection.o mt_afe_debug.o \
+diff --git a/kernel-3.18/sound/soc/mediatek/mt_soc_audio_v3/Makefile b/kernel-3.18/sound/soc/mediatek/mt_soc_audio_v3/Makefile
+index 60a4aa3a..c1eca55d 100644
+--- a/kernel-3.18/sound/soc/mediatek/mt_soc_audio_v3/Makefile
++++ b/kernel-3.18/sound/soc/mediatek/mt_soc_audio_v3/Makefile
+@@ -13,10 +13,10 @@
+ 
+ # MTK Platform Support
+ MTK_PLATFORM := $(subst ",,$(CONFIG_MTK_PLATFORM))
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
+-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat
+-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
++subdir-ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/include/mt-plat
++ccflags-y +=  -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)
+ ccflags-y += -D_GIT318_READY
+ ccflags-y += -D_GIT318_PMIC_READY
+ ccflags-y += -D_WCN_SUPPORT
+diff --git a/kernel-3.18/tools/lib/api/Makefile b/kernel-3.18/tools/lib/api/Makefile
+index 36c08b1f..f4ad28ae 100644
+--- a/kernel-3.18/tools/lib/api/Makefile
++++ b/kernel-3.18/tools/lib/api/Makefile
+@@ -21,7 +21,7 @@ LIB_OBJS += $(OUTPUT)fd/array.o
+ 
+ LIBFILE = libapikfs.a
+ 
+-CFLAGS = -ggdb3 -Wall -Wextra -std=gnu99 -Werror -O6 -D_FORTIFY_SOURCE=2 $(EXTRA_WARNINGS) $(EXTRA_CFLAGS) -fPIC
++CFLAGS = -ggdb3 -Wall -Wextra -std=gnu99  -O6 -D_FORTIFY_SOURCE=2 $(EXTRA_WARNINGS) $(EXTRA_CFLAGS) -fPIC
+ EXTLIBS = -lelf -lpthread -lrt -lm
+ ALL_CFLAGS = $(CFLAGS) $(BASIC_CFLAGS) -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64
+ ALL_LDFLAGS = $(LDFLAGS)
+diff --git a/kernel-3.18/tools/perf/config/Makefile b/kernel-3.18/tools/perf/config/Makefile
+index 58f60919..00c25b89 100644
+--- a/kernel-3.18/tools/perf/config/Makefile
++++ b/kernel-3.18/tools/perf/config/Makefile
+@@ -99,7 +99,7 @@ endif
+ 
+ # Treat warnings as errors unless directed not to
+ ifneq ($(WERROR),0)
+-  CFLAGS += -Werror
++  CFLAGS += 
+ endif
+ 
+ ifndef DEBUG
+diff --git a/kernel-3.18/tools/perf/config/feature-checks/Makefile b/kernel-3.18/tools/perf/config/feature-checks/Makefile
+index 72ab2984..799180cf 100644
+--- a/kernel-3.18/tools/perf/config/feature-checks/Makefile
++++ b/kernel-3.18/tools/perf/config/feature-checks/Makefile
+@@ -39,16 +39,16 @@ BUILD = $(CC) $(CFLAGS) -o $(OUTPUT)$@ $(patsubst %.bin,%.c,$@) $(LDFLAGS)
+ ###############################
+ 
+ test-all.bin:
+-	$(BUILD) -Werror -fstack-protector-all -O2 -Werror -D_FORTIFY_SOURCE=2 -ldw -lelf -lnuma -lelf -laudit -I/usr/include/slang -lslang $(shell $(PKG_CONFIG) --libs --cflags gtk+-2.0 2>/dev/null) $(FLAGS_PERL_EMBED) $(FLAGS_PYTHON_EMBED) -DPACKAGE='"perf"' -lbfd -ldl
++	$(BUILD)  -fstack-protector-all -O2  -D_FORTIFY_SOURCE=2 -ldw -lelf -lnuma -lelf -laudit -I/usr/include/slang -lslang $(shell $(PKG_CONFIG) --libs --cflags gtk+-2.0 2>/dev/null) $(FLAGS_PERL_EMBED) $(FLAGS_PYTHON_EMBED) -DPACKAGE='"perf"' -lbfd -ldl
+ 
+ test-hello.bin:
+ 	$(BUILD)
+ 
+ test-stackprotector-all.bin:
+-	$(BUILD) -Werror -fstack-protector-all
++	$(BUILD)  -fstack-protector-all
+ 
+ test-fortify-source.bin:
+-	$(BUILD) -O2 -Werror -D_FORTIFY_SOURCE=2
++	$(BUILD) -O2  -D_FORTIFY_SOURCE=2
+ 
+ test-bionic.bin:
+ 	$(BUILD)
+@@ -129,7 +129,7 @@ test-libdw-dwarf-unwind.bin:
+ 	$(BUILD)
+ 
+ test-sync-compare-and-swap.bin:
+-	$(BUILD) -Werror
++	$(BUILD) 
+ 
+ -include *.d
+ 
+diff --git a/kernel-3.18/tools/testing/selftests/powerpc/Makefile b/kernel-3.18/tools/testing/selftests/powerpc/Makefile
+index f6ff90a7..719d49a9 100644
+--- a/kernel-3.18/tools/testing/selftests/powerpc/Makefile
++++ b/kernel-3.18/tools/testing/selftests/powerpc/Makefile
+@@ -9,7 +9,7 @@ ifeq ($(ARCH),powerpc)
+ GIT_VERSION = $(shell git describe --always --long --dirty || echo "unknown")
+ 
+ CC := $(CROSS_COMPILE)$(CC)
+-CFLAGS := -Wall -O2 -flto -Wall -Werror -DGIT_VERSION='"$(GIT_VERSION)"' -I$(CURDIR) $(CFLAGS)
++CFLAGS := -Wall -O2 -flto -Wall  -DGIT_VERSION='"$(GIT_VERSION)"' -I$(CURDIR) $(CFLAGS)
+ 
+ export CC CFLAGS
+ 
+diff --git a/kernel-3.18/tools/usb/usbip/configure.ac b/kernel-3.18/tools/usb/usbip/configure.ac
+index 607d05c5..5b2c061a 100644
+--- a/kernel-3.18/tools/usb/usbip/configure.ac
++++ b/kernel-3.18/tools/usb/usbip/configure.ac
+@@ -18,7 +18,7 @@ LT_INIT
+ # Silent build for automake >= 1.11
+ m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
+ 
+-AC_SUBST([EXTRA_CFLAGS], ["-Wall -Werror -Wextra -std=gnu99"])
++AC_SUBST([EXTRA_CFLAGS], ["-Wall  -Wextra -std=gnu99"])
+ 
+ # Checks for programs.
+ AC_PROG_CC
