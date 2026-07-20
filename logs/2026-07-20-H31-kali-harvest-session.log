@@ -1,0 +1,408 @@
+[    8.015428] Power/swap DP: No enter --- SODI3: No enter --- SODI: No enter --- 
+[    8.016350] Power/swap CNT(soidle3,rgidle): [0] = (0,814), [1] = (0,356), [2] = (0,180), [3] = (0,125), [4] = (0,1643), [5] = (0,2142), [6] = (0,320), [7] = (0,88), [8] = (0,201), [9] = (0,63), 
+[    8.018519] Power/swap soidle3_block_cnt: [by_cpu] = 0, [by_clk] = 0, [by_tmr] = 0, [by_oth] = 0, [by_vtg] = 0, [by_frm] = 6127, [by_pll] = 0, [by_pwm] = 0, [by_dvfsp] = 0, [by_conn] = 0, 
+[    8.020620] Power/swap soidle3_block_mask: 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 
+[   10.177136] [HPS] (0x7000)<1>(0)(0) action end (0)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   10.178364] [HPS] (0x7000)<1>(0)(0) HRT_BT_DBG (0)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   13.021839] Power/swap DP: No enter --- SODI3: No enter --- SODI: No enter --- 
+[   13.022762] Power/swap CNT(soidle,rgidle): [0] = (0,2004), [1] = (0,356), [2] = (0,180), [3] = (0,125), [4] = (0,1643), [5] = (0,2142), [6] = (0,320), [7] = (0,88), [8] = (0,201), [9] = (0,63), 
+[   13.024930] Power/swap soidle_block_cnt: [by_cpu] = 0, [by_clk] = 0, [by_tmr] = 0, [by_oth] = 0, [by_vtg] = 0, [by_frm] = 7315, [by_pll] = 0, [by_pwm] = 0, [by_dvfsp] = 0, [by_conn] = 0, 
+[   13.027020] Power/swap soidle_block_mask: 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 
+[   13.104399] [kernel]AvgVbat 3850,bat_vol 3902, AvgI 494, I 482, VChr 4484, AvgT 24, T 24, ZCV 0, CHR_Type 5, SOC  -1:-100: -1, bcct 0:0, Ichg 768, IBat -337
+[   13.106147] [BATTERY] Disable check battery exist.
+[   13.106969] mtk_pep_check_charger: stop, SOC = -1, to_check_chr_type = 1, chr_type = 5, ret = 0
+[   13.108051] [BATTERY] CC mode charge, timer=0 on 10!!
+[   13.108918] mtk_pep_start_algorithm: stop, PE+ is not connected
+[   13.111254] mtk_pep_start_algorithm: vchr_org = 5000, vchr_after = 4456, delta = -544
+[   13.112228] [BATTERY] Default CC mode charging : 80000, input current = 80000
+[   13.115133] charging_set_cv_voltage register_value=0x1f 4340000 4336000
+[   13.118442] [PE+]Ibat=768, Ilim=800, Vbus=4400, err=0, Ichg=0, Vbat=3844, ChrStat=2, CHGEN=1, VDPM=1
+[   13.119597] [mt_kpoc_power_off_check] chr_vol=4484, boot_mode=8
+[   14.885304] random: nonblocking pool is initialized
+[   15.092395] [BATTERY] Disable check battery exist.
+[   15.192349] [HPS] (0x7000)<1>(0)(0) action end (2)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   15.193739] [HPS] (0x7000)<1>(0)(0) HRT_BT_DBG (2)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   16.125904] [kernel]AvgVbat 3852,bat_vol 3911, AvgI 496, I 571, VChr 4390, AvgT 24, T 24, ZCV 0, CHR_Type 5, SOC  -1:-100: -1, bcct 0:0, Ichg 768, IBat -271
+[   16.127756] [BATTERY] Disable check battery exist.
+[   16.128788] mtk_pep_check_charger: stop, SOC = -1, to_check_chr_type = 1, chr_type = 5, ret = 0
+[   16.129950] [BATTERY] CC mode charge, timer=10 on 20!!
+[   16.131044] mtk_pep_start_algorithm: stop, PE+ is not connected
+[   16.133547] mtk_pep_start_algorithm: vchr_org = 5000, vchr_after = 4551, delta = -449
+[   16.134600] [BATTERY] Default CC mode charging : 80000, input current = 80000
+[   16.137066] charging_set_cv_voltage register_value=0x1f 4340000 4336000
+[   16.141472] [PE+]Ibat=768, Ilim=800, Vbus=4500, err=0, Ichg=0, Vbat=3924, ChrStat=2, CHGEN=1, VDPM=1
+[   16.142692] [mt_kpoc_power_off_check] chr_vol=4390, boot_mode=8
+[   18.028511] Power/swap DP: No enter --- SODI3: No enter --- SODI: No enter --- 
+[   20.219623] [HPS] (0x7000)<1>(0)(0) action end (1)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   20.220954] [HPS] (0x7000)<1>(0)(0) HRT_BT_DBG (1)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   23.003070] [WDK]: kick Ex WDT,RT[23003055207]
+[   23.030900] Power/swap DP: No enter --- SODI3: No enter --- SODI: No enter --- 
+[   25.093601] [BATTERY] Disable check battery exist.
+[   25.247528] [HPS] (0x7000)<1>(0)(0) action end (1)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   25.248855] [HPS] (0x7000)<1>(0)(0) HRT_BT_DBG (1)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   26.102527] [kernel]AvgVbat 3854,bat_vol 3908, AvgI 496, I 517, VChr 4342, AvgT 23, T 23, ZCV 0, CHR_Type 5, SOC  -1:-100: -1, bcct 0:0, Ichg 768, IBat -329
+[   26.104444] [BATTERY] Disable check battery exist.
+[   26.105509] mtk_pep_check_charger: stop, SOC = -1, to_check_chr_type = 1, chr_type = 5, ret = 0
+[   26.106750] [BATTERY] CC mode charge, timer=20 on 30!!
+[   26.107900] mtk_pep_start_algorithm: stop, PE+ is not connected
+[   26.110405] mtk_pep_start_algorithm: vchr_org = 5000, vchr_after = 4371, delta = -629
+[   26.111457] [BATTERY] Default CC mode charging : 80000, input current = 80000
+[   26.113997] charging_set_cv_voltage register_value=0x1f 4340000 4336000
+[   26.118435] [PE+]Ibat=768, Ilim=800, Vbus=4500, err=0, Ichg=0, Vbat=3904, ChrStat=2, CHGEN=1, VDPM=1
+[   26.119654] [mt_kpoc_power_off_check] chr_vol=4342, boot_mode=8
+[   28.033293] Power/swap DP: No enter --- SODI3: No enter --- SODI: No enter --- 
+[   30.274680] [HPS] (0x7000)<1>(0)(0) action end (1)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   30.276011] [HPS] (0x7000)<1>(0)(0) HRT_BT_DBG (1)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   30.720508] [PBM] [ma_to_mw] 3872(mV) * 2416(mA) = 9354(mW)
+[   30.721346] [DLPT_final] 2416,0,-1,-1,1,7000
+[   30.722161] [Power/PPM] max_power_big = 4064, max_power_except_big = 3957, big_on_margin = 667, max_power_1L = 857
+[   31.723070] [Hang_Detect] hang_detect disabled.
+[   33.018816] Power/swap CNT(dpidle,rgidle): [0] = (0,5682), [1] = (0,356), [2] = (0,180), [3] = (0,125), [4] = (0,1643), [5] = (0,2142), [6] = (0,320), [7] = (0,88), [8] = (0,201), [9] = (0,63), 
+[   33.021150] Power/swap dpidle_block_cnt: [by_cpu] = 0, [by_clk] = 0, [by_tmr] = 0, [by_oth] = 0, [by_vtg] = 0, [by_frm] = 9859, [by_pll] = 0, [by_pwm] = 0, [by_dvfsp] = 0, [by_conn] = 0, 
+[   33.023379] Power/swap dpidle_block_mask: 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 
+[   33.035679] Power/swap DP: No enter --- SODI3: No enter --- SODI: No enter --- 
+[   35.094773] [BATTERY] Disable check battery exist.
+[   35.203079] ram_console: open expdb partition error [-2]!
+[   35.306871] [HPS] (0x7000)<1>(0)(0) action end (1)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   35.308200] [HPS] (0x7000)<1>(0)(0) HRT_BT_DBG (1)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   36.056086] systemd[1]: Listening on Journal Socket (/dev/log).
+[[0;32m  OK  [0m] Listening on Journal Socket (/dev/log).
+[   36.061532] systemd[1]: Listening on Journal Audit Socket.
+[[0;32m  OK  [0m] Listening on Journal Audit Socket.
+[   36.079618] systemd[1]: Listening on Syslog Socket.
+[[0;32m  OK  [0m] Listening on Syslog Socket.
+[   36.086402] systemd[1]: Starting Load Kernel Modules...
+         Starting Load Kernel Modules...
+[   36.089494] systemd[1]: Listening on LVM2 poll daemon socket.
+[[0;32m  OK  [0m] Listening on LVM2 poll daemon socket.
+[   36.094340] systemd[1]: Created slice system-getty.slice.
+[   36.104011] [kernel]AvgVbat 3855,bat_vol 3873, AvgI 495, I 446, VChr 4484, AvgT 23, T 24, ZCV 0, CHR_Type 5, SOC  -1:-100: -1, bcct 0:0, Ichg 768, IBat -490
+[   36.105785] [BATTERY] Disable check battery exist.
+[   36.106622] mtk_pep_check_charger: stop, SOC = -1, to_check_chr_type = 1, chr_type = 5, ret = 0
+[   36.107709] [BATTERY] CC mode charge, timer=30 on 40!!
+[[0;32m  OK  [0m[   36.113980] mtk_pep_start_algorithm: stop, PE+ is not connected
+[   36.114855] [Power/PPM] (0x420)(8021)(1)[LL_ONLY]->[L_ONLY]: (15)(0)(0)(0) (8)(0)(1)(4) (15)(9)(0)(0) 
+] Created slice system-getty.slice.
+[   36.120222] [Power/cpufreq] MT_CPU_DVFS_L freq = 325000
+[   36.120411] systemd[1]: Created slice system-lxc.slice.
+[   36.121632] [CPUHVFS] (0) [0010c41c] cluster1 on, pause = 0x0, swctrl = 0x27f0 (0xfd100)
+[[0;32m  OK  [0m] Created slice system-lxc.sli[   36.123585] mtk_pep_start_algorithm: vchr_org = 5000, vchr_after = 4494, delta = -506
+ce.
+[   36.124604] [BATTERY] Default CC mode charging : 80000, input current = 80000
+[   36.125633] charging_set_cv_voltage register_value=0x1f 4340000 4336000
+[   36.126127] CPU6: Booted secondary processor
+[   36.126132] Detected VIPT I-cache on CPU6
+[   36.126146] CPU6: found redistributor 102 @ffffff8000140000
+[   36.128254] [CPUHVFS] (0) [0010c4f5] cluster0 off, pause = 0x0, swctrl = 0x5af0 (0xfd7aa)
+[   36.134089] [PE+]Ibat=768, Ilim=800, Vbus=4500, err=0, Ichg=0, Vbat=3904, ChrStat=2, CHGEN=1, VDPM=1
+[   36.134096] [HPS] (0x70E1)<1>(0)(0) action end (100)(231)(0) (1)(0)(0) (0)(4)(0)(0)(1)(0) (0)(0)(231)(1) (0)<3>(0)
+[   36.136532] [mt_kpoc_power_off_check] chr_vol=4484, boot_mode=8
+[   36.144281] systemd[1]: Reached target Swap.
+[[0;32m  OK  [0m] Reached target Swap.
+[   36.146898] systemd[1]: Listening on Device-mapper event daemon FIFOs.
+[[0;32m  OK  [0m] Listening on Device-mapper event daemon FIFOs.
+[   36.164916] systemd[1]: Created slice User and Session Slice.
+[[0;32m  OK  [0m] Created slice User and Session Slice.
+[   36.177041] [HPS] (0x7F03)(0)<3>(0) action end (114)(195)(0) (0)(0)(0) (0)(4)(0)(0)(1)(0) (0)(114)(0)(0) (0)<2>(0)
+[   36.184407] systemd[1]: Reached target Slices.
+[[0;32m  OK  [0m] Reached target Slices.
+[   36.206734] systemd[1]: Starting Journal Service...
+         [   36.221348] [HPS] (0x7F03)(0)<2>(0) action end (55)(79)(0) (0)(0)(0) (0)(4)(0)(0)(1)(0) (0)(55)(0)(0) (0)<1>(0)
+[   36.243367] systemd-journald[459]: /etc/systemd/journald.conf.d/journald-geminipda.conf:2: Failed to parse storage setting, ignoring: "volatile"
+[   36.262757] [Power/PPM] (0x420)(8021)(1)[L_ONLY]->[4L_LL]: (15)(0)(0)(4) (15)(0)(1)(4) (15)(9)(0)(2) 
+[   36.265735] [mt_idvfs] SRAM LDO setting = 110000(x100mv) success.
+[   36.267406] [Power/dcm] dcm_mcusys_mp2_sync_dcm(1)
+[   36.267884] CPU8: Booted secondary processor
+[   36.267893] Detected PIPT I-cache on CPU8
+[   36.267907] CPU8: found redistributor 200 @ffffff8000180000
+[   36.269719] [mt_idvfs] [****]iDVFS Start Enable: chk ptp1 init ok!
+[   36.270497] [mt_idvfs] iDVFSAPB: Timming ctrl(0xa0) = 0x1001.
+[   36.271202] [mt_idvfs] iDVFSAPB: Slave address(0x84) = 0xd0.(DA9214(0xd0) or MT6313(0xd6))
+[   36.272457] [mt_idvfs] SRAM LDO setting = 120000(x100mv) success.
+[   36.273268] [mt_idvfs] iDVFS enable cur Vproc = 100000(mv_x100), Vsarm = 120000(mv_x100).
+[   36.274504] [mt_idvfs] [****]iDVFS enable success. Fmax = 2900 MHz, Fcur = 750MHz.
+[   36.276101] [Power/cpufreq] MT_CPU_DVFS_B freq = 845000
+[   36.276756] [CPUHVFS] (0) [0010d7f8] cluster2 on, pause = 0x0, swctrl = 0x20f0 (0x7b222)
+[   36.278242] [mt_idvfs] Get Freq: SWP_cur_pct_x100 = 3000, Phy_get_pct_x100 = 3000, sw_avgfreq = 0x1e00.
+[   36.279441] [HPS] (0x70E1)(0)<1>(0) action end (100)(176)(0) (0)(1)(0) (4)(4)(2)(0)(1)(0) (0)(0)(176)(1) (0)<1>(1)
+[   36.293198] [mt_idvfs] Get Freq: SWP_cur_pct_x100 = 3000, Phy_get_pct_x100 = 5980, sw_avgfreq = 0x3bcc.
+[   36.313756] [mt_idvfs] Get Freq: SWP_cur_pct_x100 = 3000, Phy_get_pct_x100 = 2020, sw_avgfreq = 0x1433.
+[   36.321029] [CPUHVFS] (0) [0010dda2] cluster2 off, pause = 0x0, swctrl = 0x50f0 (0x7b200)
+[   36.323735] [mt_idvfs] [****]iDVFS start disable.
+[   36.325877] [Power/dcm] dcm_mcusys_mp2_sync_dcm(0)
+[   36.329884] [HPS] (0x7F03)(0)<1>(1) action end (43)(61)(0) (0)(0)(0) (4)(4)(2)(0)(1)(0) (0)(43)(0)(0) (0)<1>(0)
+[   36.451819] [Power/PPM] (0x420)(8021)(1)[4L_LL]->[L_ONLY]: (15)(0)(0)(0) (8)(0)(1)(4) (15)(9)(0)(0) 
+[   36.614216] [Power/PPM] (0x420)(8021)(0)[L_ONLY]->[LL_ONLY]: (3)(0)(1)(4) (8)(0)(0)(0) (15)(9)(0)(0) 
+[   36.618821] [Power/cpufreq] MT_CPU_DVFS_LL freq = 221000
+[   36.619493] [CPUHVFS] (0) [001103d7] cluster0 on, pause = 0x0, swctrl = 0x2af0 (0xcc800)
+[   36.621253] [CPUHVFS] (0) [00110411] cluster1 off, pause = 0x0, swctrl = 0x57f0 (0xcc877)
+[   36.623154] [Power/PPM] (0x420)(8021)(0)[LL_ONLY]: (15)(0)(1)(4) (8)(0)(0)(0) (15)(9)(0)(0) 
+[   36.627922] [HPS] (0x7001)(0)<1>(0) action end (0)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   38.021199] Power/swap CNT(soidle3,rgidle): [0] = (0,6497), [1] = (0,356), [2] = (0,180), [3] = (0,125), [4] = (0,1843), [5] = (0,2241), [6] = (0,412), [7] = (0,88), [8] = (0,228), [9] = (0,63), 
+[   38.023549] Power/swap soidle3_block_cnt: [by_cpu] = 0, [by_clk] = 0, [by_tmr] = 0, [by_oth] = 0, [by_vtg] = 0, [by_frm] = 6116, [by_pll] = 0, [by_pwm] = 0, [by_dvfsp] = 0, [by_conn] = 0, 
+[   38.025791] Power/swap soidle3_block_mask: 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 
+[   38.037537] Power/swap DP: No enter --- SODI3: No enter --- SODI: No enter --- 
+[   40.331233] [HPS] (0x7000)<1>(0)(0) action end (1)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   40.332564] [HPS] (0x7000)<1>(0)(0) HRT_BT_DBG (1)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   40.725387] [PBM] [ma_to_mw] 3872(mV) * 2410(mA) = 9331(mW)
+[   40.726221] [DLPT_final] 2410,0,-1,-1,1,7000
+[   43.013068] [WDK]: kick Ex WDT,RT[43013053640]
+[   43.023938] Power/swap CNT(soidle,rgidle): [0] = (0,7370), [1] = (0,356), [2] = (0,180), [3] = (0,125), [4] = (0,1843), [5] = (0,2241), [6] = (0,412), [7] = (0,88), [8] = (0,228), [9] = (0,63), 
+[   43.026268] Power/swap soidle_block_cnt: [by_cpu] = 0, [by_clk] = 0, [by_tmr] = 0, [by_oth] = 0, [by_vtg] = 0, [by_frm] = 5799, [by_pll] = 0, [by_pwm] = 0, [by_dvfsp] = 0, [by_conn] = 0, 
+[   43.028498] Power/swap soidle_block_mask: 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 
+[   43.040431] Power/swap DP: No enter --- SODI3: No enter --- SODI: No enter --- 
+[   45.095934] [BATTERY] Disable check battery exist.
+[   45.364913] [HPS] (0x7000)<1>(0)(0) action end (1)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   45.366242] [HPS] (0x7000)<1>(0)(0) HRT_BT_DBG (1)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   46.104207] [kernel]AvgVbat 3857,bat_vol 3902, AvgI 496, I 535, VChr 4465, AvgT 23, T 23, ZCV 0, CHR_Type 5, SOC  -1:-100: -1, bcct 0:0, Ichg 768, IBat -323
+[   46.106058] [BATTERY] Disable check battery exist.
+[   46.107110] mtk_pep_check_charger: stop, SOC = -1, to_check_chr_type = 1, chr_type = 5, ret = 0
+[   46.108274] [BATTERY] CC mode charge, timer=40 on 50!!
+[   46.109382] mtk_pep_start_algorithm: stop, PE+ is not connected
+[   46.111879] mtk_pep_start_algorithm: vchr_org = 5000, vchr_after = 4342, delta = -658
+[   46.112932] [BATTERY] Default CC mode charging : 80000, input current = 80000
+[   46.115457] charging_set_cv_voltage register_value=0x1f 4340000 4336000
+[   46.119963] [PE+]Ibat=768, Ilim=800, Vbus=4500, err=0, Ichg=0, Vbat=3864, ChrStat=2, CHGEN=1, VDPM=1
+[   46.121183] [mt_kpoc_power_off_check] chr_vol=4465, boot_mode=8
+[   48.042803] Power/swap DP: No enter --- SODI3: No enter --- SODI: No enter --- 
+[   50.397570] [HPS] (0x7000)<1>(0)(0) action end (2)(1)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   50.398900] [HPS] (0x7000)<1>(0)(0) HRT_BT_DBG (2)(1)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   50.731873] [PBM] [ma_to_mw] 3884(mV) * 2407(mA) = 9348(mW)
+[   50.732676] [DLPT_final] 2407,0,-1,-1,1,7000
+[   53.045207] Power/swap DP: No enter --- SODI3: No enter --- SODI: No enter --- 
+[   55.097082] [BATTERY] Disable check battery exist.
+[   55.429911] [HPS] (0x7000)<1>(0)(0) action end (1)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   55.431240] [HPS] (0x7000)<1>(0)(0) HRT_BT_DBG (1)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   56.104301] [kernel]AvgVbat 3859,bat_vol 3901, AvgI 497, I 535, VChr 4390, AvgT 23, T 23, ZCV 0, CHR_Type 5, SOC  -1:-100: -1, bcct 0:0, Ichg 768, IBat -330
+[   56.106189] [BATTERY] Disable check battery exist.
+[   56.107249] mtk_pep_check_charger: stop, SOC = -1, to_check_chr_type = 1, chr_type = 5, ret = 0
+[   56.108412] [BATTERY] CC mode charge, timer=50 on 60!!
+[   56.109523] mtk_pep_start_algorithm: stop, PE+ is not connected
+[   56.112027] mtk_pep_start_algorithm: vchr_org = 5000, vchr_after = 4352, delta = -648
+[   56.113127] [BATTERY] Default CC mode charging : 80000, input current = 80000
+[   56.115538] charging_set_cv_voltage register_value=0x1f 4340000 4336000
+[   56.119962] [PE+]Ibat=768, Ilim=800, Vbus=4500, err=0, Ichg=0, Vbat=3904, ChrStat=2, CHGEN=1, VDPM=1
+[   56.121256] [mt_kpoc_power_off_check] chr_vol=4390, boot_mode=8
+[   58.047588] Power/swap DP: No enter --- SODI3: No enter --- SODI: No enter --- 
+[   60.463534] [HPS] (0x7000)<1>(0)(0) action end (2)(1)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   60.464946] [HPS] (0x7000)<1>(0)(0) HRT_BT_DBG (2)(1)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   60.736824] [PBM] [ma_to_mw] 3874(mV) * 2425(mA) = 9394(mW)
+[   60.737623] [DLPT_final] 2425,0,-1,-1,1,7000
+[   61.733075] [Hang_Detect] hang_detect disabled.
+[   63.023109] [WDK]: kick Ex WDT,RT[63023096149]
+[   63.024128] Power/swap CNT(dpidle,rgidle): [0] = (0,10959), [1] = (0,356), [2] = (0,180), [3] = (0,125), [4] = (0,1843), [5] = (0,2241), [6] = (0,412), [7] = (0,88), [8] = (0,228), [9] = (0,63), 
+[   63.027051] Power/swap dpidle_block_cnt: [by_cpu] = 0, [by_clk] = 0, [by_tmr] = 0, [by_oth] = 0, [by_vtg] = 0, [by_frm] = 5709, [by_pll] = 0, [by_pwm] = 0, [by_dvfsp] = 0, [by_conn] = 0, 
+[   63.029281] Power/swap dpidle_block_mask: 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 
+[   63.049962] Power/swap DP: No enter --- SODI3: No enter --- SODI: No enter --- 
+[   65.098202] [BATTERY] Disable check battery exist.
+[   65.496118] [HPS] (0x7000)<1>(0)(0) action end (1)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   65.497447] [HPS] (0x7000)<1>(0)(0) HRT_BT_DBG (1)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   66.104612] [kernel]AvgVbat 3860,bat_vol 3902, AvgI 499, I 553, VChr 4475, AvgT 23, T 23, ZCV 0, CHR_Type 5, SOC  -1:-100: -1, bcct 0:0, Ichg 768, IBat -330
+[   66.106463] [BATTERY] Disable check battery exist.
+[   66.107517] mtk_pep_check_charger: stop, SOC = -1, to_check_chr_type = 1, chr_type = 5, ret = 0
+[   66.108680] [BATTERY] CC mode charge, timer=60 on 70!!
+[   66.109887] mtk_pep_start_algorithm: stop, PE+ is not connected
+[   66.112380] mtk_pep_start_algorithm: vchr_org = 5000, vchr_after = 4323, delta = -677
+[   66.113481] [BATTERY] Default CC mode charging : 80000, input current = 80000
+[   66.115965] charging_set_cv_voltage register_value=0x1f 4340000 4336000
+[   66.120372] [PE+]Ibat=768, Ilim=800, Vbus=4400, err=0, Ichg=0, Vbat=3904, ChrStat=2, CHGEN=1, VDPM=1
+[   66.121591] [mt_kpoc_power_off_check] chr_vol=4475, boot_mode=8
+[   66.207839] systemd[1]: Listening on udev Control Socket.
+[[0;32m  OK  [0m] Listening on udev Control Socket.
+[   66.222180] systemd[1]: Starting udev Coldplug all Devices...
+         Starting udev Coldplug all Devices...
+[   66.236197] systemd[1]: Created slice system-serial\x2dgetty.slice.
+[[0;32m  OK  [0m] Created slice system-serial\x2dgetty.slice.
+[   66.264255] systemd[1]: Started Dispatch Password Requests to Console Directory Watch.
+[[0;32m  OK  [0m] Started Dispatch Password Requests to Console Directory Watch.
+[   66.267332] [HPS] (0x7F00)<1>(0)(0) action end (100)(251)(0) (0)(0)(0) (4)(0)(0))1)(0)(0) (0)(0)(251)(1) <3>(0)(0)
+[   66.268477] systemd[1]: Reached target Paths.
+[[0;32m  OK  [0m] Reached target Paths.
+[   66.271122] systemd[1]: Reached target Local Encrypted Volumes.
+[[0;32m  OK  [0m] Reached target Local Encrypted Volumes.
+[   66.279164] systemd[1]: Started Journal Service.
+[[0;32m  OK  [0m] Started Journal Service.
+[   66.284200] systemd[1]: Started Remount Root and Kernel File Systems.
+[[0;32m  OK  [0m] Started Remount Root and Kernel File Systems.
+[   66.287937] systemd[1]: Mounted Kernel Debug File System.
+[[0;32m  OK  [0m] Mounted Kernel Debug File System.
+[   66.292039] systemd[1]: Started Load Kernel Modules.
+[[0;32m  OK  [0m] Started Load Kernel Modules.
+[   66.298739] systemd[1]: Mounting Kernel Configuration File System...
+         Mounting Kernel Configuration File System...
+[   66.304735] systemd[1]: Starting Apply Kernel Variables...
+         Starting Apply Kernel Variables...
+[   66.309333] [Power/PPM] (0x420)(8021)(1)[LL_ONLY]->[L_ONLY]: (15)(0)(0)(0) (8)(0)(1)(4) (15)(9)(0)(0) 
+[   66.310544] systemd[1]: Mounting FUSE Control File System...
+         Mounting FUSE Control File System...
+[   66.315079] [Power/cpufreq] MT_CPU_DVFS_L freq = 325000
+[   66.315786] [CPUHVFS] (0) [001fdd4f] cluster1 on, pause = 0x0, swctrl = 0x27f0 (0xfd100)
+[   66.327312] systemd[1]: Starting Load/Save Random Seed...
+         Starting Load/Save Random Seed...[   66.329603] [CPUHVFS] (0) [001fdf14] cluster0 off, pause = 0x0, swctrl = 0x5af0 (0xfd7aa)
+
+[   66.336139] [HPS] (0x70E1)<3>(0)(0) action end (231)(280)(0) (1)(0)(0) (0)(4)(0)(0)(1)(0) (0)(231)(0)(0) (0)<3>(0)
+[   66.340056] systemd[1]: Starting Create System Users...
+         Starting Create System Users...
+[   66.358265] systemd[1]: Starting Flush Journal to Persistent Storage...
+         Starting Flush Journal to Persistent Storage...
+[   66.365756] systemd[1]: Mounted Kernel Configuration File System.
+[[0;32m  OK  [0m] Mounted Kernel Configuration File System.
+[   66.374423] systemd[1]: Started Apply Kernel Variables.
+[[0;32m  OK  [0m] Started Apply Kernel Variables.
+[   66.377575] [Power/PPM] (0x420)(8021)(1)[L_ONLY]->[4L_LL]: (15)(0)(0)(4) (15)(0)(1)(4) (15)(9)(0)(2) 
+[   66.377860] systemd[1]: Mounted FUSE Control File System.
+[[0;32m  OK  [0m] Mounted FUSE Control File System.
+[   66.383821] [Power/dcm] dcm_mcusys_mp2_sync_dcm(1)
+[   66.384287] CPU8: Booted secondary processor
+[   66.384296] Detected PIPT I-cache on CPU8
+[   66.384311] CPU8: found redistributor 200 @ffffff8000180000
+[   66.387412] [Power/cpufreq] MT_CPU_DVFS_B freq = 845000
+[   66.388081] [CPUHVFS] (0) [001fe690] cluster2 on, pause = 0x0, swctrl = 0x20f0 (0x7b222)
+[   66.391124] [HPS] (0x70E1)(0)<3>(0) action end (363)(595)(0) (0)(3)(0) (4)(4)(2)(0)(1)(0) (0)(0)(595)(1) (0)<4>(2)
+[   66.395308] systemd[1]: Started Load/Save Random Seed.
+[[0;32m  OK  [0m] Started Load/Save Random Seed.
+[   66.399312] systemd[1]: Started Create System Users.
+[[0;32m  OK  [0m] Started Create System Users.
+[   66.407776] systemd[1]: Starting Create Static Device Nodes in /dev...
+         Starting Create Static Device Nodes in /dev...
+[   66.411317] systemd-journald[459]: Received request to flush runtime journal from PID 1
+[   66.413988] [Power/PPM] (0x420)(5112)(1)[4L_LL]: (15)(9)(0)(4) (15)(9)(1)(4) (15)(9)(0)(2) 
+[   66.418518] systemd[1]: Started Flush Journal to Persistent Storage.
+[[0;32m  OK  [0m] Started Flush Journal to Persistent Storage.
+[   66.434903] systemd[1]: Started Create Static Device Nodes in /dev.
+[[0;32m  OK  [0m] Started Create Static Device Nodes in /dev.
+[   66.439879] [Power/PPM] (0x420)(5301)(1)[4L_LL]: (15)(0)(0)(4) (15)(0)(1)(4) (15)(9)(0)(2) 
+[   66.439895] [HPS] (0x70E1)(0)<4>(2) action end (345)(359)(0) (0)(0)(1) (4)(4)(2)(0)(1)(0) (0)(345)(0)(0) (0)<3>(1)
+[   66.455584] systemd[1]: Reached target Local File Systems (Pre).
+[[0;32m  OK  [0m] Reached target Local File Systems (Pre).
+[   66.458714] systemd[1]: Reached target Local File Systems.
+[[0;32m  OK  [0m] Reached target Local File Systems.
+[   66.464912] systemd[1]: Starting Enable support for additional executable binary formats...
+         Starting Enable support for additional executable binary formats...
+[   66.472157] systemd[1]: Starting Create Volatile Files and Directories...
+         Starting Create Volatile Files and Directories...
+[   66.481572] [Power/PPM] (0x420)(5034)(1)[4L_LL]: (15)(8)(0)(4) (15)(8)(1)(4) (15)(9)(0)(2) 
+[   66.483523] systemd[1]: Mounting mount system.img...
+         Mounting mount system.img...
+[   66.488546] [HPS] (0x70E1)(0)<3>(1) action end (272)(311)(0) (0)(2)(0) (4)(4)(2)(0)(1)(0) (0)(272)(0)(0) (0)<1>(2)
+[   66.494016] systemd[1]: Started Enable support for additional executable binary formats.
+[[0;32m  OK  [0m] Started Enable support for additional executable binary formats.
+[   66.533303] EXT4-fs error (device mmcblk0p29): ext4_lookup:1571: inode #336686: comm systemd-tmpfile: deleted inode referenced: 336689
+[   66.533631] CPU7: Booted secondary processor
+[   66.533640] Detected VIPT I-cache on CPU7
+[   66.533651] CPU7: found redistributor 103 @ffffff8000160000
+[   66.539699] [HPS] (0x70E1)(0)<1>(2) action end (304)(453)(22) (0)(0)(1) (4)(4)(2)(0)(1)(0) (0)(0)(453)(1) (0)<4>(1)
+[   66.543685] EXT4-fs error (device mmcblk0p29): ext4_lookup:1571: inode #336687: comm systemd-tmpfile: deleted inode referenced: 336799
+[   66.545255] [CQ] task 2 ready not clear when DMA
+[   66.547464] EXT4-fs error (device mmcblk0p29): ext4_lookup:1571: inode #336687: comm systemd-tmpfile: deleted inode referenced: 336818
+[   66.554108] EXT4-fs (loop0): mounted filesystem with ordered data mode. Opts: (null)
+[   66.555160] EXT4-fs error (device mmcblk0p29): ext4_lookup:1571: inode #336690: comm systemd-tmpfile: deleted inode referenced: 336800
+[   66.557275] EXT4-fs error (device mmcblk0p29): ext4_lookup:1571: inode #336690: comm systemd-tmpfile: deleted inode referenced: 336691
+[   66.559226] systemd[1]: Mounted mount system.img.
+[[0;32m  OK  [0m] Mounted mount system.img.
+[   66.562255] EXT4-fs error (device mmcblk0p29): ext4_lookup:1571: inode #336687: comm systemd-tmpfile: deleted inode referenced: 336817
+[   66.564609] systemd[1]: Starting udev Kernel Device Manager...
+         Starting udev Kernel Device Manager...
+[   66.566942] EXT4-fs error (device mmcblk0p29): ext4_lookup:1571: inode #336534: comm systemd-tmpfile: deleted inode referenced: 336703
+[   66.569437 EXT4-fs error (device mmcblk0p29): ext4_lookup:1571: inode #123121: comm systemd-tmpfile: deleted inode referenced: 336706
+[   66.573267] EXT4-fs error (device mmcblk0p29): ext4_lookup:1571: inode #123121: comm systemd-tmpfile: deleted inode referenced: 336697
+[   66.581002] EXT4-fs error (device mmcblk0p29): ext4_lookup:1571: inode #336534: comm systemd-tmpfile: deleted inode referenced: 336703
+[   66.603048] [CQ] task 11 ready not clear when DMA
+[   66.604619] systemd[1]: Started Create Volatile Files and Directories.
+[[0;32m  OK  [0m] Started Create Volatile Files and Directories.
+[   66.612658] systemd[1]: Started Entropy daemon using the HAVEGE algorithm.
+[[0;32m  OK  [0m] Started Entropy daemon using the HAVEGE algorithm.
+[   66.618985] systemd[1]: Starting Update UTMP about System Boot/Shutdown...
+         Starting Update UTMP about System Boot/Shutdown...
+[   66.624311] [HPS] (0x70E1)(0)<4>(1) action end (351)(365)(0) (0)(0)(1) (4)(4)(2)(0)(1)(0) (0)(351)(0)(0) (0)<3>(1)
+[   66.627055] systemd[1]: Starting Network Time Synchronization...
+         Starting Network Time Synchronization...
+[   66.645645] systemd[1]: Started udev Coldplug all Devices.
+[[0;32m  OK  [0m] Started udev Coldplug all Devices.
+[   66.659843] systemd[1]: Starting Helper to synchronize boot up for ifupdown...
+         Starting Helper to synchronize boot up for ifupdown...
+[   66.666175] [CPUHVFS] (0) [00200a29] cluster2 off, pause = 0x0, swctrl = 0x56f0 (0xac266)
+[   66.668609] [Power/dcm] dcm_mcusys_mp2_sync_dcm(0)
+[   66.671161] [HPS] (0x7F03)(0)<3>(1) action end (227)(275)(0) (0)(0)(0) (4)(4)(2)(0)(1)(0) (0)(227)(0)(0) (0)<3>(0)
+[   66.676723] systemd[1]: Starting udev Wait for Complete Device Initialization...
+         Starting udev Wait for Complete Device Initialization...
+[   66.715377] [Power/dcm] dcm_mcusys_mp2_sync_dcm(1)
+[   66.715865] CPU8: Booted secondary processor
+[   66.715874] Detected PIPT I-cache on CPU8
+[   66.715889] CPU8: found redistributor 200 @ffffff8000180000
+[   66.719009] [Power/cpufreq] MT_CPU_DVFS_B freq = 845000
+[   66.719676] [CPUHVFS] (0) [00201103] cluster2 on, pause = 0x0, swctrl = 0x26f0 (0xac222)
+[   66.727764] [HPS] (0x70E1)(0)<3>(0) action end (186)(282)(0) (0)(1)(0) (4)(4)(2)(0)(1)(0) (0)(186)(0)(0) (0)<1>(1)
+[   66.742843] systemd[1]: Started udev Kernel Device Manager.
+[[0;32m  OK  [0m] Started udev Kernel Device Manager.
+[   66.771297] [CPUHVFS] (0) [0020179f] cluster2 off, pause = 0x0, swctrl = 0x53f0 (0x73933)
+[   66.774007] [Power/dcm] dcm_mcusys_mp2_sync_dcm(0)
+[   66.776573] [HPS] (0x7F03)(0)<1>(1) action end (106)(135)(0) (0)(0)(0) (4)(4)(2)(0)(1)(0) (0)(106)(0)(0) (0)<2>(0)
+[   66.795854] systemd[1]: Started Helper to synchronize boot up for ifupdown.
+[[0;32m  OK  [0m] Started Helper to synchronize boot up for ifupdown.
+[   66.805384] systemd[1]: Starti
+>>> SENT: "PS1='GPROMPT# '"
+ng Raise network interfaces...
+         Starting Raise network interfaces...
+[   66.829887] systemd[1]: Started Update UTMP about System Boot/Shutdown.
+[[0;32m  OK  [0m] Started Update UTMP about System Boot/Shutdown.
+[   66.842444] [CQ] task 2 ready not clear when DMA
+[   66.904082] [Power/cpufreq] MT_CPU_DVFS_LL freq = 221000
+[   66.904829] [CPUHVFS] (0) [002028b6] cluster0 on, pause = 0x0, swctrl = 0x2af0 (0xfd800)
+[   66.912559] [Power/dcm] dcm_mcusys_mp2_sync_dcm(1)
+[   66.913022] CPU8: Booted secondary processor
+[   66.913034] Detected PIPT I-cache on CPU8
+[   66.913049] CPU8: found redistributor 200 @ffffff8000180000
+[   66.916257] [Power/cpufreq] MT_CPU_DVFS_B freq = 845000
+[   66.916990] [CPUHVFS] (0) [00202a45] cluster2 on, pause = 0x0, swctrl = 0x23f0 (0x7b922)
+[   66.919977] [HPS] (0x70E1)(0)<2>(0) action end (200)(624)(0) (0)(3)(0) (4)(4)(2)(0)(1)(0) (0)(0)(624)(1) (1)<4>(2)
+[   66.942431] systemd[1]: Started Network Time Synchronization.
+[[0;32m  OK  [0m] Started Network Time Synchronization.
+[   66.945821] systemd[1]: Reached target System Time Synchronized.
+[[0;32m  OK  [0m] Reached target System Time Synchronized.
+[   66.966444] [PBM] (C/G)=6310,0 => (D/L/M1/M3/F/C/G)=9394,267,3000,0,0,6127,0 (Multi:0),300
+[   66.967232] [HPS] (0x70E1)(1)<4>(2) action end (693)(1928)(9) (2)(2)(1) (4)(4)(2)(0)(1)(0) (0)(0)(1928)(1) (4)<4>(2)
+[   67.042075] systemd[1]: Started Raise network interfaces.
+[   67.043032] [CQ] task 8 ready not clear when DMA
+[   67.047033] [CQ] task 2 ready not clear when DMA
+[   67.063498] [CQ] task 1 ready not clear when DMA
+[   67.123032] [CQ] task 2 ready not clear when DMA
+[   67.417812] [CPUHVFS] (0) [00206a61] cluster0 off, pause = 0x0, swctrl = 0x5cf0 (0xfd0cc)
+[   67.428789] [HPS] (0x70E1)(4)<4>(2) action end (379)(585)(0) (0)(0)(1) (4)(4)(2)(0)(1)(0) (0)(379)(0)(0) (0)<3>(1)
+[   67.473984] [CPUHVFS] (0) [00207192] cluster2 off, pause = 0x0, swctrl = 0x56f0 (0xa4266)
+[   67.476372] [Power/dcm] dcm_mcusys_mp2_sync_dcm(0)
+[   67.479189] [HPS] (0x7F03)(0)<3>(1) action end (137)(173)(0) (0)(0)(0) (4)(4)(2)(0)(1)(0) (0)(137)(0)(0) (0)<2>(0)
+[   67.527246] [HPS] (0x7F03)(0)<2>(0) action end (37)(60)(0) (0)(0)(0) (4)(4)(2)(0)(1)(0) (0)(37)(0)(0) (0)<1>(0)
+[   67.608925] [Power/PPM] (0x420)(8021)(1)[4L_LL]->[L_ONLY]: (15)(0)(0)(0) (8)(0)(1)(4) (15)(9)(0)(0) 
+[   67.771314] [Power/PPM] (0x420)(8021)(0)[L_ONLY]->[LL_ONLY]: (3)(0)(1)(4) (8)(0)(0)(0) (15)(9)(0)(0) 
+[   67.776042] [Power/cpufreq] MT_CPU_DVFS_LL freq = 221000
+[   67.776718] [CPUHVFS] (0) [00209853] cluster0 on, pause = 0x0, swctrl = 0x2cf0 (0x9c100)
+[   67.778253] [CPUHVFS] (0) [00209886] cluster1 off, pause = 0x0, swctrl = 0x57f0 (0x9c177)
+[   67.780166] [Power/PPM] (0x420)(8021)(0)[LL_ONLY]: (15)(0)(1)(4) (8)(0)(0)(0) (15)(9)(0)(0) 
+[   67.787549] [HPS] (0x7001)(0)<1>(0) action end (0)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   68.030350] Power/swap CNT(soidle3,rgidle): [0] = (0,11819), [1] = (0,747), [2] = (0,455), [3] = (0,257), [4] = (0,2884), [5] = (0,2866), [6] = (0,1123), [7] = (0,552), [8] = (0,609), [9] = (0,85), 
+[   68.032733] Power/swap soidle3_block_cnt: [by_cpu] = 0, [by_clk] = 0, [by_tmr] = 0, [by_oth] = 0, [by_vtg] = 0, [by_frm] = 9475, [by_pll] = 0, [by_pwm] = 0, [by_dvfsp] = 0, [by_conn] = 0, 
+[   68.034975] Power/swap soidle3_block_mask: 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 
+[   68.052341] Power/swap DP: No enter --- SODI3: No enter --- SODI: No enter --- 
+[   70.525008] [HPS] (0x7000)<1>(0)(0) action end (1)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   70.526431] [HPS] (0x7000)<1>(0)(0) HRT_BT_DBG (1)(0)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   70.741697] [PBM] [ma_to_mw] 3868(mV) * 2422(mA) = 9368(mW)
+[   70.742495] [DLPT_final] 2422,0,-1,-1,1,7000
+[   73.037909] Power/swap CNT(soidle,rgidle): [0] = (0,12704), [1] = (0,747), [2] = (0,455), [3] = (0,257), [4] = (0,2884), [5] = (0,2866), [6] = (0,1123), [7] = (0,552), [8] = (0,609), [9] = (0,85), 
+[   73.040305] Power/swap soidle_block_cnt: [by_cpu] = 0, [by_clk] = 0, [by_tmr] = 0, [by_oth] = 0, [by_vtg] = 0, [by_frm] = 9478, [by_pll] = 0, [by_pwm] = 0, [by_dvfsp] = 0, [by_conn] = 0, 
+[   73.042535] Power/swap soidle_block_mask: 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 
+[   73.054751] Power/swap DP: No enter --- SODI3: No enter --- SODI: No enter --- 
+[   75.099355] [BATTERY] Disable check battery exist.
+[   75.557806] [HPS] (0x7000)<1>(0)(0) action end (2)(1)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   75.559135] [HPS] (0x7000)<1>(0)(0) HRT_BT_DBG (2)(1)(0) (0)(0)(0) (4)(0)(0)(1)(0)(0) (0)(0)(0)(0) <1>(0)(0)
+[   76.104529] [kernel]AvgVbat 3862,bat_vol 3896, AvgI 505, I 696, VChr 4380, AvgT 23, T 23, ZCV 0, CHR_Type 5, SOC  -1:-100: -1, bcct 0:0, Ichg 768, IBat -317
+[   76.106382] [BATTERY] Disable check battery exist.
+[   76.107437] mtk_pep_check_charger: stop, SOC = -1, to_check_chr_type = 1, chr_type = 5, ret = 0
+[   76.108601] [BATTERY] CC mode charge, timer=70 on 80!!
+[   76.109711] mtk_pep_start_algorithm: stop, PE+ is not connected
+[   76.112202] mtk_pep_start_algorithm: vchr_org = 5000, vchr_after = 4361, delta = -639
+[   76.113304] [BATTERY] Default CC mode charging : 80000, input current = 80000
+[   76.115875] charging_set_cv_voltage register_value=0x1f 4340000 4336000
+[   76.120376] [PE+]Ibat=768, Ilim=800, Vbus=4400, err=0, Ichg=0, Vbat=3884, ChrStat=2, CHGEN=1, VDPM=1
+[   76.121597] [mt_kpoc_power_off_check] chr_vol=4380, boot_mode=8
+
