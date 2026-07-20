@@ -2920,7 +2920,13 @@ root-causing the abnormal ROM execution state (what precondition does
 vendor LK/boot set that we don't?), not pushing more protocol. Interim
 networking: right-port USB ethernet (internet-enabled 2026-07-16)
 covers connectivity; **Bluetooth is explicitly blocked on this same
-gate.**
+gate.** **Resume path scoped 2026-07-20:** instrumented-vendor-kernel
+harvest — printk-instrument the vendor 3.18 BTIF/WMT/CONSYS drivers and
+capture a working firmware push + QUERY_STP wire trace (no userspace
+race, unlike Hypothesis 1). Full plan, instrumentation points and flash
+strategy: [docs/kali-harvest-plan.md](docs/kali-harvest-plan.md)
+(batched with the B-23 speaker checklist and camera/LTE/mic/WiFi
+captures in one Kali flash session).
 
 Original parking note (2026-07-16), kept for history: build #262
 implements the re-scoped G2b firmware push (protocol in research.md
@@ -3574,3 +3580,9 @@ speaker:
 **Cost note:** harvest requires flashing `planet/linux.img` over the
 Debian rootfs (p29) and restoring afterwards (`mtk w linux`, 5.5 GB,
 slow) — that is why this is batched, per user decision 2026-07-20.
+
+**Batched session planned 2026-07-20:** this checklist is folded into
+the consolidated Kali harvest session (instrumented vendor kernel on
+the `boot` partition, boot2/#269 untouched) together with B-21
+BT/CONSYS, camera, LTE, mic and WiFi captures — see
+[docs/kali-harvest-plan.md](docs/kali-harvest-plan.md).
