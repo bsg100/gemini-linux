@@ -94,6 +94,24 @@ root, and its rootfs is writable — unlike the Android LXC ramdisk). Lower
 fidelity (no hexdumps at wire level unless present as pr_debug) but no
 build risk.
 
+### Status 2026-07-20 — INSTRUMENTED KERNEL BUILT AND PACKED
+
+- Baseline + instrumentation both build clean in the VM with GCC 14:
+  patches `patches/vendor-3.18/0001` (build fixes; see its README for the
+  exact make invocation) and `0002-harvest-instrumentation.patch` (forced
+  WMT/STP/BTIF debug log levels, WMT TX/RX + BTIF TX/RX hexdumps,
+  `harvest_snap()` register snapshots of 0x10001f00 / CPUPCR /
+  TOP1_PWR_CTRL / ACK regs at power-on steps).
+- Flashable image: `logs/2026-07-20-H1-kali-harvest-kernel/harvest_kali_boot.img`
+  (sha256 `6a6b4885…`, banner `3.18.41-kali #3 … Jul 20 2026`), packed with
+  the vendor DTB (`docs/vendor-dtb/gemini_kali_boot.dtb`) and the unchanged
+  vendor ramdisk, reference header addrs (kernel_addr 0x40080000).
+  Config/System.map alongside. Image is untested on hardware.
+- **Pre-flash finding:** vendor BTIF hard-enables **DMA for both TX and
+  RX** (`ENABLE_BTIF_TX/RX_DMA` in `btif/common/inc/mtk_btif.h`); our #262
+  spike is PIO-only — a first-class delta the trace will now log per
+  transfer (`HARVEST-BTIF-TX: … mode=DMA|PIO`).
+
 ## Part 2 — Passive captures on the running Kali session
 
 Run everything below in one session, saving outputs under
