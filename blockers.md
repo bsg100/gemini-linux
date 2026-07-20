@@ -3232,6 +3232,40 @@ Stage 2; approved plan in research.md "CONSYS Stage W0 harvest").
   ROM+firmware together, never ROM alone, and our spike (ROM-only,
   no firmware push) failing to get a reply is expected vendor-matching
   behaviour, not evidence of a driver bug.
+- **Update 2026-07-20 — Kali harvest session closed; hypothesis 1
+  strengthened by direct trace evidence, but no new pathway to WiFi.**
+  Full session: [docs/kali-harvest-plan.md](docs/kali-harvest-plan.md).
+  The instrumented vendor 3.18 kernel's boot capture
+  (`logs/2026-07-20-H18-kali-harvest-boot.log`) recorded genuine
+  two-way BTIF/WMT traffic on real hardware — 1198 `HARVEST-BTIF-RX`,
+  1479 `HARVEST-BTIF-TX`, 584 `HARVEST-WMT-RX`, 1378 `HARVEST-WMT-TX`
+  events — i.e. direct proof the vendor stack completes the firmware
+  push and the ROM does answer over BTIF once firmware is resident.
+  This upgrades hypothesis 1 from "confirmed by timing evidence
+  without a direct pre/post diff" (2026-07-16 wording above) to
+  "confirmed with a real working-trace reference" — but it is still
+  not a pre-firmware capture (H18, like every prior harvest, starts
+  after `wmt_launcher` has already fired), so the original gap stands:
+  we still have no evidence of what the ROM does or needs *before*
+  firmware is pushed.
+  **Cross-checked live 2026-07-20 against the current build (#269,
+  running on hardware today): the `mtk-consys-spike` diagnostic still
+  reproduces the exact pre-harvest failure signature** — G2a passes
+  (chip ID 0x279), WMT query gets 0 RX bytes, retry TX stalls with
+  `BTIF TX stuck, LSR=0x20` — identical to the build #257/#259
+  signature this section already documents. Nothing about the harvest
+  changed the AP-side driver; it only added stronger evidence for a
+  hypothesis that was already the leading explanation.
+  **Net effect: there is still no pathway to WiFi/Bluetooth.** The
+  harvest closed without attempting the one thing that would actually
+  move this gate — pushing the real WMT firmware patch
+  (`docs/firmware-consys/ROMv3_patch_1_0_hdr.bin` /
+  `_1_1_hdr.bin`) through our own spike driver before judging G2b, per
+  the Stage W3 re-scope already called for below. That re-scoped
+  attempt was never built or flashed. Resuming WiFi work means
+  starting there, not re-running more harvest captures — the vendor
+  reference behaviour is now well-evidenced; what's missing is a
+  firmware-push implementation in our own driver to test against it.
 - **Stage W3:** go/no-go on the full gen2 port (frank-w 5.6→6.6 delta
   audit); if GO, port order = WMT core → AHB HIF → cfg80211 glue, WiFi
   only. Given the hypothesis-1 conclusion above, G2b as originally
