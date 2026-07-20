@@ -3498,3 +3498,44 @@ follow-ups: bq25890 boost does not self-resume after charger removal;
 xhci misses disconnect events, recovers on next connect; two-crash
 "reboot panic" mystery from #248 remains unexplained). CLAUDE.md Phase 8
 table row updated 2026-07-15.
+
+## 🟡 B-23 — PARKED 2026-07-20: loudspeaker silent on mainline despite vendor-exact enable replication — opened 2026-07-19
+
+Headphones work (#267, all-mainline). Speaker is silent although every
+element of the vendor mechanism was verified or replicated bit-exactly
+on build #268: LOL analog path live (DAPM + register dump), enable =
+GPIO243/244 3×2 µs low→high pulses ending high (AW8736-style, source-
+confirmed in gemian 3.18 `AudDrv_GPIO_EXTAMP_Select` which reuses the
+HPDEPOP pinctrl slots; pin identity triple-sourced from real DTB
+`pins <0xf300>/<0xf400>`, DWS, and shipped-kernel disassembly), pulses
+driven at register speed via /dev/mem with pad mode/dir/DOUT readback
+confirmed, vendor call-order replicated mid-playback. All silent. Full
+evidence: boot.md "#268 OUTCOME". No hidden i2c amp (full bus scan);
+MAX98926 unstuffed. Speaker works on stock Android, so hardware is fine
+— we are missing an invisible precondition (amp supply rail, board
+rework pad, or an entirely different enable).
+
+**Resume plan — HARVEST SESSION on vendor Kali 3.18 (root shell,
+unlike Android):** next time `planet/linux.img` + Kali boot chain is
+flashed, capture everything in ONE session while playing audio to the
+speaker:
+
+1. GPIO state of ALL 262 pins while speaker audible: `/sys/devices/virtual/misc/mtgpio/pin`
+   (root can read it there) — diff speaker-on vs speaker-off vs
+   headphone-on.
+2. MT6351 full register dump speaker-on vs off (vendor debug nodes or
+   /proc/asound; do NOT touch `*_access` sysfs nodes — they crash the
+   vendor kernel, see memory).
+3. dmesg with `Ext_Speaker_Amp_Change`/`Speaker_Amp_Change` pr_debug
+   enabled (dynamic debug) to see which functions actually run and
+   which aud_gpios entries have `gpio_prepare` true.
+4. /proc/asound cards/pcm, active mixer control values (tinymix dump)
+   in speaker mode.
+5. PMIC LDO/BUCK enable states (charger/regulator sysfs, not *_access).
+6. Anything else pending at that time (check open blockers before
+   booting the harvest session so it is all done at once — reflashing
+   Kali/Debian back is slow).
+
+**Cost note:** harvest requires flashing `planet/linux.img` over the
+Debian rootfs (p29) and restoring afterwards (`mtk w linux`, 5.5 GB,
+slow) — that is why this is batched, per user decision 2026-07-20.

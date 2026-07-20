@@ -8023,3 +8023,153 @@ Sample decoded frame: X=380 Y=862 pressure=200 in the landscape ranges
 `patches/v6.6/input/0002`, DTS `dts/0017`, config
 `configs/gemini-touch.config`. Remaining polish (not blocking): EINT
 migration when B-11 lands; suspend/resume policy.
+
+---
+
+## BUILD #267 — AUDIO: MT6797 AFE + MT6351 CODEC, FIRST WIRING (2026-07-19)
+
+**Goal:** Phase 9 audio bring-up using the fully-mainline stack — no
+driver ports needed: `sound/soc/mediatek/mt6797/` (AFE PCM + machine
+driver `mt6797-mt6351.c`, in mainline since 4.18) +
+`sound/soc/codecs/mt6351.c`.
+
+**Changes:**
+- `patches/v6.6/dts/0018-arm64-dts-mediatek-gemini-add-audio-afe-mt6351.patch`:
+  - `afe: audio-controller@11220000` (`mediatek,mt6797-audio`): reg +
+    IRQ SPI 151 level-low from the vendor DTB `audio@11220000`
+    (`interrupts = <0 0x97 0x08>`), matching the mainline binding
+    example. `power-domains = <&scpsys MT6797_POWER_DOMAIN_AUDIO>`
+    (mtk-scpsys mt6797 data, ctl_offs 0x314, no domain clocks). 8 clocks
+    per the binding doc; the driver consumes 7 by name, all IDs present
+    in clk-mt6797.
+  - `mt6351_codec` node (`mediatek,mt6351-sound`) as a direct child of
+    `&pwrap`: the codec takes `dev_get_regmap(parent)`; the pwrap
+    registers a regmap on its own device over the same 16-bit PMIC
+    address space — the exact pattern already proven on hardware by the
+    minimal MT6351 VCN regulator driver (regulator/0002).
+  - `sound` node (`mediatek,mt6797-mt6351-sound`) linking both.
+- `configs/gemini-audio.config`: `SND_SOC_MT6797[_MT6351]=y` (+ SOUND/
+  SND/SND_SOC core).
+
+**Provenance:** `logs/2026-07-19-267-audio-afe-mt6351/`, banner
+`#267 SMP PREEMPT Sun Jul 19 09:08:21 UTC 2026`, sha256
+`124d6b78ea740083088f5adc26a6f8558a81ebfcefaa69157eb1a288aeff9b33`.
+DTB spot-check confirmed both `mt6351-sound` and
+`mt6797-mt6351-sound` nodes present.
+
+**Risks / what to watch on serial:**
+- AFE probe requests SPI 151 (level-low) — same IRQ class as the B-13
+  DSI hang; if boot stalls at AFE probe, suspect an asserted level-low
+  line, and the first diagnostic is the GIC-observer technique.
+- scpsys AUDIO domain first-ever power-on under mainline: watch for
+  `scpsys` timeout errors.
+- Codec regmap-through-pwrap is unproven for the *audio* register
+  banks (regulator rails were proven); a codec probe error would show
+  as `mt6351` ASoC component bind failure.
+
+**Test plan after flash:** verify banner `#267`; `aplay -l` should list
+the `mt6797-mt6351` card; `speaker-test -c 2 -t sine -f 440` for output;
+check `dmesg | grep -i "afe\|6351\|asoc"` for bind status. Mixer routing
+(speaker amp / headphone path) likely needs `amixer` setup before sound
+is audible — vendor uses an external speaker amp; if sine is inaudible
+on speaker, try headphones first.
+
+**Flash:** `mtk.py w boot2 logs/2026-07-19-267-audio-afe-mt6351/new_kali_boot.img`
+
+---
+
+## BUILD #267 OUTCOME — AUDIO WORKING ON HEADPHONES (2026-07-19)
+
+**Result: first sound on mainline.** User confirms audible 440 Hz sine
+on headphones. Card `mt6797-mt6351` registered; codec + AFE bound with
+zero errors — scpsys AUDIO domain powered on first try, all 7 AFE
+clocks acquired, SPI 151 IRQ requested without incident (the B-13-style
+level-low risk did not materialise).
+
+**Routing required (DPCM):** raw playback initially failed with
+`no backend DAIs enabled for Playback_1`. Fix (now baked into
+`scripts/audio-test.sh`):
+- `amixer sset 'ADDA_DL_CH1 DL1_CH1' on` / `'ADDA_DL_CH2 DL1_CH2' on`
+  (DL1 frontend → ADDA backend interconnection)
+- `HPL Mux`/`HPR Mux` = item 2 `Audio Playback` (headphone)
+
+**Open items:** loudspeaker path (`LoudSPK Playback` mux item 1)
+routed but not confirmed audible — likely needs the external speaker
+amp enabled (vendor DTS/GPIO to be identified). Capture (mic) untested.
+ALSA state should be persisted (`alsactl store` or a UCM profile) so
+routing survives reboot.
+
+**Device access note:** SSH as `gemini`/`gemini` (user rule); device on
+LAN at `192.168.100.146` (right-port ethernet), `alsa-utils` installed
+to the rootfs 2026-07-19.
+
+---
+
+## BUILD #268 — DEBUG BUILD: WRITABLE REGMAP DEBUGFS (SPEAKER HUNT) (2026-07-19)
+
+**Goal:** loudspeaker enable hunt. Headphones work (#267) but the speaker
+is silent despite the MT6351 LOL registers matching the vendor
+`Speaker_Amp_Change` sequence exactly (live dump: CON3=0x4234, CON9=0xa255,
+CON10=0x0100, CON6 bias set, lineout gain raised). Eliminated by
+experiment: SoC GPIO243/244 (DWS `GPIO_EXT_SPKAMP_EN_PIN`), GPIO234/235
+(`headphone_en`/`headphone_cs`), AW9523B spare line 15 — all silent.
+Android evidence (adb, stock boot slot): speaker WORKS on Android;
+shipped kernel builds a MAX98926 smart-amp driver but no MAX98926 DAI
+registers (`max98926L is not find` — chip not stuffed; i2c0/0x31 never
+ACKs); shipped kernel also carries `Receiver_Speaker_Switch` (6755-style
+GPIO analog switch) but no `rcvspkswitch-gpio` property exists in the
+real Android DTB. Android DTB smartpa/extamp pinctrl states are empty
+stubs, same as the Kali DTB.
+
+**Change:** `patches/v6.6/zz-debug/0023-GEMINI-DEBUG-regmap-allow-write-debugfs.patch`
+(enabled, ALLOW_DEBUG=1): defines `REGMAP_ALLOW_WRITE_DEBUGFS` in
+regmap-debugfs.c so `/sys/kernel/debug/regmap/1000d000.pwrap/registers`
+is writable → live MT6351 codec/PMIC register experiments from Debian
+(replay vendor sequences, LDO-enable sweep) without per-experiment
+reflashes. Marker `GEMINI-DEBUG: regmap debugfs writes enabled` printed
+at init.
+
+**Provenance:** `logs/2026-07-19-268-regmap-write-debugfs/`, banner #268.
+**Flash:** `mtk.py w boot2 logs/2026-07-19-268-regmap-write-debugfs/new_kali_boot.img`
+**Next:** with tone looping, replay vendor Speaker_Amp/Headset_Speaker_Amp
+register sequences bit-exactly; sweep MT6351 LDO enable bits for an
+amp supply rail Android turns on.
+
+## #268 OUTCOME — SPEAKER HUNT EXHAUSTED, PARKED (2026-07-20)
+
+Every vendor-mechanism hypothesis was replicated exactly and all were
+silent. Evidence chain (all on build #268, Debian, LAN SSH):
+
+- **Enable pin identity confirmed three ways:** real Android DTB
+  (`docs/vendor-dtb/gemini_kali_boot.dts` audgpio `hpdepop-pullhigh/low`
+  = `pins <0xf300>` = GPIO243, `_e2` = 0xf400 = GPIO244), gemian 3.18
+  source (`AudDrv_GPIO_EXTAMP_Select` deliberately reuses the
+  GPIO_HPDEPOP slots — the hpdepop naming *is* the amp enable), and DWS
+  (`GPIO_EXT_SPKAMP_EN_PIN`/`GPIO_EXT_SPKAMP2_EN_PIN`).
+- **Waveform replicated at register speed:** libgpiod ioctl pulses were
+  too slow to trust (AW8736 spec: 0.75 µs < TL < 10 µs), so `/root/spkpulse2`
+  and `/root/spkpulse3` (scratchpad `spkpulse2.c`/`spkpulse3.c`, /dev/mem
+  mmap of pinctrl DOUT 0x10005170 bits 19/20) drive true 2 µs edges.
+  Pad state verified by readback: mode reg 0x100054E0 nibble 243 = 0
+  (GPIO), DIR bank7 bit19 = out, DOUT toggles as commanded.
+- **Vendor-exact final test:** 6797 `Ext_Speaker_Amp_Change(true)` order —
+  both pins low, ms wait, 3×2 µs pulses on 243, then 3 on 244, both left
+  high, executed mid-playback with LOL-only routing (HPL/HPR Mux = Open,
+  LOL Mux = Playback, Lineout Volume 0 dB) — silent. Variants also
+  silent: 1/2/4 pulses, each pin alone, both pins, LoudSPK HP-mux mode.
+- **Analog source proven live:** DAPM debugfs during playback shows LOL
+  Mux/LOL Buffer/LOL Bias Gen all On (mainline mt6351), and the #267
+  session already verified the LOL register values bit-exact vs vendor
+  `Speaker_Amp_Change`.
+- **No hidden i2c amp:** full i2cdetect scan of buses 0–6 shows only the
+  known bound devices; 0x31 (MAX98926, unstuffed) and everything else
+  dead. Amp must be pin-controlled — consistent with AW8736.
+- gemian git history has **no Planet-specific audio commits** — stock
+  MTK code drove the Gemini speaker on Android/Gemian, so the mechanism
+  above *should* be complete. Something environmental is missing
+  (amp supply rail? different pad? board rework?) that we cannot see
+  without observing the working OS.
+
+**Parked 2026-07-20 (user decision).** Resume plan: next time the
+vendor Kali 3.18 image is flashed (root shell, unlike Android), harvest
+everything in one session — see blockers.md B-23 for the checklist.

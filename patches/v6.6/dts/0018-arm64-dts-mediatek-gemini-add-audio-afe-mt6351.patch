@@ -1,0 +1,80 @@
+diff --git a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+--- a/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+@@ -1231,6 +1231,20 @@
+ 				};
+ 			};
+ 		};
++
++		/*
++		 * MT6351 audio codec (Phase 9 audio). Mainline
++		 * sound/soc/codecs/mt6351.c takes its regmap from
++		 * dev_get_regmap(parent) — normally an MT6351 MFD, which
++		 * mainline lacks. Placed directly under pwrap instead: the
++		 * pwrap registers a regmap on its own device covering the
++		 * same 16-bit PMIC address space, the exact pattern already
++		 * proven by regulator/0002 (mt6351-regulator.c) on this
++		 * child bus.
++		 */
++		mt6351_codec: mt6351-sound {
++			compatible = "mediatek,mt6351-sound";
++		};
+ 	};
+ 
+ 	consys: consys@18070000 {
+@@ -1245,7 +1259,55 @@
+ 		vcn18-supply = <&mt6351_vcn18_reg>;
+ 		vcn28-supply = <&mt6351_vcn28_reg>;
+ 		memory-region = <&consys_mem>;
++	};
++};
++
++/*
++ * --- Audio: MT6797 AFE + MT6351 codec (Phase 9) ---
++ *
++ * All three drivers are mainline: sound/soc/mediatek/mt6797/ (AFE PCM +
++ * machine driver) and sound/soc/codecs/mt6351.c (codec node under
++ * &pwrap above).
++ *
++ * afe: reg 0x11220000/0x10000 and IRQ SPI 151 level-low from the vendor
++ * DTB (audio@11220000, interrupts = <0 0x97 0x08>); both match the
++ * mainline binding example (mt6797-afe-pcm.txt). Power domain =
++ * scpsys AUDIO (mtk-scpsys mt6797 data, ctl_offs 0x314). Clock list =
++ * the 7 names mt6797-afe-clk.c requires, plus the binding doc's
++ * mtkaif_26m_clk (CLK_INFRA_AUDIO_26M_PAD_TOP — also in the vendor
++ * node's clock list as aud_infra_26m_pad_top); all IDs exist in
++ * clk-mt6797. Handoff: AFE clocks/domain are runtime-PM managed and
++ * released when idle, so the Android side re-initialises freely.
++ */
++/ {
++	afe: audio-controller@11220000 {
++		compatible = "mediatek,mt6797-audio";
++		reg = <0 0x11220000 0 0x10000>;
++		interrupts = <GIC_SPI 151 IRQ_TYPE_LEVEL_LOW>;
++		power-domains = <&scpsys MT6797_POWER_DOMAIN_AUDIO>;
++		clocks = <&infrasys CLK_INFRA_AUDIO>,
++			 <&infrasys CLK_INFRA_AUDIO_26M>,
++			 <&infrasys CLK_INFRA_AUDIO_26M_PAD_TOP>,
++			 <&topckgen CLK_TOP_MUX_AUDIO>,
++			 <&topckgen CLK_TOP_MUX_AUD_INTBUS>,
++			 <&topckgen CLK_TOP_SYSPLL3_D4>,
++			 <&topckgen CLK_TOP_SYSPLL1_D4>,
++			 <&clk26m>;
++		clock-names = "infra_sys_audio_clk",
++			      "infra_sys_audio_26m",
++			      "mtkaif_26m_clk",
++			      "top_mux_audio",
++			      "top_mux_aud_intbus",
++			      "top_sys_pll3_d4",
++			      "top_sys_pll1_d4",
++			      "top_clk26m_clk";
+ 	};
++
++	sound {
++		compatible = "mediatek,mt6797-mt6351-sound";
++		mediatek,platform = <&afe>;
++		mediatek,audio-codec = <&mt6351_codec>;
++	};
+ };
+ 
+ /*
