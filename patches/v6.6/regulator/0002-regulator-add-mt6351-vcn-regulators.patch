@@ -1,19 +1,20 @@
 diff --git a/drivers/regulator/Kconfig b/drivers/regulator/Kconfig
-index 965d4f0c1..ff69a2843 100644
+index 965d4f0c1..ca966da71 100644
 --- a/drivers/regulator/Kconfig
 +++ b/drivers/regulator/Kconfig
-@@ -842,6 +842,15 @@ config REGULATOR_MT6332
+@@ -842,6 +842,16 @@ config REGULATOR_MT6332
  	  This driver supports the control of different power rails of device
  	  through regulator interface
  
 +config REGULATOR_MT6351
-+	tristate "MediaTek MT6351 PMIC (CONSYS VCN rails only)"
++	tristate "MediaTek MT6351 PMIC (CONSYS VCN rails + msdc1 SD rails)"
 +	depends on MTK_PMIC_WRAP
 +	help
 +	  Say y here to enable the minimal MT6351 PMIC regulator driver
-+	  covering only the VCN LDOs (vcn18/vcn28/vcn33_bt/vcn33_wifi)
-+	  needed by the MT6797 CONSYS connectivity block. All other MT6351
-+	  rails are left as configured by the bootloader.
++	  covering the VCN LDOs (vcn18/vcn28/vcn33_bt/vcn33_wifi) needed by
++	  the MT6797 CONSYS connectivity block, plus the vmch/vmc SD card
++	  rails needed by msdc1. All other MT6351 rails are left as
++	  configured by the bootloader.
 +
  config REGULATOR_MT6357
  	tristate "MediaTek MT6357 PMIC"
@@ -32,10 +33,10 @@ index 23074714a..0dc082b0e 100644
  obj-$(CONFIG_REGULATOR_MT6359)	+= mt6359-regulator.o
 diff --git a/drivers/regulator/mt6351-regulator.c b/drivers/regulator/mt6351-regulator.c
 new file mode 100644
-index 000000000..c855f8539
+index 000000000..f3b6c305a
 --- /dev/null
 +++ b/drivers/regulator/mt6351-regulator.c
-@@ -0,0 +1,136 @@
+@@ -0,0 +1,203 @@
 +// SPDX-License-Identifier: GPL-2.0
 +//
 +// Minimal MT6351 PMIC regulator driver — CONSYS VCN rails only.
@@ -64,6 +65,25 @@ index 000000000..c855f8539
 +#define MT6351_LDO_VCN18_CON0		0x0a52
 +#define MT6351_LDO_VCN33_CON3		0x0a98	/* BT enable bank */
 +#define MT6351_LDO_VCN33_CON4		0x0a9a	/* WIFI enable bank */
++#define MT6351_LDO_VMCH_CON0		0x0a2e	/* SD card power (msdc1) */
++#define MT6351_LDO_VMC_CON0		0x0aaa	/* SD I/O rail (msdc1) */
++
++/*
++ * Voltage-select registers for the SD rails (vendor upmu_hw.h
++ * MT6351_PMIC_RG_VMCH_VOSEL_* / RG_VMC_VOSEL_*). VMCH: 1 bit @8
++ * {3.0V, 3.3V}; VMC: 3 bits @8, full table {1.2, 1.3, 1.5, 1.8, 2.0,
++ * 2.9, 3.0, 3.3}V — code 3 = 1.8V and 5 = 2.9V match the vendor
++ * msdc_io.c debug legend ("3b'101(2.8V), 3b'011(1.8V)"). The vendor SD
++ * power-on uses VMCH=3.0V + VMC=3.0V (msdc_io.c msdc_sd_power), so the
++ * probe below pins both VOSELs to 3.0V and the rails are registered as
++ * fixed 3.0V. VMC's 1.8V UHS switch is deliberately not modelled yet.
++ */
++#define MT6351_VMCH_ANA_CON0		0x0ace
++#define MT6351_VMC_ANA_CON0		0x0ae2
++#define MT6351_VMCH_VOSEL_MASK		(0x1 << 8)
++#define MT6351_VMCH_VOSEL_3V0		(0x0 << 8)
++#define MT6351_VMC_VOSEL_MASK		(0x7 << 8)
++#define MT6351_VMC_VOSEL_3V0		(0x6 << 8)
 +
 +/* Common CON0/CON3/CON4 bit layout for these LDOs */
 +#define MT6351_LDO_EN			BIT(1)
@@ -95,12 +115,65 @@ index 000000000..c855f8539
 +	MT6351_ID_vcn28,
 +	MT6351_ID_vcn33_bt,
 +	MT6351_ID_vcn33_wifi,
++	MT6351_ID_vmch,
++	MT6351_ID_vmc,
 +	MT6351_ID_max
 +};
 +
++/*
++ * Per-rail one-time hardware setup, applied lazily on first enable()
++ * rather than unconditionally in probe() — probe runs on every boot
++ * regardless of whether anything actually uses these rails yet, and an
++ * early poke at the shared pwrap bus (before consys/msdc1 need it) is a
++ * plausible source of boot-time probe-ordering fragility elsewhere on
++ * this bus (see boot.md build #280 entry). Deferring to enable() means
++ * these only fire when a real consumer (consys-spike for vcn28, the
++ * msdc1 mmc host for vmch/vmc) actually requests the rail.
++ */
++static int mt6351_ldo_enable(struct regulator_dev *rdev)
++{
++	struct regmap *regmap = rdev->regmap;
++	int ret;
++
++	switch (rdev_get_id(rdev)) {
++	case MT6351_ID_vcn28:
++		/*
++		 * Vendor consys power-on switches VCN28 to hardware
++		 * (SRCLKEN) control mode before enabling it
++		 * (mtk_wcn_consys_hw.c: "switch VCN28 to HW control
++		 * mode", RG_VCN28_ON_CTRL = 1, applied when
++		 * co_clock_flag = 0, this device's WMT_SOC.cfg value).
++		 */
++		ret = regmap_update_bits(regmap, MT6351_LDO_VCN28_CON0,
++					 MT6351_LDO_ON_CTRL,
++					 MT6351_LDO_ON_CTRL);
++		if (ret)
++			return ret;
++		break;
++	case MT6351_ID_vmch:
++		ret = regmap_update_bits(regmap, MT6351_VMCH_ANA_CON0,
++					 MT6351_VMCH_VOSEL_MASK,
++					 MT6351_VMCH_VOSEL_3V0);
++		if (ret)
++			return ret;
++		break;
++	case MT6351_ID_vmc:
++		ret = regmap_update_bits(regmap, MT6351_VMC_ANA_CON0,
++					 MT6351_VMC_VOSEL_MASK,
++					 MT6351_VMC_VOSEL_3V0);
++		if (ret)
++			return ret;
++		break;
++	default:
++		break;
++	}
++
++	return regulator_enable_regmap(rdev);
++}
++
 +/* Fixed-voltage LDOs: the core serves fixed_uV when n_voltages == 1 */
 +static const struct regulator_ops mt6351_ldo_ops = {
-+	.enable = regulator_enable_regmap,
++	.enable = mt6351_ldo_enable,
 +	.disable = regulator_disable_regmap,
 +	.is_enabled = regulator_is_enabled_regmap,
 +};
@@ -110,6 +183,8 @@ index 000000000..c855f8539
 +	MT6351_LDO_FIXED(vcn28, 2800000, MT6351_LDO_VCN28_CON0),
 +	MT6351_LDO_FIXED(vcn33_bt, 3300000, MT6351_LDO_VCN33_CON3),
 +	MT6351_LDO_FIXED(vcn33_wifi, 3300000, MT6351_LDO_VCN33_CON4),
++	MT6351_LDO_FIXED(vmch, 3000000, MT6351_LDO_VMCH_CON0),
++	MT6351_LDO_FIXED(vmc, 3000000, MT6351_LDO_VMC_CON0),
 +};
 +
 +static int mt6351_regulator_probe(struct platform_device *pdev)
@@ -125,17 +200,10 @@ index 000000000..c855f8539
 +	}
 +
 +	/*
-+	 * Vendor consys power-on switches VCN28 to hardware (SRCLKEN)
-+	 * control mode before enabling it (mtk_wcn_consys_hw.c: "switch
-+	 * VCN28 to HW control mode", RG_VCN28_ON_CTRL = 1, applied when
-+	 * co_clock_flag = 0, which is this device's WMT_SOC.cfg value).
++	 * Per-rail hardware setup (VCN28 ON_CTRL, VMCH/VMC VOSEL) is done
++	 * lazily in mt6351_ldo_enable() on first enable(), not here — see
++	 * that function's comment for why.
 +	 */
-+	ret = regmap_update_bits(regmap, MT6351_LDO_VCN28_CON0,
-+				 MT6351_LDO_ON_CTRL, MT6351_LDO_ON_CTRL);
-+	if (ret) {
-+		dev_err(&pdev->dev, "VCN28 ON_CTRL setup failed: %d\n", ret);
-+		return ret;
-+	}
 +
 +	for (i = 0; i < MT6351_ID_max; i++) {
 +		config.dev = &pdev->dev;

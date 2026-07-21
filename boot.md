@@ -8532,3 +8532,465 @@ register values at each HARVEST-SNAP point) and fold findings into
 blockers.md B-21. After the harvest session concludes, restore the Debian
 rootfs (`mtk w linux ~/gemini-build/OUTPUT/debian13-rootfs.img`) and
 verify `boot2` (#269) is still intact.
+
+---
+
+## 2026-07-21 — Stage W4 BTIF DMA transport: BUILD #273 PACKED, NOT YET FLASHED
+
+**Context:** B-21 next-step planning found the blockers.md 2026-07-20/21
+harvest-closure entries were stale — they claimed the Stage W3 firmware-push
+spike was "never built or flashed," but it was, as build #262
+(`logs/2026-07-16-262-consys-g2b-fw-push/`, tested 2026-07-20). #262's G2b
+still FAILed, and failed at the transport level: every TX after the first
+went `BTIF TX stuck, LSR=0x20` (shift register never drains), so no firmware
+fragment was ever sent.
+
+**Change:** `patches/v6.6/soc/0003-soc-mediatek-add-mt6797-consys-spike.patch`
+rewritten to drive BTIF over its DMA ("VFF ring") channels instead of PIO,
+matching the vendor driver (which hard-enables DMA for both directions and
+never uses PIO for real traffic). `patches/v6.6/dts/0013` gains the second
+`apdma` clock (`CLK_INFRA_AP_DMA`) the DMA channels need, matching the
+vendor DTB's `btif@1100c000` two-clock scheme. Full technical rationale and
+implementation notes are in blockers.md B-21 "Stage W4" entry
+(2026-07-21).
+
+**Verification done pre-build:** `git apply --check` clean for both patches
+against a fresh `v6.6` tree, and a full `for p in $(find patches/v6.6 -name
+'*.patch' | sort); do git apply "$p"; done` run applied every patch in the
+tree with zero failures (validated in a disposable git worktree, not the
+Mac checkout in active use).
+
+**Build #273** (`/build-pack` 2026-07-21): VM root disk was 100% full
+(9.7G/9.7G) on the first attempt, aborting `make` mid-`net` build with
+`mkdir: ... No space left on device` — unrelated to the patch content.
+Freed ~5.2G by deleting the two vendor 3.18 kernel checkouts left over from
+the 2026-07-20 Kali harvest session (`gemini-android-kernel-3.18` +
+`-android8`, both easily re-clonable if that work resumes) + `fstrim /`,
+leaving 4.8G free. Rebuild succeeded cleanly. Provenance:
+`logs/2026-07-21-273-consys-g2b-dma/` (`new_kali_boot.img`, `.config`,
+`System.map`), sha256
+`8b94d06afb2e9aca8d670cccbc598e520871f9f174919090c3a128baf3252464`,
+banner `#273 SMP PREEMPT Tue Jul 21 06:27:41 UTC 2026` (matches build
+number). DTB spot-check confirms `clock-names = "btif", "apdma"` landed.
+Not yet flashed or tested on hardware.
+
+**Flash — `boot2` only** (this project keeps `boot` as stock Android; the
+generic build-pack next-steps output also prints a `boot` command, ignore
+it):
+```
+~/gemini-build/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 /Volumes/extdata/github/gemini_linux/logs/2026-07-21-273-consys-g2b-dma/new_kali_boot.img
+```
+
+**Capture:**
+```
+python3 scripts/ftdi-monitor.py --interactive --log logs/2026-07-21-274-consys-g2b-dma-boot.log
+```
+
+Compare against #262's dmesg signature: does `BTIF TX stuck` disappear? Does
+RX see a non-zero byte count for the first time? Does CPUPCR still degrade
+to the abnormal `0x55AA55xx` pattern? Document the result in this file and
+blockers.md regardless of outcome.
+
+---
+
+## 2026-07-21 — Build #273 FLASHED: silent hard reset during driver-probe, no panic/BUG text
+
+**Capture:** `logs/2026-07-21-274-consys-g2b-dma-boot.log` (banner `#273`,
+confirmed via `boot-log-triage`). Boot reached driver-probe phase cleanly
+(DRM/display components registering, network drivers, `mtu3` USB gadget
+init) up to kernel time **t=0.463679s** (`mtu3 11271000.usb: u2p_dis_msk: 0,
+u3p_dis_msk: 0`), then the log jumps straight to garbled bytes followed by
+a fresh LK preloader banner — i.e. **the board hard-reset with zero
+panic/BUG/WDT text**, the same "silent reset, no diagnostic text" signature
+this project hit repeatedly during the 2026-07-20 vendor-kernel harvest
+(H16, H20-H28) and the #240 CONSYS work, always traced to touching a
+not-yet-characterised register for the first time (a DEVAPC violation or
+an unreleased bus-protect bit). No `mmcblk0p29`/blockdev text appears
+anywhere in this capture — whatever was seen on the physical console at
+that point wasn't this board's `boot2` cycle (a second reset in the same
+capture landed in `boot` (Android) via LK's own key-triggered boot-target
+selection, unrelated to this patch, and reported `KERNEL partition magic
+not match` for that slot — separate, pre-existing issue, not investigated
+here).
+
+**Diagnosis:** the crash timing lines up with where the new BTIF-DMA probe
+code runs (`consys-spike` platform-driver probe, alongside the other
+driver-probe-phase boilerplate at the same point in boot). The DMA VFF
+channel register windows (`0x11000a00`/`0x11000a80`) had never been
+touched by any prior build, and `btif_dma_arm()` (the code doing the first
+writes to them) had no step-by-step logging — a violation of this file's
+own header comment ("every step logs to dmesg BEFORE it executes") and of
+`patches/STANDARDS.md`'s serial-observability rule.
+
+**Fix:** added `dev_info()` before/after every register write in
+`btif_dma_arm()` and around the DMA channel `ioremap()` calls in
+`consys_gate_g2b()`, so a repeat of this silent reset pins down the exact
+write. **Build #274** (`consys-g2b-dma-instrumented`): provenance
+`logs/2026-07-21-274-consys-g2b-dma-instrumented/`, sha256
+`3d38ff0c5038243f2da754c2ff83065f933ec342613acc734ce56e1b58e9ce32`, banner
+`#274 SMP PREEMPT Tue Jul 21 06:37:51 UTC 2026` (matches build number).
+`git apply --check` verified clean for the full patch set. Not yet flashed.
+
+**User recovered the device** by reflashing `boot2` back to the known-good
+build #269 (`logs/2026-07-20-269-right-port-high-speed/new_kali_boot.img`)
+after #273 got stuck in a reset loop.
+
+**Flash — `boot2` only:**
+```
+~/gemini-build/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 /Volumes/extdata/github/gemini_linux/logs/2026-07-21-274-consys-g2b-dma-instrumented/new_kali_boot.img
+```
+
+**Capture:**
+```
+python3 scripts/ftdi-monitor.py --interactive --log logs/2026-07-21-275-consys-g2b-dma-instrumented-boot.log
+```
+
+If it resets again, the last `consys-spike:` line before the garbage/reboot
+is the answer. **If it gets stuck in a reset loop again, immediately
+reflash `boot2` back to build #269** (command above) rather than
+retrying repeatedly — don't leave the device cycling.
+
+---
+
+## 2026-07-21 — Build #274 flashed: consys-spike G2B FAILs cleanly (no crash), but mmcblk0p29 mount regression found — root cause still open
+
+**Correction to the prior entry's diagnosis:** the "silent hard reset" theory
+was wrong. Video of the physical panel console (serial is blind here —
+console output isn't visible on screen before ~t=3.29s in any frame
+sampled, and serial itself dies at the known ~t=0.45s USB-mux point per
+B-15) shows `consys-spike` running to completion cleanly:
+```
+[    3.293582] mtk-consys-spike 18070000.consys: consys-spike: MCU CPUPCR samples: 0x130e0 0x199c 0x130c0
+[    3.294780] mtk-consys-spike 18070000.consys: consys-spike: GATE G2B FAIL (-110) - state left up for devmem inspection
+```
+Same `-110` timeout every prior build has hit — **the DMA transport
+(Stage W4) does not fix G2b either**, but it also doesn't hang/crash the
+board. Boot then continues completely normally: DRM/display, ALSA,
+keyboard, `Run /init as init process` at t=3.83s.
+
+**Real regression found:** `/dev/mmcblk0p29: Can't lookup blockdev`
+(repeating) at t≈6s on the panel — the eMMC rootfs partition isn't
+available when `/init` tries to mount it. Confirmed by direct comparison:
+build **#269 boots clean** (`ssh gemini@192.168.100.146`, banner `#269`,
+`mmc0`/`mmcblk0` with all 33 partitions enumerate at t=0.809s,
+`mmcblk0p29` mounts r/w normally) while **build #274 does not**. #274's
+only changes vs a working baseline are the BTIF DMA rewrite in
+`patches/v6.6/soc/0003` and the new `apdma` (`CLK_INFRA_AP_DMA`) clock
+added to the `consys` DTS node in `patches/v6.6/dts/0013` — neither
+touches storage code, so this is unexpected and not yet explained.
+`msdc0` probes (per #269) well before `consys-spike` even starts
+(t=0.809s vs t=0.812s+), in the exact window neither serial nor the
+panel-video captures taken so far can see into on #274 — **whether
+`msdc0` probes at all on #274 is still unknown.**
+
+**Incidental finding (separate from today's issue, worth its own future
+investigation):** #269's dmesg shows its own (older, #262-era PIO)
+`consys-spike` build's **ROM-only query passing** on this particular boot
+(`ROM-only query PASS - ROM answers pre-firmware`, 16-byte reply matching
+`WMT_QUERY_STP_EVT_DEFAULT`) before the firmware push itself failed at
+-110 partway through. This is the first captured instance of the
+pre-firmware query succeeding in this project's history — consistent with
+the intermittent nature already noted elsewhere in B-21 (H21-H27 harvest
+findings), not a new fix, but worth flagging for whoever resumes B-21.
+
+**Next:** need visibility into #274's t=0-3.3s window (where `msdc0`
+would probe) to determine if it fails outright or something else delays
+it. Neither serial nor 6/30fps panel-video captures so far have caught
+this window — requesting a slow-motion capture next. If `msdc0` genuinely
+fails to probe on #274, the `apdma` clock addition (the only DTS change)
+is the leading suspect despite no obvious mechanism (it's an independent
+INFRACFG gate bit, `GATE_ICG1(CLK_INFRA_AP_DMA, "infra_ap_dma", "axi_sel",
+18)`, sharing only a parent mux with other infra clocks, not a direct
+dependency of MSDC's own clock tree) — worth testing by temporarily
+dropping the `apdma` clock request/DTS property in isolation if the
+slow-motion capture doesn't resolve it directly.
+
+---
+
+## 2026-07-21 — Build #275: apdma clock made optional (isolation test for mmc regression) — BUILT, NOT YET FLASHED
+
+**Change:** `patches/v6.6/soc/0003` — the `apdma` clock request in
+`consys_gate_g2b()` switched from `devm_clk_get()` (mandatory, returns an
+error that aborts the rest of G2b if unavailable) to
+`devm_clk_get_optional()` (non-fatal; if missing or enable fails, G2b just
+proceeds without it). This does not fully explain the #274 mmcblk0p29
+regression (traced the code: a `consys_gate_g2b()` failure was already
+non-fatal to the overall probe — its return value is ignored by the
+caller — so it shouldn't have been able to defer/reorder other devices'
+probing in the first place), but it removes the one DTS/driver change in
+#274 as a variable entirely, for a clean bisection test.
+
+**Build:** provenance `logs/2026-07-21-275-consys-apdma-optional/`, sha256
+`1119a11a3f8f0a74d9519f49e4584d05a4ac0287cd6c469a78a23d2dd192639b`, banner
+`#275 SMP PREEMPT Tue Jul 21 07:08:54 UTC 2026` (matches build number).
+`git apply --check` clean for the full patch set. Not yet flashed.
+
+**Flash — `boot2` only:**
+```
+~/gemini-build/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 /Volumes/extdata/github/gemini_linux/logs/2026-07-21-275-consys-apdma-optional/new_kali_boot.img
+```
+**Capture:**
+```
+python3 scripts/ftdi-monitor.py --interactive --log logs/2026-07-21-276-consys-apdma-optional-boot.log
+```
+**If `mmcblk0p29` still fails:** the apdma clock is ruled out; the DMA
+register-poking itself (or something else entirely) becomes the next
+suspect. **If it boots clean:** apdma clock confirmed as the cause via a
+mechanism not yet understood, worth a closer look before trusting it long
+term. **If it gets stuck in a reset loop, reflash `boot2` back to #269**
+immediately (`logs/2026-07-20-269-right-port-high-speed/new_kali_boot.img`).
+
+---
+
+## 2026-07-21 — Build #275 tested: apdma clock ruled out, mmcblk0p29 regression persists — Stage W4 DMA experiment concluded
+
+**Result:** identical failure to #274 — `mmcblk0p29: Can't lookup blockdev`
+still occurs with the `apdma` clock made non-fatal/optional. Serial capture
+(`logs/2026-07-21-276-consys-apdma-optional-boot.log`) adds nothing new
+(dies at t=0.474s, same B-15 signature as every prior capture).
+
+**Conclusion:** the `apdma` clock is ruled out as the cause of the mmc
+regression. Remaining candidates (not investigated further this session):
+the BTIF DMA channel register pokes themselves (`btif_dma_arm()`,
+`0x11000a00`/`0x11000a80` — genuinely new hardware for this project, with
+a track record of surprises when touched for the first time), or the two
+`dma_alloc_coherent()` calls.
+
+**Decision: stop here.** The DMA transport experiment (Stage W4) already
+answered its primary question — Gate G2B still fails with the same `-110`
+timeout under DMA as it did under PIO (#262), so DMA is **not** the fix
+for B-21's CONSYS/BTIF handshake blocker either. Continuing to debug a
+second, unrelated storage regression in service of an already-failed
+experiment isn't a good use of further build cycles. Device reflashed back
+to build **#269** (`logs/2026-07-20-269-right-port-high-speed/new_kali_boot.img`)
+as the stable baseline.
+
+---
+
+## 2026-07-21 — Build #272 flashed and tested: `mmcblk0p29: Can't lookup blockdev` on the msdc1 build too — traced to a dangling regulator phandle
+
+**Context:** build #272 (`logs/2026-07-20-272-mt6351-regulator-patch-corruption-fix/`,
+the fix for the earlier Mac-side patch truncation, see its BUILT entry
+above) was flashed and boot-captured for the first time
+(`logs/2026-07-21-277-msdc1-sd-verify-boot.log`). Banner confirmed `#272`.
+Serial dies at t=0.481s (known B-15 USB-mux blind spot, expected), so the
+capture itself shows nothing past early boot — but the physical panel
+showed the same `mmcblk0p29: Can't lookup blockdev` signature already seen
+on builds #274/#275, and the device was unreachable over both LAN and USB
+gadget IPs, confirming it never reached userspace. Device recovered by
+reflashing `boot2` back to build #269.
+
+**Root cause found (not the same mechanism as #274/#275):** `dts/0020`
+(msdc1 SD card node, build #270) wires `vmmc-supply = <&mt6351_vmch_reg>`
+and `vqmmc-supply = <&mt6351_vmc_reg>`, with those two nodes defined as
+children of the `regulators {}` node under the `mediatek,mt6351` PMIC
+(from `dts/0013`). But the driver binding that node
+(`patches/v6.6/regulator/0002-regulator-add-mt6351-vcn-regulators.patch`)
+only registered four regulators — `vcn18`/`vcn28`/`vcn33_bt`/`vcn33_wifi`
+— never `vmch`/`vmc`. The DT phandles pointed at regulator nodes with no
+matching `regulator_dev`, leaving any consumer (msdc1's
+`devm_regulator_get`) in permanent deferred probe.
+
+**Second finding: this fix already existed, uncommitted, in the Mac-side
+kernel tree.** `/Volumes/extdata/github/linux-6.6/drivers/regulator/mt6351-regulator.c`
+already contained the correct fix (vmch/vmc entries, register addresses
+`MT6351_LDO_VMCH_CON0`=0x0a2e / `MT6351_LDO_VMC_CON0`=0x0aaa sourced from
+the vendor `upmu_hw.h`, VOSEL pinned to 3.0V per vendor `msdc_io.c
+msdc_sd_power()`) as a staged-but-uncommitted `git add`. It was never
+diffed back into the checked-in patch file, so `build.sh`/`build-pack.sh`
+— which apply `patches/v6.6/` patch files, not the raw kernel tree — kept
+building the stale 4-regulator version. This is the **same corruption
+class** already documented for builds #270/#271 (patch file diverging
+silently from the Mac-side working tree); see that entry above.
+
+**Fix applied:** regenerated `patches/v6.6/regulator/0002` from the
+working-tree diff (`git diff HEAD -- drivers/regulator/{Kconfig,Makefile,mt6351-regulator.c}`
+in `/Volumes/extdata/github/linux-6.6`). Verified the full patch stack (all
+patches in `patches/v6.6/`) applies cleanly in sequence against a fresh
+`git worktree` of a clean v6.6 checkout before rebuilding.
+
+**Possible relevance to B-21 (WiFi/BT NO-GO):** this is a second,
+independent mechanism producing the exact `mmcblk0p29: Can't lookup
+blockdev` signature also seen on the CONSYS DMA builds (#274/#275, root
+cause still open there). A dangling regulator/clock phandle causing
+probe-order/deferral fallout is now a demonstrated failure mode on this
+board — worth checking `dts/0013`'s CONSYS regulator/clock references for
+a similar gap before assuming the BTIF DMA register pokes are the only
+suspect, if B-21 is ever resumed.
+
+## 2026-07-21 — Build #278: msdc1 regulator fix (vmch/vmc added to mt6351-regulator.c) — BUILT, NOT YET FLASHED
+
+**Provenance:** `logs/2026-07-21-278-msdc1-regulator-fix/`, sha256
+`cf5d996e40afccca74e9943cacb59bc6de7cba55ede57d18d7db47cdd6b53fbe`, banner
+`#278 SMP PREEMPT Tue Jul 21 07:48:40 UTC 2026` (matches build number).
+`--dtb-grep vmmc-supply` confirmed both msdc0 and msdc1 nodes now resolve
+their `vmmc-supply` phandle to a valid regulator entry (`0x1f`/`0x23`).
+
+**Change:** `patches/v6.6/regulator/0002-regulator-add-mt6351-vcn-regulators.patch`
+now registers six regulators instead of four — adds `vmch` (3.0V,
+`MT6351_LDO_VMCH_CON0`=0x0a2e) and `vmc` (3.0V, `MT6351_LDO_VMC_CON0`=0x0aaa)
+alongside the existing CONSYS VCN rails, plus a VOSEL-pinning step in probe
+matching vendor `msdc_io.c msdc_sd_power()`. No other patch changed vs #272.
+
+**Flash — `boot2` only:**
+```
+~/gemini-build/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 /Volumes/extdata/github/gemini_linux/logs/2026-07-21-278-msdc1-regulator-fix/new_kali_boot.img
+```
+
+**Capture:**
+```
+python3 scripts/ftdi-monitor.py --interactive --log logs/2026-07-21-279-msdc1-regulator-fix-boot.log
+```
+
+**Expected outcome:** if the regulator fix is sufficient, `mmcblk0p29`
+should mount cleanly (matching #269's behavior) and, with a microSD card
+inserted, `mmc1`/`mmcblk1` should enumerate. If `mmcblk0p29` still fails,
+the regulator phandle gap is ruled out as sufficient and the msdc1-specific
+hclk/VOSEL guesses from build #270 (see its original BUILT entry) become
+the next suspect. **If it gets stuck in a reset loop, reflash `boot2` back
+to #269 immediately**
+(`logs/2026-07-20-269-right-port-high-speed/new_kali_boot.img`).
+
+---
+
+## 2026-07-21 — Build #278 flashed and tested: mmcblk0p29 mounts clean (regression FIXED), but msdc1 still never probes — vmch/vmc regulators never registered
+
+**Result:** flashed and confirmed via SSH (banner `#278` over LAN
+`192.168.100.146`, user gemini/gemini). `mmcblk0p29` mounts r/w cleanly, all
+33 partitions enumerate — the eMMC regression from the earlier flash-test is
+gone, confirming the dangling-phandle theory from the prior entry.
+
+**msdc1 still absent, root cause found:** no `mmc1`/`mmcblk1`, and
+`11240000.mmc` has no bound driver (`readlink .../driver` → no such file,
+no dmesg entries at all, not even a probe-deferred message).
+`/sys/kernel/debug/regulator/` lists only `vemc` (msdc0's rail) — `vmch`/
+`vmc` don't exist as regulator devices at all. `1000d000.pwrap:mt6351` has
+no driver bound either (`/sys/bus/platform/drivers/` has no
+`mt6351-regulator` entry, only the unrelated `mt6351-sound`).
+
+**Root cause: `CONFIG_REGULATOR_MT6351` was never in the running kernel's
+`.config` at all** — not even as `# CONFIG_REGULATOR_MT6351 is not set`.
+The driver source file (`drivers/regulator/mt6351-regulator.c`) built fine
+as a *file*, but the Kconfig option gating it and the Makefile `obj-y` line
+were **missing from the patch actually used to build #278** — the
+regeneration in the prior entry (built from a `git diff` of the persistent
+Mac-side `/Volumes/extdata/github/linux-6.6` working tree) only picked up
+the `.c` file; a subsequent `git stash` attempt on that same shared tree
+(which failed partway through, per its error output) evidently reset the
+Kconfig/Makefile edits that had been sitting there uncommitted, without
+touching the `.c` file. **This is a third occurrence of the same
+"Mac-side working tree silently diverges from the committed patch file"
+corruption class** already seen with builds #270/#271 and the msdc1
+regulator gap itself — worth treating as a recurring risk of using the
+persistent `/Volumes/extdata/github/linux-6.6` tree as a diff source rather
+than writing patch hunks directly.
+
+**Fix:** re-added the `CONFIG_REGULATOR_MT6351` Kconfig entry and the
+`obj-$(CONFIG_REGULATOR_MT6351) += mt6351-regulator.o` Makefile line
+directly (not by diffing the shared working tree again), regenerated
+`patches/v6.6/regulator/0002`, and this time verified **all three hunks**
+(Kconfig, Makefile, `.c`) are present in the committed patch file and that
+the full patch stack applies cleanly against a disposable `git worktree`
+before rebuilding. Device recovery not needed this time — #278 was stable,
+just incomplete; no reflash to #269 was required.
+
+## 2026-07-21 — Build #280: msdc1 regulator Kconfig/Makefile fix (completes the #278 fix) — BUILT, NOT YET FLASHED
+
+**Provenance:** `logs/2026-07-21-280-msdc1-regulator-kconfig-fix/`, sha256
+`dbb44e817fd44d8621787a07304256af1c101530d2bde97d5dacab70701c14c7`, banner
+`#280 SMP PREEMPT Tue Jul 21 08:00:03 UTC 2026` (matches build number).
+Confirmed `CONFIG_REGULATOR_MT6351=y` present in the saved `.config` this
+time (absent from #278's). `--dtb-grep vmmc-supply` shows both msdc0 and
+msdc1 `vmmc-supply` phandles resolving.
+
+**Flash — `boot2` only:**
+```
+~/gemini-build/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 /Volumes/extdata/github/gemini_linux/logs/2026-07-21-280-msdc1-regulator-kconfig-fix/new_kali_boot.img
+```
+
+**Capture:**
+```
+python3 scripts/ftdi-monitor.py --interactive --log logs/2026-07-21-281-msdc1-regulator-kconfig-fix-boot.log
+```
+
+**Expected outcome:** `mmcblk0p29` should still mount clean (as #278 did),
+and this time `1000d000.pwrap:mt6351` should bind a `mt6351-regulator`
+driver, `vmch`/`vmc` should appear under
+`/sys/kernel/debug/regulator/`, and — with a microSD card inserted —
+`mmc1`/`mmcblk1` should enumerate. If msdc1 still doesn't probe, next
+suspects are the msdc1-specific hclk/VOSEL guesses from build #270's
+original entry. **If it gets stuck in a reset loop, reflash `boot2` back to
+#269 immediately**
+(`logs/2026-07-20-269-right-port-high-speed/new_kali_boot.img`).
+
+---
+
+## 2026-07-21 — Build #280 flashed: `mmcblk0p29: Can't lookup blockdev` regression is BACK — narrowed to the `mt6351-regulator` driver actually probing
+
+**Result:** flashed, panel showed the same `mmcblk0p29: Can't lookup
+blockdev` signature as the #272 flash-test. No serial/panel capture was
+taken this time (user reflashed straight back to build #269 to recover
+the device, correctly prioritizing not leaving it stuck over collecting
+evidence) — the only evidence is the panel message the user observed
+live, not a saved capture.
+
+**Analysis (no new capture, reasoning from the #278→#280 diff only):**
+#278 (driver `.c` file present but never compiled in — `CONFIG_REGULATOR_MT6351`
+missing, see prior entry) was flash-tested clean: `mmcblk0p29` mounted fine.
+#280 changed *only* the Kconfig/Makefile wiring so the driver actually
+compiles and its `probe()` now runs for real against the hardware pwrap
+regmap. Since #280 is otherwise identical to #278, the driver's probe
+itself is the prime suspect for reintroducing the regression. `probe()`
+unconditionally called `regmap_update_bits()` three times — VCN28's
+`ON_CTRL` bit, then VMCH/VMC's VOSEL bits — on every single boot,
+regardless of whether CONSYS or msdc1 are even in use yet. This is a new
+runtime hit against the shared pwrap bus that never happened on #278 (or
+on #269, since neither build ever ran this driver's probe). Plausible
+mechanism: an early poke at the shared pwrap bus delays/deprioritizes
+`msdc0`'s own probe past whatever window `/init` waits before giving up
+on mounting `mmcblk0p29` — the same class of probe-ordering fragility
+already seen (and never fully explained) on the unrelated CONSYS DMA
+builds #274/#275.
+
+**Fix applied (build #282, no re-test of #280 first — user chose to skip
+straight to the code fix given the cost of another blind flash cycle):**
+moved all three `regmap_update_bits()` calls out of the unconditional
+`probe()` path and into a new per-rail `mt6351_ldo_enable()` callback
+that only runs when a real consumer actually calls `regulator_enable()`
+on that specific rail (consys-spike for `vcn28`, the msdc1 mmc host for
+`vmch`/`vmc`) — `probe()` itself now only calls
+`devm_regulator_register()` for all six rails and touches no hardware.
+
+## 2026-07-21 — Build #282: mt6351-regulator lazy-enable fix (defers PMIC pokes out of probe) — BUILT, NOT YET FLASHED
+
+**Provenance:** `logs/2026-07-21-282-msdc1-regulator-lazy-enable/`, sha256
+`e4c7ede69ed4ff9e44344b0ce06b48c2c97e3090c4a9d9a996b2391f2aeec465`, banner
+`#282 SMP PREEMPT Tue Jul 21 08:17:17 UTC 2026` (matches build number).
+`CONFIG_REGULATOR_MT6351=y` confirmed present in the saved `.config`.
+`--dtb-grep vmmc-supply` shows both msdc0 and msdc1 phandles resolving, as
+in #278/#280. Full patch stack re-verified applying cleanly against a
+disposable `git worktree` of a clean v6.6 checkout before this build, all
+three hunks (Kconfig/Makefile/`.c`) confirmed present at each step this
+time (the #278→#280 corruption history made this mandatory going forward).
+
+**Flash — `boot2` only:**
+```
+~/gemini-build/mtk-venv/bin/python3 ~/mtkclient/mtk.py w boot2 /Volumes/extdata/github/gemini_linux/logs/2026-07-21-282-msdc1-regulator-lazy-enable/new_kali_boot.img
+```
+
+**Capture (mandatory this time — no #280 capture exists, so this is our
+first real evidence on the lazy-enable hypothesis):**
+```
+python3 scripts/ftdi-monitor.py --interactive --log logs/2026-07-21-283-msdc1-regulator-lazy-enable-boot.log
+```
+
+**Expected outcome:** if the lazy-enable theory is right, `mmcblk0p29`
+mounts clean again (matching #278) and — since `vmch`/`vmc` now only
+enable when msdc1 actually requests them — msdc1 should also probe
+successfully this time (unlike #278, where the driver wasn't compiled in
+at all). If `mmcblk0p29` still fails, the pwrap-probe-ordering theory is
+wrong and the regression's cause is still open — the next step would be
+capturing #280's actual boot (not yet done) rather than more speculative
+driver changes. **If it gets stuck in a reset loop, reflash `boot2` back
+to #269 immediately**
+(`logs/2026-07-20-269-right-port-high-speed/new_kali_boot.img`).

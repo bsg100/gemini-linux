@@ -2905,7 +2905,36 @@ cable protocol ("never boot with the Mac cable in") is retired: boot
 with the host attached now just works.
 
 
-## ⏸️ B-21 — Internal WiFi via MT6797 CONSYS (Phase 8 Stage 2, activated 2026-07-14, **PARKED 2026-07-16**)
+## 🛑 B-21 — Internal WiFi via MT6797 CONSYS (Phase 8 Stage 2, activated 2026-07-14, **NO-GO 2026-07-21**)
+
+**NO-GO decision (user, 2026-07-21):** internal CONSYS WiFi/Bluetooth is
+parked permanently, not just paused. Rationale: three independent AP-side
+transport attempts (PIO firmware-push #262, DMA transport #274, DMA with
+the apdma clock made optional #275) all failed to get the CONSYS MCU past
+the same `-110` BTIF timeout, and the DMA attempts additionally introduced
+an unexplained, unresolved eMMC-mount regression (boot.md 2026-07-21) —
+diminishing returns with no new register-level hypothesis left to try.
+Even a fixed handshake would still leave the ~75-103 KLOC vendor
+`wlan_drv_gen2` port ahead of it (driver_ports.md), which already broke
+upstream at frank-w's kernel 6.0 attempt and was never fixed. Per this
+section's own risk note below, the gate exists precisely because the
+gen2 port might prove uneconomical — it has.
+
+**Path forward for wireless connectivity:** a USB WiFi dongle over the
+right port's already-working host mode (same MUSB host path proven with
+USB Ethernet, B-22) — zero CONSYS risk, mainline driver support
+(`mt7601u`/`ath9k_htc`/`rtl8xxxu` etc. depending on the dongle used).
+Internet connectivity is otherwise already solved via right-port USB
+Ethernet (B-22, complete). Bluetooth remains blocked on the same CONSYS
+gate and is NO-GO alongside WiFi for the same reason.
+
+**If revisiting this decision in the future:** the codebase's
+`patches/v6.6/soc/0003`/`patches/v6.6/dts/0013` are reverted to the
+pre-Stage-W4 (#269-matching, PIO) state as of 2026-07-21 — the DMA/apdma
+work is not preserved on disk, only in this file's history and boot.md.
+The two open register-level leads noted in the Stage W4 entry below
+(`0x10001f00` bit 11, an SPM/EMI precondition vendor LK sets) were never
+conclusively ruled in or out and would be the starting point.
 
 **RE-PARKED 2026-07-20 after #262 tested — G2b FAIL, firmware-push
 theory falsified.** #262 was flashed and run (unparked to attempt
@@ -3281,11 +3310,19 @@ Stage 2; approved plan in research.md "CONSYS Stage W0 harvest").
   move this gate — pushing the real WMT firmware patch
   (`docs/firmware-consys/ROMv3_patch_1_0_hdr.bin` /
   `_1_1_hdr.bin`) through our own spike driver before judging G2b, per
-  the Stage W3 re-scope already called for below. That re-scoped
-  attempt was never built or flashed. Resuming WiFi work means
-  starting there, not re-running more harvest captures — the vendor
-  reference behaviour is now well-evidenced; what's missing is a
-  firmware-push implementation in our own driver to test against it.
+  the Stage W3 re-scope already called for below.
+  **Correction (2026-07-21): the paragraph above is stale.** The
+  Stage W3 firmware-push spike *was* built and flashed, as build
+  **#262** (`logs/2026-07-16-262-consys-g2b-fw-push/`, tested
+  2026-07-20 — see boot.md "BUILD #262 FLASHED AND TESTED"), not
+  "never built or flashed" as this entry originally claimed. Result:
+  **G2b still FAILed.** Every TX after the first ROM-only query went
+  `BTIF TX stuck, LSR=0x20` (THRE sets, TEMT never does — the PIO
+  shift register cannot drain), so firmware push aborted before a
+  single fragment was sent; this reproduced #240's finding that the
+  CONSYS link FIFO swallows one frame and jams because the ROM never
+  drains its RX FIFO. See the Stage W4 entry below for the next
+  action this pointed to.
 - **Update 2026-07-21 — H35: golden trace obtained (full handshake +
   holding shell, single boot, zero crashes), but same net conclusion —
   still no pre-firmware capture, no new pathway.** Root cause of the
@@ -3328,6 +3365,67 @@ Stage 2; approved plan in research.md "CONSYS Stage W0 harvest").
   WiFi work means implementing a real firmware-push in our own AP-side
   driver and testing it against the now well-evidenced vendor reference
   (Stage W3 re-scope), not capturing more harvest traces.
+- **Stage W4 (2026-07-21, not yet built/flashed): BTIF DMA transport.**
+  #262's failure signature (`BTIF TX stuck, LSR=0x20`, THRE set but
+  TEMT never sets on every TX after the first) means the PIO shift
+  register cannot drain even once — a transport-level stall, not a
+  missing-firmware problem. The one concretely-flagged, never-tested
+  lead: the vendor BTIF driver hard-enables DMA for both directions
+  (`ENABLE_BTIF_TX_DMA`/`ENABLE_BTIF_RX_DMA` in `mtk_btif.h`,
+  `BTIF_DMA_EN_TX`/`BTIF_DMA_EN_RX` set in `hal_btif_hw_init()`), while
+  every AP-side build through #262 ran BTIF in PIO only
+  (`btif_hw_init()` explicitly forced `BTIF_DMA_EN` off) — flagged as
+  a "first-class behavioral delta" in the 2026-07-20 harvest plan but
+  never tried at the AP-driver level. The BTIF DMA channels
+  (`btif_tx@11000a00`/`btif_rx@11000a80` in the vendor DTB) turned out
+  to be the same "VFF ring" APDMA IP mainline
+  `drivers/dma/mediatek/mtk-uart-apdma.c` already drives on newer MTK
+  SoCs (register offsets match exactly), but this SoC's vendor DTB
+  models each channel as a bare MMIO window with no OF-DMA-controller
+  binding, so `patches/v6.6/soc/0003` pokes the VFF registers directly
+  (sourced from vendor `btif_dma_plat.c`/`btif_dma_priv.h`) rather than
+  going through the dmaengine framework. Implementation: `btif_tx()`/
+  `btif_rx_drain()` rewritten around a new `struct btif_ctx` (BTIF
+  regs + TX/RX DMA channel regs + `dma_alloc_coherent()` ring buffers),
+  a `btif_dma_arm()` helper that re-arms each channel (warm reset,
+  ADDR/LEN/THRE, WPT=RPT=0, enable) before every single TX/RX burst
+  instead of carrying the vendor's persistent wraparound-capable ring —
+  correct here because every burst (max 1005B fragment, max ~64B
+  reply) is far smaller than the 4KB ring, so wraparound is provably
+  never exercised. `patches/v6.6/dts/0013` gains a second clock
+  (`CLK_INFRA_AP_DMA`, `clock-names = "apdma"`) matching the vendor
+  DTB's `btif@1100c000` clocks = "btifc", "apdmac". `git apply --check`
+  verified clean for both patches against a fresh v6.6 tree, together
+  with every other patch in the tree (no cross-patch conflicts).
+  **Built and tested 2026-07-21 (builds #274/#275): DMA mode does NOT
+  fix G2b — same `-110` timeout as PIO (#262).** This cleanly rules out
+  the PIO-vs-DMA transport delta; the remaining open suspect is an
+  upstream precondition (`0x10001f00` bit 11, or an SPM/EMI sequencing
+  step vendor LK does that our direct-boot path skips). Full trace:
+  `consys-spike` completes cleanly with no hang/crash (`GATE G2B FAIL
+  (-110) - state left up for devmem inspection`), confirmed via panel-
+  console video captures (serial is blind here — dies at the B-15
+  USB-mux point, ~t=0.45s, before `consys-spike` runs).
+  **Unexpected second regression found and left unresolved:** both
+  #274 and #275 (apdma clock made optional in #275 to isolate it —
+  ruled out, same failure persists) hit `/dev/mmcblk0p29: Can't lookup
+  blockdev` at boot, while the pre-DMA baseline (#269) mounts the eMMC
+  rootfs cleanly. Root cause not found — leading candidates are the
+  BTIF DMA channel register pokes themselves (`btif_dma_arm()`,
+  `0x11000a00`/`0x11000a80`, never touched by any prior build) or the
+  two `dma_alloc_coherent()` calls, neither investigated further.
+  **Session closed 2026-07-21 without pursuing this further**: Stage W4
+  had already answered its primary question (DMA doesn't fix G2b), so
+  debugging a second, unrelated storage regression in service of an
+  already-failed experiment wasn't judged worth more build cycles.
+  Device reflashed back to build #269 (stable baseline). Full narrative:
+  boot.md 2026-07-21 entries "Stage W4 BTIF DMA transport patch
+  written", "Build #274 flashed", "Build #275 tested".
+  **If B-21 is resumed, do not re-attempt DMA mode without first
+  root-causing the mmc regression** — `patches/v6.6/soc/0003` and
+  `patches/v6.6/dts/0013` on disk currently contain this DMA/apdma
+  work; reverting to the pre-Stage-W4 PIO version (matching #269) may
+  be the safer starting point if picking B-21 back up.
 - **Stage W3:** go/no-go on the full gen2 port (frank-w 5.6→6.6 delta
   audit); if GO, port order = WMT core → AHB HIF → cfg80211 glue, WiFi
   only. Given the hypothesis-1 conclusion above, G2b as originally

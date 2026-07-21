@@ -72,12 +72,77 @@ The question I set out to answer:
 - A USB PHY needing vendor-specific session-valid bits forced by hand.
 
 **The expensive, unglamorous kind:**
-- A CPU core that wouldn't come up under SMP — an interrupt routing quirk.
-- A display pipeline that hung the *entire system*, not just the screen —
-  an IRQ unmasked one probe-step too early.
-- A charging IC mis-identified for years (schematic said one part number,
-  silicon said another) — every register access based on the wrong
-  datasheet was quietly wrong.
+- **A display IRQ that froze the whole CPU, not just the screen.** The
+  MIPI DSI driver requested its interrupt at probe time and unmasked it
+  immediately — but the bootloader had left the DSI engine's IRQ line
+  asserted low. The kernel acked the interrupt, entered the handler, and
+  stalled reading a status register on a still-unclocked block — with the
+  line never cleared, the GIC stopped delivering *any* interrupt to that
+  core, so the whole CPU wedged, not just display. It looked exactly like
+  a hardware bus lock. Diagnosing it took a purpose-built GIC observer
+  that could catch an interrupt controller mid-hang and a chain of six
+  narrowing experiments (irqs-off survives, irqs-on dies even with
+  cpuidle/nohlt disabled, the observer catches SPI 229 stuck ACTIVE,
+  `disable_irq()` placed after `request_irq()` is already too late) before
+  the real fix fell out: request the IRQ with `IRQ_NOAUTOEN` and only
+  `enable_irq()` once the DSI engine is actually clocked and powered.
+  Two probe-order bugs, same shape: fixing display *also* surfaced a
+  second one — resuming the SMI larb (the memory-interface block behind
+  the overlay engine) unconditionally at its own probe hard-hung the MM
+  power domain the same way. The safe fix wasn't "pin it active," it was
+  making the overlay driver take a runtime-PM device link to the larb it
+  actually depends on, so the larb powers up only when something real
+  needs it.
+- **A big CPU core that never joined SMP — and firmware, not Linux, was
+  holding it.** With no core limit, the eight little cores (A53) boot
+  cleanly in milliseconds, but the PSCI `CPU_ON` call for the first big
+  core (A72) never returns — the boot CPU just blocks inside the SMC
+  instruction until ATF's own watchdog fires 14 seconds later and reboots
+  the board. It looked identical to the display power-domain bug at
+  first glance — "some domain isn't powering on" — until reading the
+  actual MT6797 power-domain table in the mainline driver showed it
+  defines no CPU-cluster domain at all, which ruled out a whole class of
+  Linux-side fixes in one read. The workaround (`maxcpus=8`, skip the A72
+  cluster entirely) is the current baseline; the actual bug lives inside
+  a firmware blob outside this project's reach.
+- **A charging IC mis-identified for years.** Every piece of documentation
+  — schematic, vendor DTS, forum threads — named the charger as a Richtek
+  RT9466 at I2C address 0x53. Following that lead burned real time (an
+  RT9466 driver port, IRQ wiring to a GPIO the schematic specified) before
+  a plain I2C bus scan turned up nothing at 0x53 at all — and a chip-ID
+  read at 0x6b came back matching a completely different part, TI's
+  BQ25896. Every register value anyone had ever cited, sourced from the
+  RT9466 datasheet, had quietly been describing the wrong silicon.
+  Re-pointing at the correct part meant no custom driver was even needed
+  — mainline already has `bq25890_charger.c` — but only after the false
+  identity was caught and discarded.
+- **Internal WiFi — the one that stayed unglamorous to the end.** MediaTek
+  splits this into two independently gated steps: wake the CONSYS
+  co-processor's power domain (G2a), then complete a firmware handshake
+  with it over a byte-oriented UART-like link called BTIF (G2b). G2a
+  passed cleanly — but only after finding that the "known-good" register
+  value everyone had been building against was itself wrong: the vendor
+  source defined the CONSYS power-control register at one offset, but the
+  real offset was 76 bytes further on — the documented one simply
+  rejected every write. G2b never passed. Three separate transport
+  designs were tried against the firmware handshake — plain
+  programmed-I/O, then DMA, then DMA with one clock made optional — and
+  all three stalled at the identical timeout, which pointed at a
+  precondition set somewhere in the vendor bootloader rather than a
+  protocol bug in this driver. The DMA attempts also introduced an
+  unrelated eMMC-mount regression that was never root-caused, which
+  raised the cost of continuing to experiment against a live device.
+  Getting a *provably* pre-firmware register snapshot to compare against
+  — the cleanest way to find what precondition was missing — turned out
+  to be blocked by the same read-only, write-protected Android userspace
+  described above, so the best available evidence stayed post-firmware
+  captures with no clean "before" state. After three failed transport
+  attempts with no new register-level hypothesis left to try, and a
+  roughly 75-100K-line vendor WiFi driver still waiting on the other side
+  of the handshake even if it were solved, this was the one call I made
+  to stop: park it, and route wireless connectivity through a USB WiFi
+  dongle on the already-working host-mode port instead. Bluetooth shares
+  the same CONSYS co-processor and is blocked alongside it.
 
 **Current frontier — internal WiFi:**
 - MediaTek's CONSYS subsystem: a separate on-package microcontroller
