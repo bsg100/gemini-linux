@@ -2914,7 +2914,10 @@ BTIF transport jams after exactly one frame ("BTIF TX stuck, LSR=0x20"
 ×13 — TEMT never sets), so the firmware push never reached the ROM;
 the ROM is deaf on BTIF entirely, not opcode-selective. CPUPCR decays
 to the known-bad 0x55AA55xx spin; 0x10001f00 still 0x11403200 vs
-golden 0x6D403A00 (bit-11 delta = top open suspect). Full entry:
+golden 0x6D403A00 — this delta was live-poked to the full golden value
+on real hardware in #247 and eliminated as a cause (see #247 postmortem
+below, boot.md #247 entry); it was never committed to soc/0003, which
+is why it kept reappearing as "unexplained" in later write-ups. Full entry:
 boot.md 2026-07-20 "#262 FLASHED AND TESTED". Resuming now means
 root-causing the abnormal ROM execution state (what precondition does
 vendor LK/boot set that we don't?), not pushing more protocol. Interim
@@ -3047,6 +3050,23 @@ Stage 2; approved plan in research.md "CONSYS Stage W0 harvest").
   `clk_scp_conn_main` (scpsys) side effects beyond our sequence;
   co-clock/XO detail (`RG_VCN28_ON_CTRL=1` HW-mode before VCN28
   enable). Device left safe: MCU parked in reset, EMI mapping restored.
+  **Postmortem conclusion (retro-flagged 2026-07-20):** this session live-poked
+  and individually eliminated every register/sequencing hypothesis derivable
+  from the golden Kali harvest — 0x10001f00 to the full golden 0x6D403A00,
+  SWSYSRST bit16, MCU_CFG_ACR bits 24/25, the AFE/WBG analog table, every
+  BTIF HANDSHAKE/WAK/FIFO-clear combination — none moved G2b off -110. None of
+  these pokes were committed to soc/0003 (they were live devmem only), which
+  is why later entries kept re-describing 0x10001f00 as "unexplained" — it
+  was already tried and shown to do nothing in isolation. The one gap nothing
+  has touched: the golden reference was captured *after* firmware was already
+  resident, so there is no reference for ROM register state in the window
+  between MCU-reset-release and firmware-push — exactly the window where our
+  ROM goes abnormal (0x55AA55xx spin). That makes the kali-harvest-plan.md
+  instrumented-vendor-kernel capture (docs/kali-harvest-plan.md) the only
+  remaining action that targets an actually-uncaptured gap, not one guess
+  among competing untested code changes (firmware-push retry, fuller STP
+  init sequence, DMA) — those are all guesses against an already-exhausted
+  register space and should not be attempted before the pre-firmware harvest.
 - **Update 2026-07-16 — source audit of the real vendor CONSYS driver**
   (`mtk_wcn_consys_hw.c`, `wmt_core.c`, `wmt_ic_soc.c` in the 3.18 reference
   tree, not just the generic scpsys `clk-mt6797-pg.c` checked in earlier

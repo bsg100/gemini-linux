@@ -5,12 +5,15 @@ description: Triage a Gemini serial boot log (ftdi-monitor capture) in one token
 
 # Boot log triage
 
-Runs `scripts/triage-boot-log.py <logfile>` — a single-pass parser that
-replaces the usual chain of separate grep calls (banner, panic/BUG scan,
+Runs `scripts/triage-boot-log.py <logfile>` (path relative to the
+**gemini_linux repo root**, not this skill directory) — a single-pass parser
+that replaces the usual chain of separate grep calls (banner, panic/BUG scan,
 DEVAPC/MPU violation counts, HARVEST- trace counts, reboot detection, tail)
 with one compact structured report.
 
 ## Usage
+
+Run from the repo root (`/Volumes/extdata/github/gemini_linux`):
 
 ```bash
 python3 scripts/triage-boot-log.py logs/YYYY-MM-DD-NN-desc.log
