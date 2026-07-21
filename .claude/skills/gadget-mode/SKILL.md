@@ -22,34 +22,20 @@ address until manually addressed. See memory `rndis-gadget-ip-config`.
 
 ## Steps
 
-```bash
-# 1. Find the current interface name for "RNDIS/Ethernet Gadget"
-networksetup -listallhardwareports
-```
-
-Read off the `Device:` line immediately following the
-`Hardware Port: RNDIS/Ethernet Gadget` block (e.g. `en12`). If that block is
-absent entirely, the Mac doesn't see the gadget at all — check the left-port
-USB cable is connected and the device has USB gadget mode active (kernel
-cmdline has `g_ether.dev_addr=...`), not a device-side problem to fix here.
+Run the bundled script — it finds the current interface, adds the alias if
+missing, and pings to verify, all in one pass:
 
 ```bash
-# 2. Check current addressing on that interface
-ifconfig <iface> | grep inet
+.claude/skills/gadget-mode/gadget-mode.sh
 ```
 
-If it already shows `inet 10.15.19.1 netmask 0xffffff00`, skip to step 4.
-
-```bash
-# 3. Add the static alias (requires sudo — ask the user to confirm/run if
-#    the harness prompts for password)
-sudo ifconfig <iface> inet 10.15.19.1 netmask 255.255.255.0 alias
-```
-
-```bash
-# 4. Verify
-ping -c2 10.15.19.82
-```
+This still runs `sudo ifconfig <iface> inet 10.15.19.1 netmask 255.255.255.0
+alias` under the hood (flag it before running per the notes below — it's the
+one step that changes Mac-side network state). Everything else (interface
+discovery, "already aliased" skip, ping verification) is handled by the
+script; there's no need to run the individual `networksetup` /
+`ifconfig` / `ping` commands by hand unless the script fails and you're
+diagnosing why.
 
 On success, `ssh gemini@10.15.19.82` (or `root@`, password `toor`) should
 connect immediately — no ARP flush needed.
