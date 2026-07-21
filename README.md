@@ -26,6 +26,25 @@ detail and links into blockers.md/boot.md):
   now that pre-firmware capture has been ruled out as reachable from
   userspace. See [blockers.md](blockers.md) B-21.
 
+## What works
+
+| Subsystem | Status | What actually fixed it |
+|---|---|---|
+| Serial console | Working | UART0 pins/baud triple-sourced from vendor DTB, cmdline, and schematic before touching hardware |
+| eMMC storage + rootfs | Working | Upstream MSDC driver as-is; fresh Debian 13 rootfs replaced the dead 2019 vendor image |
+| Display (panel + DDP) | Working | Three stacked bugs: early-unmasked IRQ hung the *whole system*, then generic MIPI packets ≥0xB0, LK-sourced TIMCON values, vendor-bootloader video timing |
+| Keyboard (AW9523B) | Working (base layer) | I2C expander held in reset, a node hidden with `status="disabled"`, inverted GPIO polarity — three bugs stacked on one driver |
+| Charging (BQ25896) | Working | Charger IC misidentified for years (schematic RT9466, silicon TI BQ25896) — root-caused, wired to mainline `bq25890_charger.c` |
+| USB — left port (gadget) | Working | mtu3 PHY needed vendor-specific session-valid bits forced by hand |
+| USB — right port (host, ethernet) | Working | MUSB config vendor-inaccurate (endpoint count/FIFO table); dual-port broke until left port's leftover host-mode DTS reverted to peripheral |
+| Touchscreen | Working | SSD2092 polled driver; DS-unstall handshake |
+| Audio (headphones) | Working | All-mainline MT6797 AFE + MT6351 codec; DPCM routing |
+| Fn/second keyboard layer | Not done | Base matrix works; second layer not yet mapped |
+| Internal WiFi (CONSYS) | Blocked (permanent NO-GO) | G2a (chip-ID poll) passes; G2b (firmware handshake) fails after three transport attempts — needs the vendor firmware blob. Use a USB WiFi dongle on the right port instead |
+| Bluetooth | Not started | Shares the CONSYS MCU with WiFi — blocked on the same firmware question |
+| Loudspeaker | Parked | Vendor-exact enable sequence replicated, still silent |
+| Fuel gauge (battery %) | Deferred | MT6351 has no mainline driver; charger-only + userspace voltage monitor accepted as the minimum |
+
 ## Documents
 
 | Document | Purpose |
