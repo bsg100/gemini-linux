@@ -3286,6 +3286,48 @@ Stage 2; approved plan in research.md "CONSYS Stage W0 harvest").
   starting there, not re-running more harvest captures — the vendor
   reference behaviour is now well-evidenced; what's missing is a
   firmware-push implementation in our own driver to test against it.
+- **Update 2026-07-21 — H35: golden trace obtained (full handshake +
+  holding shell, single boot, zero crashes), but same net conclusion —
+  still no pre-firmware capture, no new pathway.** Root cause of the
+  H18 gap (trace present but crashed before a shell) was rebuilt
+  correctly this session: a fresh `git clone` of
+  `gemini-android-kernel-3.18` directly on the VM (the Mac-side
+  checkout had the same case-folding corruption bug already documented
+  for linux-6.6, silently dropping `net/netfilter/xt_DSCP.c`) with all
+  9 vendor patches applied, including 0009 (`ccci_ringbuf` alignment
+  fix) alongside 0002 (harvest instrumentation) — the combination no
+  prior H1–H32 attempt had actually built together. Flashed as `boot`
+  (image `logs/2026-07-21-H33-kali-harvest-resync-full-fix/harvest_kali_boot.img`,
+  sha256 `5ce203a95858d145b959c630ca8c0b40a2c7175a0da1c158e68ec19a630c8f93`)
+  with vendor Kali rootfs (`planet/linux.img`) on `linux`; `boot2`/#269
+  and the Debian rootfs untouched.
+  `logs/2026-07-21-H35-kali-harvest-boot.log`
+  (sha256 `39ecd122ba6898176fc4db38982f6186c711932979b7583c8edf8e3b6c247655`)
+  is the resulting capture: single boot cycle, zero panic/BUG, zero
+  DEVAPC violations, harvest trace running continuously 105.2s–138.3s
+  (1214 BTIF-RX, 1491 BTIF-TX, 592 WMT-RX, 1382 WMT-TX, 3 SNAP events —
+  roughly 3–4x H18's volume) spanning across the `kali login:` prompt at
+  126.3s, with the capture continuing stable to 141s+ afterward (normal
+  battery/thermal telemetry, no crash). This is the first capture with
+  both the full CONSYS/BTIF/WMT firmware-push trace and a shell that
+  actually holds, in one continuous boot — confirming the H18 crash was
+  purely the `ccci_ringbuf` bug (now fixed) and not evidence of anything
+  wrong in the CONSYS/BTIF handshake itself.
+  **But this still does not open a new pathway to WiFi.** Like H18, the
+  H35 trace starts with `wmt_launcher` already having fired (first
+  HARVEST-SNAP line is `reg_ctrl-on-entry`, i.e. already inside the
+  vendor power-on sequence) — it is a confirmation/volume upgrade of the
+  same post-firmware reference evidence, not the pre-firmware capture
+  the original gap was about. An interim finding: this vendor image's
+  right USB port runs in gadget mode (`rndis0`, "USB Tethering" service,
+  `link is not ready`) rather than host mode, so a USB ethernet dongle
+  plugged into it is not recognized — the host-mode right-port DTS is a
+  mainline-6.6-only addition (B-22), not present in this stock vendor
+  kernel, so SSH/network access to this image requires serial only.
+  **Conclusion unchanged from the 2026-07-20 update above:** resuming
+  WiFi work means implementing a real firmware-push in our own AP-side
+  driver and testing it against the now well-evidenced vendor reference
+  (Stage W3 re-scope), not capturing more harvest traces.
 - **Stage W3:** go/no-go on the full gen2 port (frank-w 5.6→6.6 delta
   audit); if GO, port order = WMT core → AHB HIF → cfg80211 glue, WiFi
   only. Given the hypothesis-1 conclusion above, G2b as originally

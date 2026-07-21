@@ -353,20 +353,48 @@ build risk.
   starving the WDT-kick thread during the densest logging burst in the
   boot (the CONSYS/BTIF firmware-push window) — not a vendor defect. Those
   markers were reverted; H29 booted clean in the runs captured so far.
-- **B-21 (Bluetooth/CONSYS) golden-reference trace**: best captured so far
-  is H18's ~4642-line `HARVEST-*` trace (CONSYS power-on through WMT
-  command exchange through BTIF DMA wire-level hex dumps of the firmware
-  push handshake) — real data, but that run predates the ccci_ringbuf fix
-  and ended in a (now-fixed) crash rather than a clean shell. **Not yet
-  obtained**: a single capture that reaches a stable shell *and* passes
-  through the BT/CONSYS trigger with the harvest payload instrumentation
-  (0002) active and logging. Next session: repeat H29-style captures
-  (trimmed instrumentation, only 0002 + fixes) until one both logs
-  `HARVEST-WMT-*`/`HARVEST-BTIF-*` lines *and* reaches `kali login:`
-  cleanly, then proceed to Part 2 below.
+- **B-21 (Bluetooth/CONSYS) golden-reference trace — OBTAINED 2026-07-21
+  (H35).** A fresh `git clone` of `gemini-android-kernel-3.18` directly on
+  the VM (the Mac-side checkout had silently dropped
+  `net/netfilter/xt_DSCP.c` to the same case-folding corruption bug
+  already documented for linux-6.6) with all 9 vendor patches applied —
+  0002 (harvest instrumentation) and 0009 (ccci_ringbuf fix) together for
+  the first time — was built as H33
+  (`logs/2026-07-21-H33-kali-harvest-resync-full-fix/harvest_kali_boot.img`,
+  banner `#1 ... Jul 21 00:53:16 UTC 2026`) and flashed to `boot`. First
+  boot (H34) reached the `kali login:` banner but then hard-reset ~1.4s
+  later (no panic/BUG text — consistent with a watchdog reset) before
+  anyone reached a working prompt. A second, fresh power-on capture
+  (H35, `logs/2026-07-21-H35-kali-harvest-boot.log`) is the target
+  artifact: single boot cycle, zero panic/BUG, zero DEVAPC violations,
+  `HARVEST-*` trace running continuously 105.2s–138.3s (1214 BTIF-RX,
+  1491 BTIF-TX, 592 WMT-RX, 1382 WMT-TX, 3 SNAP — roughly 3-4x H18's
+  volume) spanning across the `kali login:` prompt at 126.3s, and the
+  capture stays stable to 141s+ afterward with no crash. **This closes
+  the H18/H32 gap** — proves the H18 crash was purely the (now-fixed)
+  ccci_ringbuf bug and not a defect in the CONSYS/BTIF handshake itself.
+  Full findings folded into blockers.md B-21 (2026-07-21 update).
+  **However this does not open a new WiFi pathway**: like H18, the H35
+  trace starts with `wmt_launcher` already having fired (first
+  `HARVEST-SNAP` line is `reg_ctrl-on-entry`), so it remains a
+  post-firmware reference, not the pre-firmware capture the original gap
+  was about. Interim finding: this vendor image's right USB port runs in
+  gadget mode (`rndis0`, "USB Tethering" service) rather than the
+  mainline-only (B-22) host-mode DTS, so a USB ethernet dongle plugged
+  into it is not recognized — serial is the only console into this
+  image. Resuming WiFi work still means implementing a real firmware-push
+  in our own AP-side driver (Stage W3 re-scope), not further harvest
+  captures.
 - Rootfs restore to Debian (`~/gemini-build/OUTPUT/debian13-rootfs.img`)
-  and boot2 (#269/#270) verification remain outstanding once the harvest
-  session concludes (see Partition strategy above).
+  and boot2 (#269) verification: **done 2026-07-21** — device confirmed
+  live over SSH on 192.168.100.146, banner `6.6.0-dirty #269`. The
+  flashed Debian image predated the 2026-07-20 panel.conf staging fix
+  (commit `b1c9a1c`, 17:40), so panel.conf was live-patched onto both
+  `gemini` and `root` users to match current `rootfs-files/panel.conf`,
+  and the filesystem was grown from 2.9G to the full 26G partition via
+  `resize2fs` (fresh image ships unresized). Everything else mkrootfs.sh
+  stages (xorg fbdev-rotate conf, `.xinitrc`, `audio-test.sh` for both
+  users) was already current on the flashed image.
 
 ### Session closed 2026-07-20 — evidence disposition
 

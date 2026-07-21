@@ -8462,3 +8462,73 @@ probing and `11240000.mmc` resolving out of deferred probe; `cat
 card still fails to enumerate, the msdc1-specific hclk/VOSEL guesses from
 build #270 are the next suspect (see that build's original BUILT entry
 for the caveats).
+
+## 2026-07-21 — H33/H34/H35: instrumented vendor-3.18 harvest kernel — GOLDEN CAPTURE OBTAINED (H35)
+
+Goal: one boot with **both** the HARVEST-BTIF/WMT instrumentation (patch
+0002) and the `ccci_ringbuf` alignment-fault fix (patch 0009) present, to
+close the gap between prior sessions' H18 (trace present, crashes before
+reaching a shell) and H32 (clean shell, but trace deliberately trimmed).
+Full rationale and prior history in
+[docs/kali-harvest-plan.md](docs/kali-harvest-plan.md).
+
+**Build (H33):** fresh `git clone --depth 1` of
+`gemini-android-kernel-3.18` directly on the VM's case-sensitive
+filesystem (the Mac-side checkout had silently dropped
+`net/netfilter/xt_DSCP.c` to a case-folding collision with `xt_dscp.c` —
+same corruption class already documented for the mainline linux-6.6 tree;
+this is the first time it's been seen affecting the vendor-3.18 tree too,
+and cost 4 failed build attempts before being correctly root-caused). All
+9 patches in `patches/vendor-3.18/` applied with `patch -p2` (paths are
+`a/kernel-3.18/...`, and we're already inside `kernel-3.18/`); patch 0008
+needed a one-off manual fix for a fuzzy-match bug (its hunk #1 duplicates
+the `harvest_snap()` definition instead of replacing the 1-arg version
+from patch 0002 — fixed by hand on the VM, not committed to the patch file
+itself, so it will need reapplying if the tree is re-cloned).
+
+Image: `logs/2026-07-21-H33-kali-harvest-resync-full-fix/harvest_kali_boot.img`
+sha256: `5ce203a95858d145b959c630ca8c0b40a2c7175a0da1c158e68ec19a630c8f93`
+Banner: `Linux version 3.18.41-kali (root@gemini-build) (gcc version 14.2.0 (Debian 14.2.0-19)) #1 SMP PREEMPT Tue Jul 21 00:53:16 UTC 2026`
+
+Packed with `scripts/pack-boot-img.py` from `planet/kali_boot.img` as
+reference (ramdisk/header unchanged), flashed to `boot` (not `boot2` —
+this is the vendor Kali kernel, not the mainline port) via
+`mtk w boot harvest_kali_boot.img`. `linux` partition flashed with
+`planet/linux.img` (vendor 2019 Kali rootfs, LXQt included) for the
+session; `boot2` (mainline #269) and the Debian rootfs are untouched and
+will be restored after the harvest session concludes.
+
+**H34** (first capture attempt): reached the `kali login:` banner at
+102.1s with harvest trace firing 102–103.47s just after it, but the board
+then hard-reset (garbled UART bytes, fresh `Preloader Start`, no panic/BUG
+text at all — consistent with a watchdog reset, not a kernel fault) only
+~1.4s after the banner printed. No one reached a working prompt in this
+capture. Initially mis-read as a successful "clean shell + trace" capture
+— corrected after user review of the actual line-by-line timing.
+
+**H35 (this is the golden capture):** fresh full-power-on capture,
+`logs/2026-07-21-H35-kali-harvest-boot.log`
+(sha256 `39ecd122ba6898176fc4db38982f6186c711932979b7583c8edf8e3b6c247655`).
+Single boot cycle, no reboots, zero panic/BUG lines, zero DEVAPC
+violations. Harvest trace runs continuously from 105.2s to 138.3s
+(1214 BTIF-RX, 1491 BTIF-TX, 592 WMT-RX, 1382 WMT-TX, 3 SNAP lines) —
+spanning across the `kali login:` prompt at 126.3s — and the capture
+continues stable to 141s+ afterward with normal battery/thermal telemetry
+and no crash. This is the first capture with both the full CONSYS/BTIF/WMT
+firmware-push trace **and** a shell that actually holds, in one continuous
+boot. Confirmed via `scripts/triage-boot-log.py`.
+
+USB ethernet (right port) and FTDI (left port) were both connected during
+H35, but no DHCP lease appeared on the Mac side and SSH was unreachable on
+both the known gadget (10.15.19.82) and LAN (192.168.100.146) addresses —
+this vendor 2019 Kali image predates the project's gadget-ethernet setup,
+so serial remains the only console into it. Touchscreen also not working
+on this image (its own vendor touch driver stack, unrelated to the
+mainline SSD2092 port) — not a concern, out of scope for the harvest.
+
+**Next:** analyze the H35 trace content for the B-21 CONSYS/BTIF/WMT
+handshake evidence (firmware download success/failure, ACK sequence,
+register values at each HARVEST-SNAP point) and fold findings into
+blockers.md B-21. After the harvest session concludes, restore the Debian
+rootfs (`mtk w linux ~/gemini-build/OUTPUT/debian13-rootfs.img`) and
+verify `boot2` (#269) is still intact.
