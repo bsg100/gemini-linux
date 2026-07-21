@@ -720,19 +720,36 @@ The MT6351 PMIC contains an integrated coulomb counter. In the Android vendor dr
 
 ### Phase 7 Strategy: Charger-Only + Userspace Monitor
 
-For Phases 3–6, use charger-only mode:
-1. Load `rt9467-charger.c` driver (covers RT9466).
+Corrected 2026-07-14 (research.md section 8): the actual charger IC is a TI
+BQ25896 at i2c0 0x6b, not an RT9466. Charger-only mode:
+1. Load mainline `bq25890_charger.c` (covers the BQ2589x family including
+   BQ25896).
 2. Do not load any battery driver.
-3. System reports `POWER_SUPPLY_STATUS_UNKNOWN` for battery.
-4. The RT9466 charger hardware manages voltage and current limits safely.
+3. System reports `POWER_SUPPLY_STATUS_UNKNOWN` for battery capacity — there
+   is no "Battery" power_supply, only the charger's own "USB"-type node.
+4. The BQ25896 charger hardware manages voltage and current limits safely on
+   its own; the risk below is specifically about *host-side* shutdown
+   timing, not charger safety.
 
-**Risk:** Without a fuel gauge, the system cannot perform automatic low-battery shutdown. A userspace monitor script is required:
-
-```bash
-# Poll charger sysfs for VBUS presence and adapter current
-# Trigger graceful shutdown when adapter removed + estimated Vbat < threshold
-# (requires RT9466 ADC register access via sysfs or i2c-dev)
-```
+**Risk:** Without a fuel gauge, the kernel cannot perform automatic
+low-battery shutdown. **Implemented 2026-07-21:**
+[`scripts/battery-monitor.sh`](scripts/battery-monitor.sh) polls
+`/sys/class/power_supply/bq25890-charger-*/{online,voltage_now}` (the
+`POWER_SUPPLY_PROP_VOLTAGE_NOW` V_BAT ADC reading the driver already exposes)
+and calls `shutdown -h now` when the charger reports offline (no VBUS) and
+V_BAT falls below a configurable floor (`--threshold-mv`, default 3400mV).
+Not yet wired into a systemd unit. **Both trigger paths hardware-verified
+2026-07-21** on build #269 (LAN 192.168.100.146, over the right-port USB
+ethernet dongle — unaffected by unplugging the left-port charge cable):
+`bq25890-charger-0` node found, `online`/`voltage_now`/`status` all
+readable. With charger connected (online=1, 3744000µV, Charging), the
+online-gate correctly suppressed shutdown even under an artificially low
+`--threshold-mv`. With the charge cable unplugged (online=0, 3564000µV,
+Discharging), `--threshold-mv 3600 --dry-run` correctly detected V_BAT
+below floor, logged via `logger` (confirmed in `journalctl -t
+battery-monitor`) and reached the `shutdown -h now` call site (suppressed
+only by `--dry-run`, not run for real to avoid powering off the device
+mid-session).
 
 ### Full Fuel Gauge Driver (Phase 7+)
 
@@ -843,6 +860,54 @@ MT6797X SoC
 - WiFi uses **AHB bus** (NOT SDIO). The gen2 driver registers as a `platform_driver` with `"mediatek,wifi"` compatible and uses AHB memory-mapped register access + PDMA DMA engine.
 - BT/GPS/FM are multiplexed over a single BTIF channel using **STP** (Serial Transport Protocol, a proprietary MTK framing layer). STP is a kernel TTY line discipline (`N_MTKSTP`, ID=16).
 - The `wmt_launcher` userspace daemon must run before any RF function is usable. It opens `/dev/mtk_stp_wmt` and loads MCU firmware patches into the CONSYS control CPU.
+
+### Why This Is Hard (and Why "It's the Same Hardware, Just Reuse the 3.18 Driver" Doesn't Work)
+
+Three separate problems stack on top of each other here, which is why B-21 (blockers.md)
+has spent months on bring-up before writing a single line of 802.11 code:
+
+1. **It's a hard-IP block fused into the SoC die, not a discrete chip behind a bus.**
+   Most WiFi porting work treats the radio as a black box with a documented
+   register interface behind SDIO/USB/PCIe. CONSYS instead shares power
+   rails, clocks, and an internal MCU with the rest of the SoC — bring-up
+   means correctly sequencing SoC-internal state (SPM power domains,
+   MTCMOS, EMI remapping, a watchdog-held reset) *before* any WiFi-specific
+   code is reachable at all. Get that sequencing wrong and the result isn't
+   a driver error, it's silence or a chip left in an abnormal execution
+   state (see blockers.md B-21 "Stage W1/W2" and the recurring `0x55AA55xx`
+   CPUPCR-spin signature).
+2. **The driver doesn't talk 802.11 first — it talks to a second,
+   undocumented CPU.** Before any WiFi/BT traffic exists, the AP must push
+   firmware to the CONSYS control CPU over the proprietary STP/WMT framed
+   protocol described above. There is no public spec for this handshake;
+   the vendor 3.18 source is the only source of truth, which is why B-21's
+   effort has gone into reverse-engineering wire-level framing rather than
+   writing cfg80211 code — the 802.11 management stack (`wlan/gen2/mgmt/`,
+   the biggest chunk of the ~75-103 KLOC below) is the *last* mile, not the
+   current blocker.
+3. **The vendor 3.18 driver itself cannot simply be recompiled or dropped
+   into a modern tree, even setting aside the size/maintenance argument
+   above:**
+   - **It depends on kernel-internal ABIs that no longer exist in this
+     form.** Between 3.18 (2014) and 6.6, clock management (MediaTek's
+     ad-hoc `CLKMGR` → mainline Common Clock Framework, already had to be
+     bridged for other drivers in this project), DMA-mapping, and the
+     regulator API all went through incompatible rewrites. A port is a
+     rewrite at every subsystem touchpoint, not a recompile.
+   - **It was never built to compile outside the Android/AOSP build
+     system.** Confirmed by direct test (CLAUDE.md, 2026-06-07): building
+     the vendor 3.18 tree standalone (`kali_gemini_defconfig`,
+     `make ARCH=arm64 CROSS_COMPILE="" CC=gcc -k`) hit no GCC-version or
+     language-standard errors — every failure in the connectivity/BTIF
+     code was a missing include path that Android's `Android.mk`/Soong
+     build graph injects and a plain kernel tree does not provide. Getting
+     it to compile at all outside that environment is its own project,
+     before any porting work even starts.
+   - **Community prior art on the same silicon already tried and stalled.**
+     frank-w's port (same `wlan_drv_gen2` core, external-SDIO transport
+     instead of this SoC's internal AHB/BTIF) broke at kernel 6.0 and was
+     never fixed upstream — see the compatibility table and porting
+     strategy below.
 
 ### Why Mainline Drivers Don't Apply
 
